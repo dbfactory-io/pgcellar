@@ -44,7 +44,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	switch args[0] {
 	case "version", "--version", "-v":
-		fmt.Fprintln(stdout, "pgcellar", Version)
+		_, _ = fmt.Fprintln(stdout, "pgcellar", Version)
 		return 0
 	case "serve":
 		return serve(args[1:], stdout, stderr)
@@ -61,7 +61,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, `usage:
+	_, _ = fmt.Fprintln(w, `usage:
   pgcellar serve --config FILE [--listen ADDR] [--dev] [--cron-interval 30s]
   pgcellar check --config FILE [--barman-dir DIR]
   pgcellar apikey create --config FILE --name NAME --role viewer|operator|admin
@@ -87,7 +87,7 @@ func serve(args []string, stdout, stderr io.Writer) int {
 			d, err = 0, nil
 		}
 		if err != nil || d < 0 {
-			fmt.Fprintf(stderr, "pgcellar: invalid --cron-interval %q\n", *cronEvery)
+			_, _ = fmt.Fprintf(stderr, "pgcellar: invalid --cron-interval %q\n", *cronEvery)
 			return 2
 		}
 		cronOverride = d
@@ -95,7 +95,7 @@ func serve(args []string, stdout, stderr io.Writer) int {
 
 	a, err := app.Load(*cfgPath, *dev)
 	if err != nil {
-		fmt.Fprintln(stderr, "pgcellar:", err)
+		_, _ = fmt.Fprintln(stderr, "pgcellar:", err)
 		return 1
 	}
 	a.Version = Version
@@ -109,13 +109,13 @@ func serve(args []string, stdout, stderr io.Writer) int {
 
 	srv, err := web.New(a)
 	if err != nil {
-		fmt.Fprintln(stderr, "pgcellar:", err)
+		_, _ = fmt.Fprintln(stderr, "pgcellar:", err)
 		_ = a.Close()
 		return 1
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		fmt.Fprintln(stderr, "pgcellar: cannot listen:", err)
+		_, _ = fmt.Fprintln(stderr, "pgcellar: cannot listen:", err)
 		_ = a.Close()
 		return 1
 	}
@@ -130,9 +130,9 @@ func serve(args []string, stdout, stderr io.Writer) int {
 	defer stop()
 	a.Start(ctx)
 
-	fmt.Fprintf(stdout, "pgcellar %s listening on %s\n", Version, displayURL(ln.Addr().String()))
+	_, _ = fmt.Fprintf(stdout, "pgcellar %s listening on %s\n", Version, displayURL(ln.Addr().String()))
 	if *dev {
-		fmt.Fprintf(stdout, "dev mode: fake Barman, data in %s, sign in as admin / admin\n", a.TempDir)
+		_, _ = fmt.Fprintf(stdout, "dev mode: fake Barman, data in %s, sign in as admin / admin\n", a.TempDir)
 	}
 	errc := make(chan error, 1)
 	go func() { errc <- httpSrv.Serve(ln) }()
@@ -141,7 +141,7 @@ func serve(args []string, stdout, stderr io.Writer) int {
 	select {
 	case err := <-errc:
 		if !errors.Is(err, http.ErrServerClosed) {
-			fmt.Fprintln(stderr, "pgcellar:", err)
+			_, _ = fmt.Fprintln(stderr, "pgcellar:", err)
 			code = 1
 		}
 	case <-ctx.Done():
@@ -151,7 +151,7 @@ func serve(args []string, stdout, stderr io.Writer) int {
 	}
 	stop()
 	if err := a.Close(); err != nil {
-		fmt.Fprintln(stderr, "pgcellar:", err)
+		_, _ = fmt.Fprintln(stderr, "pgcellar:", err)
 	}
 	return code
 }
@@ -178,18 +178,18 @@ func check(args []string, stdout, stderr io.Writer) int {
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "pgcellar: cannot read %s: %v\n", *cfgPath, err)
+		_, _ = fmt.Fprintf(stderr, "pgcellar: cannot read %s: %v\n", *cfgPath, err)
 		return 1
 	}
 	bad := 0
-	fmt.Fprintf(stdout, "configuration %s\n", *cfgPath)
+	_, _ = fmt.Fprintf(stdout, "configuration %s\n", *cfgPath)
 	if problems := config.Validate(cfg); len(problems) > 0 {
 		for _, p := range problems {
-			fmt.Fprintf(stdout, "  PROBLEM  %s\n", p)
+			_, _ = fmt.Fprintf(stdout, "  PROBLEM  %s\n", p)
 			bad++
 		}
 	} else {
-		fmt.Fprintln(stdout, "  ok")
+		_, _ = fmt.Fprintln(stdout, "  ok")
 	}
 
 	barmanDir := *dir
@@ -199,17 +199,17 @@ func check(args []string, stdout, stderr io.Writer) int {
 			// A copy of the example config points to /etc/barman.d, which only exists
 			// on a Barman host: use the example files next to it.
 			if alt := filepath.Join(filepath.Dir(*cfgPath), "barman.d.example"); isDir(alt) {
-				fmt.Fprintf(stdout, "note: %s not found, reading %s instead\n", barmanDir, alt)
+				_, _ = fmt.Fprintf(stdout, "note: %s not found, reading %s instead\n", barmanDir, alt)
 				barmanDir = alt
 			}
 		}
 	}
 	servers, err := barman.LoadServers(barmanDir)
 	if err != nil {
-		fmt.Fprintf(stdout, "  PROBLEM  cannot read the Barman directory %s: %v\n", barmanDir, err)
+		_, _ = fmt.Fprintf(stdout, "  PROBLEM  cannot read the Barman directory %s: %v\n", barmanDir, err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "\nservers in %s: %d\n", barmanDir, len(servers))
+	_, _ = fmt.Fprintf(stdout, "\nservers in %s: %d\n", barmanDir, len(servers))
 	seen := map[string]bool{}
 	for _, s := range servers {
 		seen[s.Name] = true
@@ -223,22 +223,22 @@ func check(args []string, stdout, stderr io.Writer) int {
 			status = "PROBLEM"
 			bad++
 		}
-		fmt.Fprintf(stdout, "  %-8s %-20s %-16s %s\n", status, s.Name, method, filepath.Base(s.File))
+		_, _ = fmt.Fprintf(stdout, "  %-8s %-20s %-16s %s\n", status, s.Name, method, filepath.Base(s.File))
 		for _, p := range probs {
-			fmt.Fprintf(stdout, "           - %s\n", p)
+			_, _ = fmt.Fprintf(stdout, "           - %s\n", p)
 		}
 	}
 	for _, s := range cfg.Servers {
 		if !seen[s.Name] {
-			fmt.Fprintf(stdout, "  PROBLEM  %-20s listed in pgcellar.yaml but has no section in %s\n", s.Name, barmanDir)
+			_, _ = fmt.Fprintf(stdout, "  PROBLEM  %-20s listed in pgcellar.yaml but has no section in %s\n", s.Name, barmanDir)
 			bad++
 		}
 	}
 	if bad > 0 {
-		fmt.Fprintf(stdout, "\n%d problem(s) found\n", bad)
+		_, _ = fmt.Fprintf(stdout, "\n%d problem(s) found\n", bad)
 		return 1
 	}
-	fmt.Fprintln(stdout, "\nall good")
+	_, _ = fmt.Fprintln(stdout, "\nall good")
 	return 0
 }
 

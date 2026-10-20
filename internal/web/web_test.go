@@ -64,7 +64,6 @@ func (f *fixture) post(path string, c *http.Cookie, form url.Values, hdr ...stri
 }
 
 var csrfRe = regexp.MustCompile(`name="csrf" value="([^"]+)"`)
-var tokenRe = regexp.MustCompile(`X-CSRF-Token": "([0-9a-f]+)"`)
 
 // login opens a session directly in the store (bcrypt is slow, and the real
 // login form is covered by TestLoginSessionAndCookie) and returns the cookie
@@ -260,7 +259,7 @@ func TestBackupRunFollowed(t *testing.T) {
 		t.Error("run missing from /runs")
 	}
 	// A failing backup is recorded as failed, with the reason.
-	rec = f.post("/servers/broken/backup", c, url.Values{}, "HX-Request", "true", "X-CSRF-Token", csrf)
+	f.post("/servers/broken/backup", c, url.Values{}, "HX-Request", "true", "X-CSRF-Token", csrf)
 	for _, r := range mustRuns(t, run) {
 		if r.Server == "broken" {
 			if got := apptest.WaitRun(t, run, r.ID); got.Status != app.RunFailed || !strings.Contains(got.Stderr, "Cannot connect") {

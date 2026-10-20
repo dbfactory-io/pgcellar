@@ -57,7 +57,7 @@ func (a *App) serverNames(ctx context.Context) ([]string, error) {
 	}
 	sort.Strings(fromFiles)
 	if err == nil && len(fromFiles) > 0 {
-		err = fmt.Errorf("Barman lists no server although %d are configured in barman.d", len(fromFiles))
+		err = fmt.Errorf("barman lists no server although %d are configured in barman.d", len(fromFiles))
 	}
 	if err != nil {
 		names = fromFiles

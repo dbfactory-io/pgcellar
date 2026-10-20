@@ -231,7 +231,7 @@ func (s *Store) ListRuns(server string, limit int) ([]Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []Run
 	for rows.Next() {
 		r, err := scanRun(rows)
@@ -284,7 +284,7 @@ func (s *Store) ListAudit(limit int) ([]AuditEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []AuditEntry
 	for rows.Next() {
 		var e AuditEntry
