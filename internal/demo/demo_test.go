@@ -276,3 +276,31 @@ func TestBaseURLFromEnvironment(t *testing.T) {
 		t.Error("the demo must not run a scheduler or barman cron")
 	}
 }
+
+func TestCheckFakesRefusesNonExecutable(t *testing.T) {
+	good := filepath.Join(t.TempDir(), "bin")
+	if err := ExtractAssets(good); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", good+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := checkFakes(good); err != nil {
+		t.Fatalf("extracted fakes refused: %v", err)
+	}
+	// Same files without the execute bit, like a noexec mount: whatever else is
+	// on PATH must not be accepted instead.
+	bad := filepath.Join(t.TempDir(), "bin")
+	if err := ExtractAssets(bad); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(bad)
+	for _, e := range entries {
+		if !e.IsDir() && e.Type().IsRegular() {
+			_ = os.Chmod(filepath.Join(bad, e.Name()), 0o644)
+		}
+	}
+	t.Setenv("PATH", bad+string(os.PathListSeparator)+good)
+	err := checkFakes(bad)
+	if err == nil || !strings.Contains(err.Error(), "not executable (noexec mount?)") {
+		t.Fatalf("checkFakes = %v", err)
+	}
+}

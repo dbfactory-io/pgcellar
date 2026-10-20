@@ -24,7 +24,10 @@ services:
     # image's VOLUME declarations from creating anonymous volumes.
     read_only: true
     tmpfs:
-      - /tmp:size=64m,mode=1777
+      # exec is required: the fake barman, psql... are extracted here and run. A
+      # Docker tmpfs is noexec by default, and the real Barman of the image would
+      # answer instead (pgCellar refuses to start in that case).
+      - /tmp:size=64m,mode=1777,exec
       - /var/lib/barman:size=1m
       - /var/lib/pgcellar:size=1m
     mem_limit: 256m

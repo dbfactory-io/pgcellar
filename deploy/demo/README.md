@@ -61,6 +61,8 @@ at start-up (the private half never leaves memory).
 docker compose up -d --build           # from this directory
 ```
 
+The tmpfs on `/tmp` must allow exec (`exec` option): the fake programs are extracted there. The demo refuses to start, and never runs a program outside that directory, otherwise.
+
 Then nginx in front of it, with HTTPS, as in `nginx-vhost.conf`. The compose
 file runs the same image as the product with a read-only root file system, a
 tmpfs for the temporary directory, 256 MB of memory, no capability, no volume.

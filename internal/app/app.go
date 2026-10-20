@@ -126,13 +126,17 @@ type App struct {
 // Load reads and validates the configuration, opens the database and builds
 // the Barman engine. In dev mode it works on a temporary copy of everything
 // and uses the fake Barman, see dev.go.
-func Load(configPath string, dev bool) (*App, error) { return load(configPath, dev, false) }
+func Load(configPath string, dev bool) (*App, error) { return load(configPath, dev, false, "") }
 
 // LoadDemo is Load for the public demo: the configuration may hold no
 // administrator, only one read-only user.
-func LoadDemo(configPath string) (*App, error) { return load(configPath, false, true) }
+//
+// onlyUnder is the directory of the fake programs: nothing else is ever run.
+func LoadDemo(configPath, onlyUnder string) (*App, error) {
+	return load(configPath, false, true, onlyUnder)
+}
 
-func load(configPath string, dev, demo bool) (*App, error) {
+func load(configPath string, dev, demo bool, onlyUnder string) (*App, error) {
 	abs, err := filepath.Abs(configPath)
 	if err != nil {
 		return nil, err
@@ -196,6 +200,8 @@ func load(configPath string, dev, demo bool) (*App, error) {
 		Binary: cfg.Barman.Binary,
 		User:   cfg.Barman.User,
 		Audit:  a.audit,
+
+		OnlyUnder: onlyUnder,
 	}
 	a.Runner = runner
 	a.Tools = runner

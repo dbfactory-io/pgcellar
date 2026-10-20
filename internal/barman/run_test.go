@@ -97,3 +97,20 @@ func TestRunnerContextAndMissingBinary(t *testing.T) {
 		t.Error("context was not respected")
 	}
 }
+
+func TestOnlyUnderRefusesOtherPrograms(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "mine")
+	if err := os.WriteFile(p, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	r := CLIRunner{Binary: "mine", OnlyUnder: dir}
+	if out, _, err := r.Run(context.Background()); err != nil || !strings.Contains(string(out), "ok") {
+		t.Fatalf("own program: %q %v", out, err)
+	}
+	var re *RunError
+	if _, _, err := r.RunBinary(context.Background(), "sh", "-c", "true"); !errors.As(err, &re) || re.ExitCode != -1 {
+		t.Fatalf("a program outside the directory ran: %v", err)
+	}
+}

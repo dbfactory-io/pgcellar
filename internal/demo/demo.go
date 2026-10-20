@@ -28,6 +28,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
 	"github.com/stranix79/pgcellar/internal/license"
 )
@@ -152,6 +153,9 @@ func Open(opts Options) (*Demo, error) {
 	if err := os.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")); err != nil {
 		return fail(err)
 	}
+	if err := checkFakes(bin); err != nil {
+		return fail(err)
+	}
 	// Channels whose secrets are "set": the names appear on the Alerts page. No
 	// message is ever sent by the demo.
 	for _, k := range []string{"PGCELLAR_TELEGRAM_TOKEN", "PGCELLAR_SMTP_USER", "PGCELLAR_SMTP_PASSWORD"} {
@@ -184,7 +188,7 @@ func Open(opts Options) (*Demo, error) {
 		return fail(err)
 	}
 
-	a, err := app.LoadDemo(cfgPath)
+	a, err := app.LoadDemo(cfgPath, bin)
 	if err != nil {
 		return fail(err)
 	}
@@ -411,4 +415,17 @@ func (d *Demo) Run(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// fakeNames are the programs the demo must find in its own directory.
+var fakeNames = []string{"barman", "psql", "pg_basebackup", "ssh", "pg_ctl", "pg_isready", "pg_checksums"}
+
+// checkFakes refuses to go on when a program of the demo does not resolve to
+// the extracted fake: with a directory mounted noexec (the default of a Docker
+// tmpfs) the real Barman or psql of the image would answer instead.
+func checkFakes(dir string) error {
+	if err := barman.CheckOnlyUnder(dir, fakeNames...); err != nil {
+		return fmt.Errorf("demo mode: the fake barman in %s is not executable (noexec mount?): %w", dir, err)
+	}
+	return nil
 }

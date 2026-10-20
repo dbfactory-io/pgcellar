@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -19,6 +20,10 @@ type CLIRunner struct {
 	Binary string // "barman" when empty
 	User   string // run as this user through sudo when it differs from the current user
 	Audit  Audit  // optional
+	// OnlyUnder, when set, refuses to run any program that does not resolve to a
+	// file under this directory. The public demo uses it so that it can never
+	// start the real Barman or the real psql.
+	OnlyUnder string
 }
 
 // RunError is returned when Barman ran and exited with a non-zero status, or
@@ -115,6 +120,11 @@ func (r CLIRunner) Run(ctx context.Context, args ...string) (stdout, stderr []by
 func (r CLIRunner) RunBinary(ctx context.Context, binary string, args ...string) (stdout, stderr []byte, err error) {
 	argv := r.argvFor(binary, args)
 	command := strings.Join(argv, " ")
+	if r.OnlyUnder != "" {
+		if err := underDir(binary, r.OnlyUnder); err != nil {
+			return nil, nil, &RunError{Command: command, ExitCode: -1, Stderr: err.Error(), Err: err}
+		}
+	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
@@ -153,4 +163,36 @@ func (r CLIRunner) RunBinary(ctx context.Context, binary string, args ...string)
 		return out.Bytes(), errb.Bytes(), &RunError{Command: command, ExitCode: code, Stderr: errb.String(), Err: runErr}
 	}
 	return out.Bytes(), errb.Bytes(), nil
+}
+
+// underDir checks that the program name resolves (PATH included) to a file
+// inside dir, symbolic links followed.
+func underDir(binary, dir string) error {
+	path, err := exec.LookPath(binary)
+	if err != nil {
+		return fmt.Errorf("refusing to run %s: %w", binary, err)
+	}
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return err
+	}
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	// The link itself (barman -> fake-barman) lives in dir, its target too.
+	if filepath.Dir(real) != root {
+		return fmt.Errorf("refusing to run %s: it is %s, outside %s", binary, real, root)
+	}
+	return nil
+}
+
+// CheckOnlyUnder reports an error unless every name resolves under dir.
+func CheckOnlyUnder(dir string, names ...string) error {
+	for _, n := range names {
+		if err := underDir(n, dir); err != nil {
+			return err
+		}
+	}
+	return nil
 }
