@@ -24,3 +24,23 @@ services:
     # The Pi has 3.7 GiB shared with Home Assistant, Grafana, Plex and others.
     mem_limit: 768m
     restart: unless-stopped
+
+  # SSH companion for WAL shipping (README, "SSH companion"): same image, sshd run
+  # by the barman user, same Barman volume, key-only login restricted to
+  # "barman put-wal <server>".
+  pgcellar-ssh:
+    image: pgcellar:testbed
+    container_name: pgcellar-ssh
+    entrypoint: /usr/local/bin/pgcellar-sshd
+    ports:
+      - "127.0.0.1:2222:2222"
+      - "10.79.0.212:2222:2222"
+    volumes:
+      - /mnt/usbdata/pgcellar/barman:/var/lib/barman
+      - ./sshd_config:/etc/pgcellar/sshd_config:ro
+    environment:
+      TZ: Europe/Brussels
+    mem_limit: 64m
+    depends_on:
+      - pgcellar
+    restart: unless-stopped

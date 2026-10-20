@@ -27,6 +27,28 @@ services:
       # PGCELLAR_TELEGRAM_TOKEN: ""
     restart: unless-stopped
 
+  # SSH companion: same image, sshd run by the barman user (no root), same Barman
+  # volume. PostgreSQL servers push their WAL files here with
+  #   archive_command = 'barman-wal-archive --port 2222 <ssh_host> <server> %p'
+  # Only the keys authorised on the "SSH key" page of pgCellar are accepted, each
+  # one for "barman put-wal <server>" and nothing else. Set ssh_host (and ssh_port)
+  # in pgcellar.yaml to how PostgreSQL reaches this port. Do not publish it on
+  # the internet: bind it to a private address ("10.0.0.5:2222:2222") if you can.
+  pgcellar-ssh:
+    image: pgcellar:dev
+    container_name: pgcellar-ssh
+    entrypoint: /usr/local/bin/pgcellar-sshd
+    ports:
+      - "2222:2222"
+    volumes:
+      - barman-data:/var/lib/barman
+      - ./sshd/sshd_config:/etc/pgcellar/sshd_config:ro
+    environment:
+      TZ: Europe/Brussels
+    depends_on:
+      - pgcellar
+    restart: unless-stopped
+
 volumes:
   barman-data:
   pgcellar-data:

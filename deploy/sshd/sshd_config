@@ -1,0 +1,27 @@
+# sshd of the pgCellar SSH companion container (see deploy/docker-compose.yml).
+# It runs as the barman user itself, without root: only the barman login is
+# possible, PAM and privilege separation do not apply. Mounted read-only on
+# /etc/pgcellar/sshd_config.
+Port 2222
+HostKey /var/lib/barman/.ssh/host/ssh_host_ed25519_key
+PidFile none
+
+# Key only. The authorised keys are written by the "SSH key" page of pgCellar,
+# each one restricted to "barman put-wal <server>".
+UsePAM no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile /var/lib/barman/.ssh/authorized_keys
+PermitRootLogin no
+AllowUsers barman
+
+# No forwarding, no terminal. WAL shipping needs a plain exec channel only
+# (barman-wal-archive pipes a tar into "barman put-wal"). No sftp subsystem:
+# rsync over ssh does not use it.
+X11Forwarding no
+AllowTcpForwarding no
+AllowAgentForwarding no
+PermitTTY no
+
+LogLevel VERBOSE

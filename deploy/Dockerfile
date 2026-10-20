@@ -28,7 +28,7 @@ RUN apt-get update \
       > /etc/apt/sources.list.d/pgdg.list \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      barman barman-cli postgresql-client-18 rsync openssh-client \
+      barman barman-cli postgresql-client-18 rsync openssh-client openssh-server \
       ca-certificates git tzdata \
  && apt-get purge -y curl gnupg \
  && apt-get autoremove -y \
@@ -39,9 +39,11 @@ RUN mkdir -p /etc/barman.d /var/lib/barman /etc/pgcellar /var/lib/pgcellar \
  && chown -R barman:barman /etc/barman.d /var/lib/barman /etc/pgcellar /var/lib/pgcellar
 
 COPY --from=build /out/pgcellar /usr/local/bin/pgcellar
+# Entry point of the SSH companion container (same image, other entrypoint).
+COPY --chmod=0755 deploy/sshd/entrypoint.sh /usr/local/bin/pgcellar-sshd
 
 VOLUME ["/var/lib/barman", "/var/lib/pgcellar"]
-EXPOSE 8080
+EXPOSE 8080 2222
 
 # pgcellar runs as the barman user itself: no root in the container and no
 # sudo (the image has none), Barman is executed directly. Bind-mounted
