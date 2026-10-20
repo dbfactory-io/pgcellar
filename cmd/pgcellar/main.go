@@ -5,6 +5,7 @@
 //	pgcellar serve --config /etc/pgcellar/pgcellar.yaml   run the web UI and API
 //	pgcellar check --config ...                            validate the configuration and list the servers
 //	pgcellar apikey create|list                            manage API keys (the key is printed once)
+//	pgcellar hash-password                                 bcrypt hash of a password read on stdin, for users: in pgcellar.yaml
 //	pgcellar license keygen|issue|verify|show              licence keys (signing is for the vendor only)
 //	pgcellar version
 //
@@ -12,6 +13,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -22,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -53,6 +56,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return check(args[1:], stdout, stderr)
 	case "apikey":
 		return apikey(args[1:], stdout, stderr)
+	case "hash-password":
+		return hashPassword(os.Stdin, stdout, stderr)
 	case "license":
 		return licenseCmd(args[1:], stdout, stderr)
 	case "help", "--help", "-h":
@@ -69,6 +74,7 @@ func usage(w io.Writer) {
   pgcellar check --config FILE [--barman-dir DIR]
   pgcellar apikey create --config FILE --name NAME --role viewer|operator|admin
   pgcellar apikey list --config FILE
+  pgcellar hash-password                  reads a password on standard input, prints its bcrypt hash for pgcellar.yaml
   pgcellar license keygen --out DIR
   pgcellar license issue --key FILE --edition pro --licensee NAME --servers N --expires YYYY-MM-DD [--id ID]
   pgcellar license verify KEY
@@ -252,4 +258,25 @@ func check(args []string, stdout, stderr io.Writer) int {
 func isDir(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
+}
+
+// hashPassword reads one line (the password) and prints its bcrypt hash.
+func hashPassword(in io.Reader, stdout, stderr io.Writer) int {
+	line, err := bufio.NewReader(io.LimitReader(in, 1024)).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		_, _ = fmt.Fprintln(stderr, "pgcellar:", err)
+		return 1
+	}
+	pw := strings.TrimRight(line, "\r\n")
+	if len(pw) < 8 {
+		_, _ = fmt.Fprintln(stderr, "pgcellar: the password must have at least 8 characters")
+		return 1
+	}
+	h, err := config.HashPassword(pw)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "pgcellar:", err)
+		return 1
+	}
+	_, _ = fmt.Fprintln(stdout, h)
+	return 0
 }

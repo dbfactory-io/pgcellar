@@ -74,3 +74,13 @@ func TestLicenseRoundTrip(t *testing.T) {
 		t.Errorf("issue without options: %d", code)
 	}
 }
+
+func TestHashPassword(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := hashPassword(strings.NewReader("correct horse battery\n"), &out, &errb); code != 0 || !strings.HasPrefix(out.String(), "$2") {
+		t.Fatalf("hash: %d %q %q", code, out.String(), errb.String())
+	}
+	if code := hashPassword(strings.NewReader("short\n"), &out, &errb); code == 0 {
+		t.Error("a short password is refused")
+	}
+}
