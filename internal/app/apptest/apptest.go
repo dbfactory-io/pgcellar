@@ -83,6 +83,23 @@ func New(t *testing.T) *Env {
 	cfg.Barman.User = ""
 	cfg.Barman.ConfigDir = barmanDir
 	cfg.Barman.ConfigFile = filepath.Join(dir, "barman.conf")
+	home := filepath.Join(dir, "barman-home")
+	for _, srv := range []string{"pg-main", "pg-rsync", "broken"} {
+		wals := filepath.Join(home, srv, "wals")
+		if err := os.MkdirAll(wals, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		line := ""
+		if srv == "pg-main" { // last WAL archived at 02:10 on 2026-10-20
+			line = fmt.Sprintf("000000010000000000000007\t16777216\t%d.0\tgzip\tNone\n", time.Date(2026, 10, 20, 2, 10, 29, 0, time.Local).Unix())
+		}
+		if err := os.WriteFile(filepath.Join(wals, srv+"-xlog.db"), []byte(line), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(cfg.Barman.ConfigFile, []byte("[barman]\nbarman_home = "+home+"\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
 	cfg.Alerts.MaxBackupAge = 26 * time.Hour
 	cfg.Alerts.MaxWALAge = time.Hour
 	cfg.Servers = []config.Server{{Name: "pg-main", Label: "Main", Schedule: config.Schedule{Backup: "daily 02:00", Enabled: true}}}

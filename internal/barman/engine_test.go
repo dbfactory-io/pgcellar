@@ -13,7 +13,9 @@ func newTestEngine(t *testing.T) (*CLIEngine, *[]AuditEntry) {
 	useFakeBarman(t)
 	var entries []AuditEntry
 	r := CLIRunner{Binary: "fake-barman", Audit: func(e AuditEntry) { entries = append(entries, e) }}
-	return NewEngine(r), &entries
+	e := NewEngine(r)
+	e.BarmanHome = filepath.Join("testdata", "fixtures", "barman-home")
+	return e, &entries
 }
 
 func TestEngineListServers(t *testing.T) {
@@ -82,7 +84,7 @@ func TestEngineStatusHealthy(t *testing.T) {
 		t.Errorf("status = %+v last=%+v", st, st.LastBackup)
 	}
 	if st.LastWAL != "000000010000000000000007" || st.LastWALTime.Unix() != 1792455029 {
-		t.Errorf("last WAL from diagnose: %q %v", st.LastWAL, st.LastWALTime)
+		t.Errorf("last WAL from the catalogue: %q %v", st.LastWAL, st.LastWALTime)
 	}
 	if st.LastWALTime.IsZero() || len(st.Checks) == 0 {
 		t.Errorf("wal time / checks missing: %+v", st)
@@ -169,5 +171,29 @@ func TestFakeBarmanLog(t *testing.T) {
 	data, _ := os.ReadFile(log)
 	if strings.TrimSpace(string(data)) != "--format json list-backups pg-main" {
 		t.Errorf("log = %q", data)
+	}
+}
+
+func TestEngineStatusCatalogueUnreadable(t *testing.T) {
+	e, entries := newTestEngine(t)
+	e.BarmanHome = filepath.Join(t.TempDir(), "nowhere")
+	st, err := e.Status(context.Background(), "pg-main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.LastWALTime.IsZero() {
+		t.Errorf("time should stay empty: %v", st.LastWALTime)
+	}
+	found := false
+	for _, p := range st.Problems {
+		found = found || (strings.HasPrefix(p, "Last WAL unknown: cannot read ") && strings.Contains(p, "pg-main-xlog.db"))
+	}
+	if !found {
+		t.Errorf("problems = %v", st.Problems)
+	}
+	for _, en := range *entries {
+		if strings.Contains(strings.Join(en.Args, " "), "diagnose") {
+			t.Errorf("diagnose must not be called automatically: %v", en.Args)
+		}
 	}
 }

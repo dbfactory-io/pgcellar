@@ -136,7 +136,11 @@ func Load(configPath string, dev bool) (*App, error) {
 		Audit:  a.audit,
 	}
 	a.Runner = runner
-	a.Engine = barman.NewEngine(runner)
+	eng := barman.NewEngine(runner)
+	if g, gerr := barman.LoadGlobal(cfg.Barman.ConfigFile); gerr == nil {
+		eng.BarmanHome = g.BarmanHome
+	}
+	a.Engine = eng
 
 	if err := config.EnsureRepo(a.ConfigDir); err != nil {
 		a.Logger.Printf("warning: no git history for %s: %v", a.ConfigDir, err)

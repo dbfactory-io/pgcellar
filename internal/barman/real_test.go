@@ -80,3 +80,19 @@ func TestDiagnoseWALNewestTimeline(t *testing.T) {
 		t.Fatalf("empty: %q %v %v", name, when, err)
 	}
 }
+
+func TestRealXlogDB(t *testing.T) {
+	// Real catalogue of Barman 3.20.1: <server>-xlog.db, tab separated.
+	home := t.TempDir()
+	dir := filepath.Join(home, "chutag", "wals")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "chutag-xlog.db"), realOut(t, "chutag-xlog.db"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	path, name, when, err := ReadLastWAL(home, "chutag")
+	if err != nil || name != "00000001000000000000000A" || when.Unix() != 1792494767 || !strings.HasSuffix(path, "chutag-xlog.db") {
+		t.Fatalf("%s %q %v %v", path, name, when, err)
+	}
+}

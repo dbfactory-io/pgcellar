@@ -32,7 +32,9 @@ Messages are collected in top-level lists: `_INFO`, `_WARNING`, `_ERROR`, `_EXCE
 
 Parsers ignore unknown keys, accept numbers as numbers or strings, read dates from the epoch key first and the text key second, strip any text before the first `{`, and keep the full object in `Backup.Raw`.
 
-- `diagnose` (global, read-only): `{"_INFO": ["<JSON document as text>"]}`; the document holds `servers.<name>.wals.last_archived_wal_per_timeline` = `{"00000001": {"name": "00000001000000000000000A", "time": 1792494767.81, "size": 16602, "compression": "gzip"}}`. This is the source of the last archived WAL time since `status` dropped it (see `ParseDiagnoseWAL`, called by `Engine.Status`). `show-server`, `list-backups` and `replication-status` carry no archive time. `testdata/real/diagnose-chutag.json` is trimmed to that part (the full output holds every server's configuration).
+- `diagnose` (global, read-only): `{"_INFO": ["<JSON document as text>"]}`; the document holds `servers.<name>.wals.last_archived_wal_per_timeline` = `{"00000001": {"name": "00000001000000000000000A", "time": 1792494767.81, "size": 16602, "compression": "gzip"}}`. `ParseDiagnoseWAL` parses it but nothing calls it automatically: it takes 18-25 s on a Raspberry Pi. `show-server`, `list-backups` and `replication-status` carry no archive time. `testdata/real/diagnose-chutag.json` is trimmed to that part (the full output holds every server's configuration).
+
+- WAL catalogue file, the source of the last archived WAL time (`ReadLastWAL` in `xlogdb.go`): `<barman_home>/<server>/wals/<server>-xlog.db` on 3.20.1 (older: `xlog.db`), one tab-separated line per archived WAL, appended in order: `00000001000000000000000A<TAB>16602<TAB>1792494767.8113196<TAB>gzip<TAB>None` (name, size, epoch, compression, encryption). Real capture: `testdata/real/chutag-xlog.db`. Read-only; unreadable file = last WAL unknown, reported as a problem.
 
 ## Not verified
 

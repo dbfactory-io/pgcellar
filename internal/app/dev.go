@@ -50,6 +50,10 @@ func (a *App) setupDev(src string, cfg *config.Config) (string, error) {
 	if err := os.WriteFile(cfg.Barman.ConfigFile, []byte(minimal), 0o640); err != nil {
 		return "", err
 	}
+	// WAL catalogue of the fake servers: pg-main archived a WAL at 02:10.
+	if err := writeDevCatalogue(filepath.Join(tmp, "barman"), frozen.Add(-20*time.Minute)); err != nil {
+		return "", err
+	}
 	if example := filepath.Join(filepath.Dir(src), "barman.d.example"); isDir(example) {
 		if err := copyDir(example, cfg.Barman.ConfigDir); err != nil {
 			return "", err
@@ -136,6 +140,25 @@ func copyDir(src, dst string) error {
 			err = cerr
 		}
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeDevCatalogue creates, under barmanHome, the WAL catalogue files of the
+// fake Barman's servers: one archived WAL for pg-main, nothing for the others.
+func writeDevCatalogue(barmanHome string, lastWAL time.Time) error {
+	for _, srv := range []string{"pg-main", "pg-rsync", "broken"} {
+		dir := filepath.Join(barmanHome, srv, "wals")
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return err
+		}
+		line := ""
+		if srv == "pg-main" {
+			line = fmt.Sprintf("000000010000000000000007\t16777216\t%d.0\tgzip\tNone\n", lastWAL.Unix())
+		}
+		if err := os.WriteFile(filepath.Join(dir, srv+"-xlog.db"), []byte(line), 0o640); err != nil {
 			return err
 		}
 	}
