@@ -1,0 +1,14 @@
+{{define "content"}}
+<section class="login">
+  <h1>{{t "login.title"}}</h1>
+  {{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{end}}
+  <form method="post" action="/login">
+    <input type="hidden" name="csrf" value="{{.Data.Token}}">
+    <input type="hidden" name="next" value="{{.Data.Next}}">
+    <label>User <input type="text" name="user" autocomplete="username" required autofocus></label>
+    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn" type="submit">{{t "btn.login"}}</button>
+  </form>
+  <p class="muted">The barman serves, the cellar keeps.</p>
+</section>
+{{end}}

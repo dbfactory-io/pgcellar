@@ -1,0 +1,16 @@
+{{define "content"}}
+<h1>{{t "history.title"}}</h1>
+<p class="muted">Every change made through pgCellar is a git commit in the configuration directory, with the user as author.</p>
+{{if .Data.Entries}}
+<div class="tablewrap">
+<table>
+<thead><tr><th>Commit</th><th>Date</th><th>Author</th><th>Change</th></tr></thead>
+<tbody>
+{{range .Data.Entries}}
+<tr><td><a href="/history?repo={{.Repo}}&amp;diff={{.Hash}}"><code>{{.Hash}}</code></a>{{if eq .Repo "barman"}} <small>barman.d</small>{{end}}</td><td>{{.Date}}</td><td>{{.Author}}</td><td>{{.Message}}</td></tr>
+{{end}}
+</tbody></table>
+</div>
+{{else}}<p class="empty">No change recorded yet.</p>{{end}}
+{{if .Data.Diff}}<h2>Commit {{.Data.DiffHash}}</h2><pre class="out diff">{{.Data.Diff}}</pre>{{end}}
+{{end}}

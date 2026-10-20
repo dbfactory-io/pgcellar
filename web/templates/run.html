@@ -1,0 +1,5 @@
+{{define "content"}}
+<h1>Run #{{.Data.Run.ID}}</h1>
+{{template "run_fragment" .Data}}
+<p><a href="/servers/{{.Data.Run.Server}}">Back to {{.Data.Run.Server}}</a> &middot; <a href="/runs">All runs</a></p>
+{{end}}

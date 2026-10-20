@@ -1,0 +1,61 @@
+{{define "content"}}
+{{with .Data}}
+<div class="head">
+  <h1>{{.Detail.Name}}</h1>
+  <div class="btns">
+    {{if .CanOperate}}
+    <button class="btn alt" hx-get="/servers/{{.Detail.Name}}/check" hx-target="#check-result" hx-swap="innerHTML" hx-indicator="#check-result">{{t "btn.run_check"}}</button>
+    <button class="btn" hx-post="/servers/{{.Detail.Name}}/backup" hx-target="#backup-run" hx-swap="innerHTML" hx-confirm="Start a backup of {{.Detail.Name}} now?">{{t "btn.backup_now"}}</button>
+    <button class="btn alt" hx-post="/servers/{{.Detail.Name}}/switch-wal" hx-target="#backup-run" hx-swap="innerHTML">{{t "btn.switch_wal"}}</button>
+    {{end}}
+  </div>
+</div>
+{{if .Detail.Label}}<p class="muted">{{.Detail.Label}}</p>{{end}}
+<div id="backup-run" aria-live="polite"></div>
+
+<section>
+  <h2>State</h2>
+  {{if .Detail.State}}
+    <p>{{template "level" .Detail.State.Level}}
+    {{if .Detail.State.LastBackupID}} &middot; last backup {{.Detail.State.LastBackupID}}, {{ageSec .Detail.State.LastBackupAgeSeconds}} ago{{end}}
+    {{if not .Detail.State.LastWAL.IsZero}} &middot; last WAL {{ageSec .Detail.State.LastWALAgeSeconds}} ago{{end}}</p>
+    {{if .Detail.State.Problems}}<ul class="problems">{{range .Detail.State.Problems}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    {{if .Detail.State.Error}}<div class="flash bad">{{.Detail.State.Error}}</div>{{end}}
+  {{else}}<p class="muted">No status yet.</p>{{end}}
+  <div id="check-result" class="htmx-target" aria-live="polite"></div>
+</section>
+
+<section>
+  <h2>Backups</h2>
+  {{if .BackupsErr}}<div class="flash bad">{{.BackupsErr}}</div>
+  {{else if .Backups}}
+  <div class="tablewrap">
+  <table>
+  <thead><tr><th>Backup</th><th>Status</th><th>Started</th><th>Ended</th><th class="num">Size</th><th class="num">WAL size</th></tr></thead>
+  <tbody>
+  {{range .Backups}}
+  <tr><td>{{.ID}}</td>
+  <td>{{if eq .Status "DONE"}}<span class="pill ok">{{.Status}}</span>{{else if eq .Status "FAILED"}}<span class="pill bad">{{.Status}}</span>{{else}}<span class="pill warn">{{.Status}}</span>{{end}}</td>
+  <td>{{ts .BeginTime}}</td><td>{{ts .EndTime}}</td><td class="num">{{size .SizeBytes}}</td><td class="num">{{size .WALSizeBytes}}</td></tr>
+  {{end}}
+  </tbody></table>
+  </div>
+  {{else}}<p class="empty">No backup yet.</p>{{end}}
+</section>
+
+<section>
+  <h2>Configuration</h2>
+  {{if .Detail.HasFile}}
+    <p class="muted">File: <code>{{.Detail.File}}</code>{{if not .CanAdmin}} (read only, administrators can edit){{end}}</p>
+    {{template "server_form" .Form}}
+  {{else}}
+    <p class="empty">This server has no file in the Barman directory, so it cannot be edited here.</p>
+  {{end}}
+</section>
+
+<section>
+  <h2>Recent runs</h2>
+  {{template "runs_table" .Runs}}
+</section>
+{{end}}
+{{end}}

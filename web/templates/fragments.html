@@ -1,0 +1,123 @@
+{{define "problems"}}
+{{if .}}<div class="flash bad" role="alert"><strong>Please fix:</strong><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+{{end}}
+
+{{define "level"}}<span class="dot {{.}}" title="{{.}}"></span><span class="lvl {{.}}">{{if eq . "ok"}}Healthy{{else if eq . "warn"}}Attention{{else}}Failing{{end}}</span>{{end}}
+
+{{define "check_fragment"}}
+<div class="checks">
+{{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{else}}
+<table>
+<thead><tr><th>Check</th><th>Result</th><th>What it verifies</th></tr></thead>
+<tbody>
+{{range .Checks}}
+<tr class="{{if .OK}}rowok{{else}}rowbad{{end}}">
+  <td>{{.Display}}</td>
+  <td>{{if .OK}}<span class="pill ok">OK</span>{{else}}<span class="pill bad">FAILED</span>{{end}}</td>
+  <td>{{.What}}{{if .Fix}}<div class="fix"><strong>How to fix:</strong> {{.Fix}}</div>{{end}}</td>
+</tr>
+{{else}}<tr><td colspan="3">Barman returned no check.</td></tr>{{end}}
+</tbody></table>
+{{end}}
+</div>
+{{end}}
+
+{{define "run_fragment"}}
+<div id="run-{{.Run.ID}}" class="runbox"{{if eq .Run.Status "running"}} hx-get="/runs/{{.Run.ID}}/fragment" hx-trigger="every 3s" hx-swap="outerHTML"{{end}}>
+  <p>
+    Run <a href="/runs/{{.Run.ID}}">#{{.Run.ID}}</a> ({{.Run.Kind}} of {{.Run.Server}}):
+    {{if eq .Run.Status "running"}}<span class="pill warn">running</span> started {{ago .Run.StartedAt}} ago, this panel refreshes every 3 seconds.
+    {{else if eq .Run.Status "ok"}}<span class="pill ok">finished</span> in {{runtime .Run}}.
+    {{else}}<span class="pill bad">failed</span> with exit code {{if .Run.ExitCode}}{{.Run.ExitCode}}{{end}} after {{runtime .Run}}.{{end}}
+  </p>
+  {{if .Run.Stdout}}<pre class="out">{{.Run.Stdout}}</pre>{{end}}
+  {{if .Run.Stderr}}<pre class="out err">{{.Run.Stderr}}</pre>{{end}}
+</div>
+{{end}}
+
+{{define "status_table"}}
+<div id="status-table" hx-get="/status/table" hx-trigger="every 30s" hx-swap="outerHTML">
+{{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{end}}
+{{if .States}}
+<div class="tablewrap">
+<table class="status">
+<thead><tr><th>Server</th><th>State</th><th>Last backup</th><th>Last WAL</th><th>Backups</th><th>Check</th></tr></thead>
+<tbody>
+{{range .States}}
+<tr class="lv-{{.Level}}">
+  <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
+  <td>{{template "level" .Level}}</td>
+  <td>{{if .LastBackupID}}{{.LastBackupID}}<br><small>{{ageSec .LastBackupAgeSeconds}} ago &middot; {{size .LastBackupSize}}</small>{{else}}<small>none yet</small>{{end}}</td>
+  <td>{{if .LastWAL.IsZero}}<small>unknown</small>{{else}}{{ageSec .LastWALAgeSeconds}} ago{{end}}</td>
+  <td>{{.BackupCount}}</td>
+  <td>{{if .CheckOK}}<span class="pill ok">OK</span>{{else if .Checks}}<span class="pill bad">FAILED</span>{{else}}<span class="pill warn">unknown</span>{{end}}</td>
+</tr>
+{{if .Problems}}<tr class="probs lv-{{.Level}}"><td></td><td colspan="5"><ul>{{range .Problems}}<li>{{.}}</li>{{end}}</ul></td></tr>{{end}}
+{{if .Error}}<tr class="probs lv-fail"><td></td><td colspan="5">{{.Error}}</td></tr>{{end}}
+{{end}}
+</tbody></table>
+</div>
+<p class="muted">Cached status, refreshed every minute{{if not .Updated.IsZero}}; last refresh {{ago .Updated}} ago{{end}}.</p>
+{{else}}
+<p class="empty">No server yet, or the first status check is still running. <a href="/servers">Servers</a></p>
+{{end}}
+</div>
+{{end}}
+
+{{define "server_form"}}
+{{template "problems" .Problems}}
+<form class="grid" method="post" action="{{.Action}}">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <fieldset{{if .ReadOnly}} disabled{{end}}>
+    <legend>Server</legend>
+    {{if .New}}
+    <label>Name <input type="text" name="name" value="{{.In.Name}}" required pattern="[a-z0-9_-]+" placeholder="pg-main"><small>Lowercase letters, digits, - and _. It becomes the file name in barman.d.</small></label>
+    {{end}}
+    <label>Label <input type="text" name="label" value="{{.In.Label}}" placeholder="Main application database"><small>Free text shown in pgCellar.</small></label>
+    <label>Description <input type="text" name="description" value="{{.In.Description}}"><small>Barman's description option.</small></label>
+    <label>Backup method
+      <select name="backup_method">
+        <option value="postgres"{{if eq .In.BackupMethod "postgres"}} selected{{end}}>postgres (streaming, no SSH)</option>
+        <option value="rsync"{{if eq .In.BackupMethod "rsync"}} selected{{end}}>rsync (over SSH)</option>
+      </select>
+    </label>
+    <label>Connection string (conninfo) <input type="text" name="conninfo" value="{{.In.ConnInfo}}" placeholder="host=db1 user=barman dbname=postgres"></label>
+    <label>Streaming connection string <input type="text" name="streaming_conninfo" value="{{.In.StreamingConnInfo}}" placeholder="host=db1 user=streaming_barman dbname=postgres"><small>Streaming method only: the replication connection.</small></label>
+    <label>Replication slot <input type="text" name="slot_name" value="{{.In.Slot}}" placeholder="barman"><small>Streaming method only.</small></label>
+    <label>SSH command <input type="text" name="ssh_command" value="{{.In.SSHCommand}}" placeholder="ssh postgres@db1"><small>Rsync method only.</small></label>
+  </fieldset>
+  <fieldset{{if .ReadOnly}} disabled{{end}}>
+    <legend>Retention</legend>
+    <label>Recovery window (days) <input type="number" min="0" name="recovery_window_days" value="{{.In.Retention.RecoveryWindowDays}}"><small>0 = not set. Use either a window or a redundancy.</small></label>
+    <label>Redundancy (backups kept) <input type="number" min="0" name="redundancy" value="{{.In.Retention.Redundancy}}"></label>
+    <label>Minimum redundancy <input type="number" min="0" name="minimum_redundancy" value="{{.In.Retention.MinimumRedundancy}}"><small>Never delete below this number of backups.</small></label>
+  </fieldset>
+  <fieldset{{if .ReadOnly}} disabled{{end}}>
+    <legend>Schedule</legend>
+    <label>Backup schedule <input type="text" name="schedule_backup" value="{{.In.Schedule.Backup}}" placeholder="daily 02:00"><small>daily 02:00, weekly sun 03:00, hourly, every 6 hours, or a cron expression.</small></label>
+    <label class="chk"><input type="checkbox" name="schedule_enabled" value="1"{{if .In.Schedule.Enabled}} checked{{end}}> Enabled</label>
+  </fieldset>
+  {{if not .ReadOnly}}<div class="actions"><button class="btn" type="submit">{{if .New}}{{t "btn.create"}}{{else}}{{t "btn.save"}}{{end}}</button></div>{{end}}
+</form>
+{{end}}
+
+{{define "runs_table"}}
+{{if .}}
+<div class="tablewrap">
+<table>
+<thead><tr><th>Run</th><th>Server</th><th>Kind</th><th>Status</th><th>Started</th><th>By</th></tr></thead>
+<tbody>
+{{range .}}
+<tr><td><a href="/runs/{{.ID}}">#{{.ID}}</a></td><td><a href="/servers/{{.Server}}">{{.Server}}</a></td><td>{{.Kind}}</td>
+<td>{{if eq .Status "ok"}}<span class="pill ok">ok</span>{{else if eq .Status "running"}}<span class="pill warn">running</span>{{else}}<span class="pill bad">failed</span>{{end}}</td>
+<td>{{ts .StartedAt}}</td><td>{{.Actor}}</td></tr>
+{{end}}
+</tbody></table>
+</div>
+{{else}}<p class="empty">Nothing was run yet.</p>{{end}}
+{{end}}
+
+{{define "result_fragment"}}
+<div class="flash {{.Class}}" role="status">{{.Text}}</div>
+{{if .Output}}<pre class="out">{{.Output}}</pre>{{end}}
+{{end}}

@@ -1,0 +1,587 @@
+package app
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/stranix79/pgcellar/internal/barman"
+	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/stranix79/pgcellar/internal/store"
+)
+
+// outputTail is the most that is kept of a run's output.
+const outputTail = 16 * 1024
+
+func tail(b []byte) string {
+	if len(b) > outputTail {
+		return "[...truncated...]\n" + string(b[len(b)-outputTail:])
+	}
+	return string(b)
+}
+
+// ---- servers ----
+
+func inputFrom(s barman.Server, cs *config.Server) ServerInput {
+	in := ServerInput{
+		Name:              s.Name,
+		Description:       s.Description,
+		BackupMethod:      s.BackupMethod,
+		ConnInfo:          s.ConnInfo,
+		StreamingConnInfo: s.StreamingConnInfo,
+		Slot:              s.Slot,
+		SSHCommand:        s.SSHCommand,
+	}
+	if in.BackupMethod == "" {
+		in.BackupMethod = "rsync" // Barman's own default
+	}
+	if r, err := config.BuildRetention(s.RetentionPolicy, s.MinimumRedundancy); err == nil {
+		in.Retention = RetentionInput{r.RecoveryWindowDays, r.Redundancy, r.MinimumRedundancy}
+	}
+	if cs != nil {
+		in.Label = cs.Label
+		in.Schedule = ScheduleInput{Backup: cs.Schedule.Backup, Enabled: cs.Schedule.Enabled}
+		if s.RetentionPolicy == "" && s.MinimumRedundancy == "" {
+			in.Retention = RetentionInput{cs.Retention.RecoveryWindowDays, cs.Retention.Redundancy, cs.Retention.MinimumRedundancy}
+		}
+	}
+	return in
+}
+
+func findCfg(cfg *config.Config, name string) *config.Server {
+	for i := range cfg.Servers {
+		if cfg.Servers[i].Name == name {
+			return &cfg.Servers[i]
+		}
+	}
+	return nil
+}
+
+func findFile(files []barman.Server, name string) *barman.Server {
+	for i := range files {
+		if files[i].Name == name {
+			return &files[i]
+		}
+	}
+	return nil
+}
+
+func (a *App) detail(name string, file *barman.Server, cs *config.Server, inBarman bool) ServerDetail {
+	d := ServerDetail{InBarman: inBarman, Problems: []string{}}
+	if file != nil {
+		d.ServerInput = inputFrom(*file, cs)
+		d.HasFile = true
+		d.File = file.File
+		if p := barman.Validate(*file); p != nil {
+			d.Problems = p
+		}
+	} else {
+		d.ServerInput = ServerInput{Name: name}
+		if cs != nil {
+			d.Label = cs.Label
+			d.Schedule = ScheduleInput{Backup: cs.Schedule.Backup, Enabled: cs.Schedule.Enabled}
+			d.Retention = RetentionInput{cs.Retention.RecoveryWindowDays, cs.Retention.Redundancy, cs.Retention.MinimumRedundancy}
+		}
+	}
+	if d.Schedule.Backup != "" {
+		if _, human, err := config.ParseSchedule(d.Schedule.Backup); err == nil {
+			d.ScheduleHuman = human
+		}
+	}
+	if st, ok := a.State(name); ok {
+		d.State = &st
+	}
+	return d
+}
+
+// ListServers merges the servers of barman.d, those Barman reports and those
+// pgcellar.yaml mentions.
+func (a *App) ListServers(ctx context.Context) ([]ServerDetail, error) {
+	files, err := barman.LoadServers(a.barmanConfigDir())
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the Barman configuration directory: %w", err)
+	}
+	cfg := a.Config()
+	inBarman := map[string]bool{}
+	if names, err := a.Engine.ListServers(barman.WithActor(ctx, "system")); err == nil {
+		for _, n := range names {
+			inBarman[n] = true
+		}
+	}
+	set := map[string]bool{}
+	for _, f := range files {
+		set[f.Name] = true
+	}
+	for n := range inBarman {
+		set[n] = true
+	}
+	for _, s := range cfg.Servers {
+		set[s.Name] = true
+	}
+	names := make([]string, 0, len(set))
+	for n := range set {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	out := make([]ServerDetail, 0, len(names))
+	for _, n := range names {
+		out = append(out, a.detail(n, findFile(files, n), findCfg(cfg, n), inBarman[n]))
+	}
+	return out, nil
+}
+
+// GetServer returns one server, or ErrNotFound.
+func (a *App) GetServer(ctx context.Context, name string) (*ServerDetail, error) {
+	list, err := a.ListServers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if list[i].Name == name {
+			return &list[i], nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func normalize(in *ServerInput) {
+	for _, p := range []*string{&in.Name, &in.Label, &in.Description, &in.BackupMethod, &in.ConnInfo, &in.StreamingConnInfo, &in.Slot, &in.SSHCommand, &in.Schedule.Backup} {
+		*p = strings.TrimSpace(*p)
+	}
+	in.BackupMethod = strings.ToLower(in.BackupMethod)
+}
+
+// toBarman applies the input on top of an existing section (or a new one).
+func toBarman(in ServerInput, existing *barman.Server) barman.Server {
+	var s barman.Server
+	isNew := existing == nil
+	if existing != nil {
+		s = *existing
+		s.Extra = map[string]string{}
+		for k, v := range existing.Extra {
+			s.Extra[k] = v
+		}
+	} else {
+		s = barman.Server{Name: in.Name, Extra: map[string]string{}}
+	}
+	methodChanged := isNew || strings.ToLower(s.BackupMethod) != in.BackupMethod
+	s.Description = in.Description
+	s.BackupMethod = in.BackupMethod
+	s.ConnInfo = in.ConnInfo
+	s.StreamingConnInfo = in.StreamingConnInfo
+	s.Slot = in.Slot
+	s.SSHCommand = in.SSHCommand
+	if methodChanged {
+		switch in.BackupMethod {
+		case "postgres":
+			s.StreamingArchiver, s.Archiver = "on", "off"
+			if _, ok := s.Extra["create_slot"]; !ok {
+				s.Extra["create_slot"] = "auto"
+			}
+		case "rsync":
+			s.Archiver, s.StreamingArchiver = "on", "off"
+		}
+	}
+	r := config.Retention{RecoveryWindowDays: in.Retention.RecoveryWindowDays, Redundancy: in.Retention.Redundancy, MinimumRedundancy: in.Retention.MinimumRedundancy}
+	s.RetentionPolicy = config.RetentionPolicy(r)
+	s.MinimumRedundancy = config.MinimumRedundancy(r)
+	return s
+}
+
+func upsertServer(cfg *config.Config, in ServerInput) {
+	entry := config.Server{
+		Name:  in.Name,
+		Label: in.Label,
+		Schedule: config.Schedule{
+			Backup:  in.Schedule.Backup,
+			Enabled: in.Schedule.Enabled,
+		},
+		Retention: config.Retention{
+			RecoveryWindowDays: in.Retention.RecoveryWindowDays,
+			Redundancy:         in.Retention.Redundancy,
+			MinimumRedundancy:  in.Retention.MinimumRedundancy,
+		},
+	}
+	servers := make([]config.Server, 0, len(cfg.Servers)+1)
+	replaced := false
+	for _, s := range cfg.Servers {
+		if s.Name == in.Name {
+			entry.Tags = s.Tags
+			s = entry
+			replaced = true
+		}
+		servers = append(servers, s)
+	}
+	if !replaced {
+		servers = append(servers, entry)
+	}
+	cfg.Servers = servers
+}
+
+// problemsFor checks an input without touching any file.
+func (a *App) problemsFor(in ServerInput, bs barman.Server) []string {
+	var p []string
+	if in.Schedule.Backup != "" {
+		if _, _, err := config.ParseSchedule(in.Schedule.Backup); err != nil {
+			p = append(p, "Schedule: "+err.Error()+".")
+		}
+	} else if in.Schedule.Enabled {
+		p = append(p, "Schedule: give a schedule such as \"daily 02:00\" or untick \"enabled\".")
+	}
+	r := in.Retention
+	switch {
+	case r.RecoveryWindowDays < 0 || r.Redundancy < 0 || r.MinimumRedundancy < 0:
+		p = append(p, "Retention: values cannot be negative.")
+	case r.RecoveryWindowDays > 0 && r.Redundancy > 0:
+		p = append(p, "Retention: set either a recovery window or a redundancy, not both.")
+	case r.Redundancy > 0 && r.MinimumRedundancy > r.Redundancy:
+		p = append(p, "Retention: the minimum redundancy cannot be higher than the redundancy.")
+	}
+	if in.Name != "" && !serverNameOK(in.Name) {
+		p = append(p, fmt.Sprintf("The server name %q is not valid: use lowercase letters, digits, '-' and '_' only.", in.Name))
+	}
+	p = append(p, barman.Validate(bs)...)
+	return p
+}
+
+func serverNameOK(n string) bool {
+	if n == "" {
+		return false
+	}
+	for _, c := range n {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return barman.ValidName(n)
+}
+
+// CreateServer writes a new barman.d file and the pgcellar.yaml entry, then
+// commits both with the user as author.
+func (a *App) CreateServer(actor string, in ServerInput) (*WriteResult, error) {
+	normalize(&in)
+	if in.BackupMethod == "" {
+		in.BackupMethod = "postgres"
+	}
+	bs := toBarman(in, nil)
+	if p := a.problemsFor(in, bs); len(p) > 0 {
+		return nil, &ProblemsError{Problems: p}
+	}
+	dir := a.barmanConfigDir()
+	files, err := barman.LoadServers(dir)
+	if err != nil {
+		return nil, err
+	}
+	if findFile(files, in.Name) != nil {
+		return nil, &ConflictError{Msg: fmt.Sprintf("A server named %q already exists.", in.Name)}
+	}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return nil, fmt.Errorf("cannot create %s: %w", dir, err)
+	}
+	if err := barman.SaveNewServer(dir, bs); err != nil {
+		return nil, err
+	}
+	if err := a.mutateConfig(func(cfg *config.Config) error { upsertServer(cfg, in); return nil }); err != nil {
+		_ = os.Remove(filepath.Join(dir, in.Name+".conf"))
+		return nil, err
+	}
+	_ = a.Store.AddAudit(actor, "server.create", in.Name, "")
+	return a.finishWrite("add server "+in.Name, actor), nil
+}
+
+// UpdateServer rewrites the barman.d section and the pgcellar.yaml entry.
+func (a *App) UpdateServer(actor, name string, in ServerInput) (*WriteResult, error) {
+	in.Name = name
+	normalize(&in)
+	files, err := barman.LoadServers(a.barmanConfigDir())
+	if err != nil {
+		return nil, err
+	}
+	existing := findFile(files, name)
+	if existing == nil {
+		if a.knownInConfig(name) {
+			return nil, ErrNoFile
+		}
+		return nil, ErrNotFound
+	}
+	bs := toBarman(in, existing)
+	if p := a.problemsFor(in, bs); len(p) > 0 {
+		return nil, &ProblemsError{Problems: p}
+	}
+	previous, readErr := os.ReadFile(existing.File)
+	if err := barman.SaveServer(bs); err != nil {
+		return nil, err
+	}
+	if err := a.mutateConfig(func(cfg *config.Config) error { upsertServer(cfg, in); return nil }); err != nil {
+		if readErr == nil {
+			_ = os.WriteFile(existing.File, previous, 0o640)
+		}
+		return nil, err
+	}
+	_ = a.Store.AddAudit(actor, "server.update", name, "")
+	return a.finishWrite("update server "+name, actor), nil
+}
+
+func (a *App) knownInConfig(name string) bool { return findCfg(a.Config(), name) != nil }
+
+func (a *App) finishWrite(message, actor string) *WriteResult {
+	res := &WriteResult{}
+	h, err := a.Commit(message, actor)
+	res.Commit = h
+	if err != nil {
+		res.Warning = "The change was saved but could not be recorded in git: " + err.Error()
+		a.Logf("%s: %s", message, res.Warning)
+	}
+	return res
+}
+
+// CurrentInput returns the current input of a server with the JSON-decoded
+// overrides applied by the caller; used by PUT so that omitted fields keep
+// their value.
+func (a *App) CurrentInput(ctx context.Context, name string) (ServerInput, error) {
+	d, err := a.GetServer(ctx, name)
+	if err != nil {
+		return ServerInput{}, err
+	}
+	if !d.HasFile {
+		return ServerInput{}, ErrNoFile
+	}
+	return d.ServerInput, nil
+}
+
+// ---- Barman actions ----
+
+func (a *App) knownServer(ctx context.Context, name string) error {
+	if !barman.ValidName(name) {
+		return ErrNotFound
+	}
+	if files, err := barman.LoadServers(a.barmanConfigDir()); err == nil && findFile(files, name) != nil {
+		return nil
+	}
+	if names, err := a.Engine.ListServers(barman.WithActor(ctx, "system")); err == nil {
+		for _, n := range names {
+			if n == name {
+				return nil
+			}
+		}
+	}
+	return ErrNotFound
+}
+
+// Check runs `barman check` live and explains every line.
+func (a *App) Check(ctx context.Context, actor, name string) ([]CheckView, error) {
+	if err := a.knownServer(ctx, name); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(barman.WithActor(ctx, actor), 3*time.Minute)
+	defer cancel()
+	res, err := a.Engine.Check(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return checkViews(res), nil
+}
+
+// Backups lists the backups of a server, newest first.
+func (a *App) Backups(ctx context.Context, actor, name string) ([]BackupView, error) {
+	if err := a.knownServer(ctx, name); err != nil {
+		return nil, err
+	}
+	list, err := a.Engine.ListBackups(barman.WithActor(ctx, actor), name)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]BackupView, 0, len(list))
+	for i := len(list) - 1; i >= 0; i-- {
+		b := list[i]
+		out = append(out, BackupView{ID: b.ID, Status: b.Status, BeginTime: b.BeginTime, EndTime: b.EndTime, SizeBytes: b.Size, WALSizeBytes: b.WALSize, PGVersion: b.PGVersion})
+	}
+	return out, nil
+}
+
+// captureRunner keeps what Barman printed, for the run record.
+type captureRunner struct {
+	inner          barman.Runner
+	stdout, stderr bytes.Buffer
+}
+
+func (c *captureRunner) Run(ctx context.Context, args ...string) ([]byte, []byte, error) {
+	out, errOut, err := c.inner.Run(ctx, args...)
+	c.stdout.Write(out)
+	c.stderr.Write(errOut)
+	return out, errOut, err
+}
+
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var re *barman.RunError
+	if errors.As(err, &re) {
+		return re.ExitCode
+	}
+	return -1
+}
+
+// StartBackup starts `barman backup` in the background and returns the id of
+// the run to follow. Only one backup per server runs at a time.
+func (a *App) StartBackup(ctx context.Context, actor, name string) (int64, error) {
+	if err := a.knownServer(ctx, name); err != nil {
+		return 0, err
+	}
+	a.runMu.Lock()
+	if id, busy := a.running[name]; busy {
+		a.runMu.Unlock()
+		return id, &ConflictError{Msg: fmt.Sprintf("A backup of %s is already running (run #%d).", name, id)}
+	}
+	id, err := a.Store.StartRun(name, store.KindBackup, actor)
+	if err != nil {
+		a.runMu.Unlock()
+		return 0, err
+	}
+	a.running[name] = id
+	a.runMu.Unlock()
+	_ = a.Store.AddAudit(actor, "backup.start", name, fmt.Sprintf("run #%d", id))
+
+	a.jobs.Add(1)
+	go func() {
+		defer a.jobs.Done()
+		bctx, cancel := context.WithTimeout(barman.WithActor(context.Background(), actor), 12*time.Hour)
+		defer cancel()
+		cr := &captureRunner{inner: a.Runner}
+		berr := barman.NewEngine(cr).Backup(bctx, name)
+		code := exitCodeOf(berr)
+		stderr := cr.stderr.String()
+		if berr != nil && !strings.Contains(stderr, berr.Error()) {
+			stderr += "\n" + berr.Error()
+		}
+		if err := a.Store.FinishRun(id, code, tail(cr.stdout.Bytes()), tail([]byte(strings.TrimSpace(stderr)))); err != nil {
+			a.Logf("cannot record the end of run #%d: %v", id, err)
+		}
+		a.runMu.Lock()
+		delete(a.running, name)
+		a.runMu.Unlock()
+		a.refreshServer(bctx, name)
+	}()
+	return id, nil
+}
+
+// SwitchWAL closes the current WAL segment and archives it. It returns what
+// Barman printed.
+func (a *App) SwitchWAL(ctx context.Context, actor, name string) (string, error) {
+	if err := a.knownServer(ctx, name); err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(barman.WithActor(ctx, actor), 5*time.Minute)
+	defer cancel()
+	cr := &captureRunner{inner: a.Runner}
+	err := barman.NewEngine(cr).SwitchWAL(ctx, name)
+	_ = a.Store.AddAudit(actor, "switch-wal", name, fmt.Sprintf("exit=%d", exitCodeOf(err)))
+	out := strings.TrimSpace(cr.stdout.String())
+	if err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+// ---- runs, history, audit ----
+
+func toRunView(r store.Run, withOutput bool) RunView {
+	v := RunView{ID: r.ID, Server: r.Server, Kind: r.Kind, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt, ExitCode: r.ExitCode, Actor: r.Actor}
+	switch {
+	case r.FinishedAt == nil:
+		v.Status = RunRunning
+	case r.ExitCode != nil && *r.ExitCode == 0:
+		v.Status = RunOK
+	default:
+		v.Status = RunFailed
+	}
+	if withOutput {
+		v.Stdout, v.Stderr = r.StdoutTail, r.StderrTail
+	}
+	return v
+}
+
+// Runs lists recent runs, newest first. An empty server means all.
+func (a *App) Runs(server string, limit int) ([]RunView, error) {
+	runs, err := a.Store.ListRuns(server, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RunView, 0, len(runs))
+	for _, r := range runs {
+		out = append(out, toRunView(r, false))
+	}
+	return out, nil
+}
+
+// Run returns one run with its output, or ErrNotFound.
+func (a *App) Run(id int64) (*RunView, error) {
+	// The store has no lookup by id; recent runs are enough in practice.
+	runs, err := a.Store.ListRuns("", 5000)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range runs {
+		if r.ID == id {
+			v := toRunView(r, true)
+			return &v, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// History returns the latest commits of the configuration repositories.
+func (a *App) History(n int) ([]HistoryItem, error) {
+	var out []HistoryItem
+	add := func(repo, dir string) error {
+		log, err := config.Log(dir, n)
+		if err != nil {
+			return err
+		}
+		for _, e := range log {
+			out = append(out, HistoryItem{Repo: repo, Hash: e.Hash, Date: e.Date, Author: e.Author, Message: e.Message})
+		}
+		return nil
+	}
+	if err := add("config", a.ConfigDir); err != nil {
+		return nil, err
+	}
+	if d := a.barmanDirIfSeparate(); d != "" {
+		if err := add("barman", d); err != nil {
+			return nil, err
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Date > out[j].Date })
+	return out, nil
+}
+
+// Diff returns the patch of one commit of "config" or "barman".
+func (a *App) Diff(repo, hash string) (string, error) {
+	dir := a.ConfigDir
+	if repo == "barman" {
+		if dir = a.barmanDirIfSeparate(); dir == "" {
+			return "", ErrNotFound
+		}
+	}
+	return config.Diff(dir, hash)
+}
+
+// Audit returns the latest audit entries.
+func (a *App) Audit(limit int) ([]AuditItem, error) {
+	list, err := a.Store.ListAudit(limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AuditItem, 0, len(list))
+	for _, e := range list {
+		out = append(out, AuditItem{At: e.At, Actor: e.Actor, Action: e.Action, Target: e.Target, Details: e.Details})
+	}
+	return out, nil
+}

@@ -1,0 +1,41 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true}]}'>
+<title>{{.Title}} - pgCellar</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
+<header class="top">
+  <div class="wrap bar">
+    <a class="logo" href="/status">pg<span>Cellar</span></a>
+    {{if .User}}
+    <nav>
+      <a href="/status"{{if eq .Active "status"}} class="on"{{end}}>{{t "nav.status"}}</a>
+      <a href="/servers"{{if eq .Active "servers"}} class="on"{{end}}>{{t "nav.servers"}}</a>
+      <a href="/runs"{{if eq .Active "runs"}} class="on"{{end}}>{{t "nav.runs"}}</a>
+      <a href="/history"{{if eq .Active "history"}} class="on"{{end}}>{{t "nav.history"}}</a>
+      {{if .CanAdmin}}<a href="/audit"{{if eq .Active "audit"}} class="on"{{end}}>{{t "nav.audit"}}</a>{{end}}
+    </nav>
+    <form class="who" method="post" action="/logout">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <span>{{.User}} <em>({{.Role}})</em></span>
+      <button class="link" type="submit">{{t "nav.logout"}}</button>
+    </form>
+    {{end}}
+  </div>
+</header>
+{{if .Dev}}<div class="devbar">{{t "dev.banner"}}</div>{{end}}
+<main class="wrap">
+{{if .Msg}}<div class="flash ok" role="status">{{.Msg}}</div>{{end}}
+{{if .Warn}}<div class="flash warn" role="status">{{.Warn}}</div>{{end}}
+{{template "content" .}}
+</main>
+<footer class="wrap foot">pgCellar {{.Version}} &middot; <span>the barman serves, the cellar keeps</span></footer>
+</body>
+</html>
+{{end}}

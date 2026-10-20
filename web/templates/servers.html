@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="head"><h1>{{t "servers.title"}}</h1>{{if .CanAdmin}}<a class="btn" href="/servers/new">{{t "btn.add_server"}}</a>{{end}}</div>
+{{if .Data}}
+<div class="tablewrap">
+<table>
+<thead><tr><th>Server</th><th>State</th><th>Method</th><th>Schedule</th><th>Retention</th><th>Notes</th></tr></thead>
+<tbody>
+{{range .Data}}
+<tr>
+  <td><a href="/servers/{{.Name}}">{{.Name}}</a>{{if .Label}}<br><small>{{.Label}}</small>{{end}}</td>
+  <td>{{if .State}}{{template "level" .State.Level}}{{else}}<small>unknown</small>{{end}}</td>
+  <td>{{if .HasFile}}{{.BackupMethod}}{{else}}-{{end}}</td>
+  <td>{{if .Schedule.Enabled}}{{.ScheduleHuman}}{{else}}<small>off</small>{{end}}</td>
+  <td>{{retention .Retention}}</td>
+  <td>{{if not .HasFile}}<small>No file in barman.d</small>{{else if not .InBarman}}<small>Barman does not list it</small>{{end}}{{if .Problems}}<small class="warnt"> {{len .Problems}} definition problem(s)</small>{{end}}</td>
+</tr>
+{{end}}
+</tbody></table>
+</div>
+{{else}}
+<p class="empty">No server yet.{{if .CanAdmin}} <a href="/servers/new">Add the first one.</a>{{end}}</p>
+{{end}}
+{{end}}

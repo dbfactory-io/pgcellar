@@ -1,0 +1,382 @@
+// Package app wires pgCellar together (configuration, store, Barman engine)
+// and holds the service layer used by both presentations: the HTML interface
+// (internal/web) and the JSON API (internal/api). Neither of them contains
+// business logic of its own.
+package app
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/stranix79/pgcellar/internal/barman"
+	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/stranix79/pgcellar/internal/store"
+)
+
+// Roles, from the least to the most privileged.
+const (
+	RoleViewer   = "viewer"
+	RoleOperator = "operator"
+	RoleAdmin    = "admin"
+)
+
+var roleRank = map[string]int{RoleViewer: 1, RoleOperator: 2, RoleAdmin: 3}
+
+// RoleAtLeast reports whether role grants everything min grants.
+func RoleAtLeast(role, min string) bool {
+	return roleRank[role] > 0 && roleRank[role] >= roleRank[min]
+}
+
+// App is the running pgCellar: configuration, database and Barman engine.
+type App struct {
+	Version string
+	Dev     bool
+	// CronInterval is how often `barman cron` runs. Zero disables it.
+	CronInterval time.Duration
+	// StatusInterval is how often the status cache is refreshed.
+	StatusInterval time.Duration
+
+	ConfigPath string // absolute path of pgcellar.yaml
+	ConfigDir  string // its directory, a git repository
+	Store      *store.Store
+	Engine     barman.Engine
+	Runner     barman.Runner
+	Logger     *log.Logger
+	// Now can be replaced in tests.
+	Now func() time.Time
+
+	// Generated in --dev mode; removed by Close.
+	TempDir string
+
+	mu         sync.RWMutex
+	cfg        *config.Config
+	cfgModTime time.Time
+	cfgChecked time.Time
+
+	runMu   sync.Mutex
+	running map[string]int64 // server -> run id of the backup in progress
+
+	cacheMu     sync.RWMutex
+	cache       map[string]*ServerState
+	cacheOrder  []string
+	cacheTime   time.Time
+	cacheErr    string
+	refreshOnce sync.Mutex
+
+	wg   sync.WaitGroup // background loops
+	jobs sync.WaitGroup // backups in progress
+}
+
+// Load reads and validates the configuration, opens the database and builds
+// the Barman engine. In dev mode it works on a temporary copy of everything
+// and uses the fake Barman, see dev.go.
+func Load(configPath string, dev bool) (*App, error) {
+	abs, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := config.Load(abs)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %s: %w", configPath, err)
+	}
+	a := &App{
+		Dev:            dev,
+		CronInterval:   time.Minute,
+		StatusInterval: time.Minute,
+		Logger:         log.New(os.Stderr, "pgcellar: ", log.LstdFlags),
+		Now:            time.Now,
+		running:        map[string]int64{},
+		cache:          map[string]*ServerState{},
+	}
+	if dev {
+		abs, err = a.setupDev(abs, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("dev mode: %w", err)
+		}
+	}
+	if problems := config.Validate(cfg); len(problems) > 0 {
+		a.cleanup()
+		return nil, fmt.Errorf("invalid configuration %s:\n  - %s", configPath, strings.Join(problems, "\n  - "))
+	}
+	a.ConfigPath = abs
+	a.ConfigDir = filepath.Dir(abs)
+	a.cfg = cfg
+	a.noteModTime()
+
+	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
+		a.cleanup()
+		return nil, fmt.Errorf("cannot create data_dir %s: %w", cfg.DataDir, err)
+	}
+	st, err := store.Open(filepath.Join(cfg.DataDir, "pgcellar.db"))
+	if err != nil {
+		a.cleanup()
+		return nil, fmt.Errorf("cannot open the database: %w", err)
+	}
+	if err := st.Migrate(); err != nil {
+		_ = st.Close()
+		a.cleanup()
+		return nil, fmt.Errorf("cannot prepare the database: %w", err)
+	}
+	a.Store = st
+
+	runner := barman.CLIRunner{
+		Binary: cfg.Barman.Binary,
+		User:   cfg.Barman.User,
+		Audit:  a.audit,
+	}
+	a.Runner = runner
+	a.Engine = barman.NewEngine(runner)
+
+	if err := config.EnsureRepo(a.ConfigDir); err != nil {
+		a.Logger.Printf("warning: no git history for %s: %v", a.ConfigDir, err)
+	}
+	if d := a.barmanDirIfSeparate(); d != "" {
+		if _, err := os.Stat(d); err == nil {
+			if err := config.EnsureRepo(d); err != nil {
+				a.Logger.Printf("warning: no git history for %s: %v", d, err)
+			}
+		}
+	}
+	a.closeStaleRuns()
+	return a, nil
+}
+
+// audit records one executed Barman command.
+func (a *App) audit(e barman.AuditEntry) {
+	actor := e.Actor
+	if actor == "" {
+		actor = "system"
+	}
+	target := ""
+	if n := len(e.Args); n > 0 && !strings.HasPrefix(e.Args[n-1], "-") && e.Args[n-1] != "cron" {
+		target = e.Args[n-1]
+	}
+	details := fmt.Sprintf("exit=%d duration=%s", e.ExitCode, e.Duration.Round(time.Millisecond))
+	if err := a.Store.AddAudit(actor, e.Command, target, details); err != nil {
+		a.Logger.Printf("audit write failed: %v", err)
+	}
+}
+
+// closeStaleRuns marks runs left open by a previous process as interrupted.
+func (a *App) closeStaleRuns() {
+	runs, err := a.Store.ListRuns("", 500)
+	if err != nil {
+		return
+	}
+	for _, r := range runs {
+		if r.FinishedAt == nil {
+			_ = a.Store.FinishRun(r.ID, -1, r.StdoutTail, "interrupted: pgCellar was restarted while this run was in progress")
+		}
+	}
+}
+
+func (a *App) now() time.Time { return a.Now() }
+
+// Logf writes to the application log.
+func (a *App) Logf(format string, args ...any) { a.Logger.Printf(format, args...) }
+
+// Start launches the background loops (status cache, barman cron, session
+// cleanup). They stop when ctx ends.
+func (a *App) Start(ctx context.Context) {
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		a.statusLoop(ctx)
+	}()
+	if a.CronInterval > 0 {
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			a.cronLoop(ctx)
+		}()
+	}
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				_, _ = a.Store.PurgeExpiredSessions()
+			}
+		}
+	}()
+}
+
+func (a *App) cronLoop(ctx context.Context) {
+	t := time.NewTicker(a.CronInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			cctx, cancel := context.WithTimeout(barman.WithActor(ctx, "system"), 5*time.Minute)
+			if err := a.Engine.Cron(cctx); err != nil && ctx.Err() == nil {
+				a.Logf("barman cron failed: %v", err)
+			}
+			cancel()
+		}
+	}
+}
+
+// Close waits for the background loops, then closes the database. Call it
+// after cancelling the context given to Start.
+func (a *App) Close() error {
+	a.wg.Wait()
+	// Give running backups a moment to record their end; a backup that
+	// takes longer is left to Barman and shows up as interrupted on restart.
+	done := make(chan struct{})
+	go func() { a.jobs.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+	}
+	var err error
+	if a.Store != nil {
+		err = a.Store.Close()
+	}
+	a.cleanup()
+	return err
+}
+
+func (a *App) cleanup() {
+	if a.TempDir != "" {
+		_ = os.RemoveAll(a.TempDir)
+	}
+}
+
+// ---- configuration access ----
+
+func (a *App) noteModTime() {
+	if fi, err := os.Stat(a.ConfigPath); err == nil {
+		a.cfgModTime = fi.ModTime()
+	}
+	a.cfgChecked = time.Now()
+}
+
+// Config returns the current configuration. The file is the truth: when it
+// changed on disk (hand edit, git pull) and still validates, it is reloaded.
+// The returned value must be treated as read-only.
+func (a *App) Config() *config.Config {
+	a.mu.RLock()
+	cfg, checked := a.cfg, a.cfgChecked
+	a.mu.RUnlock()
+	if time.Since(checked) < time.Second {
+		return cfg
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if time.Since(a.cfgChecked) < time.Second {
+		return a.cfg
+	}
+	a.cfgChecked = time.Now()
+	fi, err := os.Stat(a.ConfigPath)
+	if err != nil || !fi.ModTime().After(a.cfgModTime) {
+		return a.cfg
+	}
+	fresh, err := config.Load(a.ConfigPath)
+	if err != nil || len(config.Validate(fresh)) > 0 {
+		a.Logf("pgcellar.yaml changed on disk but is not valid, keeping the previous configuration")
+		a.cfgModTime = fi.ModTime()
+		return a.cfg
+	}
+	a.cfg, a.cfgModTime = fresh, fi.ModTime()
+	return a.cfg
+}
+
+// barmanConfigDir is where the server files live.
+func (a *App) barmanConfigDir() string { return a.Config().Barman.ConfigDir }
+
+// barmanDirIfSeparate returns the Barman config directory when it is not
+// inside the pgcellar.yaml repository (then it gets its own repository).
+func (a *App) barmanDirIfSeparate() string {
+	d := a.cfg.Barman.ConfigDir
+	if d == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(d)
+	if err != nil {
+		return ""
+	}
+	if abs == a.ConfigDir || strings.HasPrefix(abs, a.ConfigDir+string(filepath.Separator)) {
+		return ""
+	}
+	return abs
+}
+
+// mutateConfig reloads pgcellar.yaml from disk, applies fn, validates and
+// saves. The caller holds no lock.
+func (a *App) mutateConfig(fn func(cfg *config.Config) error) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	cfg, err := config.Load(a.ConfigPath)
+	if err != nil {
+		return err
+	}
+	if err := fn(cfg); err != nil {
+		return err
+	}
+	if problems := config.Validate(cfg); len(problems) > 0 {
+		return &ProblemsError{Problems: problems}
+	}
+	if err := config.Save(a.ConfigPath, cfg); err != nil {
+		return err
+	}
+	a.cfg = cfg
+	a.noteModTime()
+	return nil
+}
+
+// Commit records pending changes in the git history of the configuration
+// directory (and of the Barman directory when it is elsewhere). It returns
+// the short hash of the first repository that changed.
+func (a *App) Commit(message, author string) (string, error) {
+	var first string
+	var errs []string
+	dirs := []string{a.ConfigDir}
+	if d := a.barmanDirIfSeparate(); d != "" {
+		dirs = append(dirs, d)
+	}
+	for _, d := range dirs {
+		h, err := config.Commit(d, message, author, author+"@pgcellar")
+		if err != nil {
+			errs = append(errs, err.Error())
+			continue
+		}
+		if first == "" {
+			first = h
+		}
+	}
+	if len(errs) > 0 {
+		return first, errors.New(strings.Join(errs, "; "))
+	}
+	return first, nil
+}
+
+// Errors returned by the service layer. Presentations map them to messages
+// and status codes.
+var (
+	ErrNotFound = errors.New("not found")
+	ErrNoFile   = errors.New("this server has no configuration file in the Barman directory")
+)
+
+// ProblemsError carries validation problems, one sentence each.
+type ProblemsError struct{ Problems []string }
+
+func (e *ProblemsError) Error() string { return strings.Join(e.Problems, " ") }
+
+// ConflictError means the request is valid but cannot be done now.
+type ConflictError struct{ Msg string }
+
+func (e *ConflictError) Error() string { return e.Msg }

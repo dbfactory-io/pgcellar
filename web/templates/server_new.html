@@ -1,0 +1,5 @@
+{{define "content"}}
+<h1>{{t "servers.new"}}</h1>
+<p class="muted">Writes <code>barman.d/&lt;name&gt;.conf</code> and the matching entry of <code>pgcellar.yaml</code>, then records both in git under your name.</p>
+{{template "server_form" .Data}}
+{{end}}
