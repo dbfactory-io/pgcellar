@@ -62,6 +62,9 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET "+v+"/runs/{id}", a.auth(app.RoleViewer, a.run))
 	mux.HandleFunc("GET "+v+"/history", a.auth(app.RoleViewer, a.history))
 	mux.HandleFunc("GET "+v+"/audit", a.auth(app.RoleAdmin, a.audit))
+	mux.HandleFunc("GET "+v+"/ssh/authorized-keys", a.auth(app.RoleAdmin, a.authorizedKeys))
+	mux.HandleFunc("POST "+v+"/ssh/authorized-keys", a.auth(app.RoleAdmin, a.allowKey))
+	mux.HandleFunc("DELETE "+v+"/ssh/authorized-keys", a.auth(app.RoleAdmin, a.revokeKey))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no such endpoint; see /api/v1/openapi.json")
 	})
@@ -425,6 +428,46 @@ func (a *API) deleteRecovery(w http.ResponseWriter, r *http.Request, p principal
 		return
 	}
 	if err := a.app.DeleteRecovery(p.actor(), id); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) authorizedKeys(w http.ResponseWriter, r *http.Request, p principal) {
+	keys, err := a.app.AuthorizedKeys()
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, keys)
+}
+
+func (a *API) allowKey(w http.ResponseWriter, r *http.Request, p principal) {
+	var in struct {
+		Server    string `json:"server"`
+		PublicKey string `json:"public_key"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+		return
+	}
+	k, err := a.app.AllowSSHKey(p.actor(), strings.TrimSpace(in.Server), in.PublicKey)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusCreated, k)
+}
+
+// revokeKey removes the key whose fingerprint is given in ?fingerprint=SHA256:...
+func (a *API) revokeKey(w http.ResponseWriter, r *http.Request, p principal) {
+	fp := r.URL.Query().Get("fingerprint")
+	if fp == "" {
+		writeError(w, http.StatusBadRequest, "give the key to remove: ?fingerprint=SHA256:...")
+		return
+	}
+	if err := a.app.RevokeSSHKey(p.actor(), fp); err != nil {
 		a.fail(w, r, err)
 		return
 	}

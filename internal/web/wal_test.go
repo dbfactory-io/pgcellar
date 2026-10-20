@@ -140,7 +140,7 @@ func TestSSHKeyPage(t *testing.T) {
 		t.Error("the public key is not on the page")
 	}
 	host, _ := os.Hostname()
-	for _, w := range []string{"~postgres/.ssh/authorized_keys", "~barman/.ssh/authorized_keys", "barman-cli", "archive_mode = on", "archive_command = 'barman-wal-archive " + host + " &lt;server&gt; %p'", "restart", "pg_reload_conf", "barman switch-wal --archive", "barman check"} {
+	for _, w := range []string{"~postgres/.ssh/authorized_keys", "~barman/.ssh/authorized_keys", "barman-cli", "archive_mode = on", "archive_command = 'barman-wal-archive --port 2222 " + host + " &lt;server&gt; %p'", "restart", "pg_reload_conf", "barman switch-wal --archive", "barman check"} {
 		if !strings.Contains(body, w) {
 			t.Errorf("page lacks %q", w)
 		}

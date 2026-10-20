@@ -130,6 +130,7 @@ type SetupInput struct {
 	ArchiverOn    bool   // archiver = on in the Barman server (WAL by archive_command)
 	ServerName    string // name of the Barman server, used in the advised archive_command
 	SSHHost       string // how PostgreSQL reaches pgCellar over SSH, used in the advised archive_command
+	SSHPort       int    // port of the SSH companion container; 0 or 22 = no --port in the command
 }
 
 // SetupTools names the PostgreSQL client programs; empty means the usual name
@@ -142,7 +143,7 @@ type SetupTools struct {
 // ReadSetup runs the query and the version probe through r and returns the
 // checks that come from PostgreSQL itself. When psql fails the result is one
 // error line and the rest is not evaluated.
-func ReadSetup(ctx context.Context, r BinaryRunner, tools SetupTools, srv Server, sshHost string) []SetupCheck {
+func ReadSetup(ctx context.Context, r BinaryRunner, tools SetupTools, srv Server, sshHost string, sshPort int) []SetupCheck {
 	ctx = WithTarget(ctx, srv.Name)
 	psql := tools.Psql
 	if psql == "" {
@@ -174,6 +175,7 @@ func ReadSetup(ctx context.Context, r BinaryRunner, tools SetupTools, srv Server
 		ArchiverOn:    IsOn(srv.Archiver),
 		ServerName:    srv.Name,
 		SSHHost:       sshHost,
+		SSHPort:       sshPort,
 	})
 }
 
@@ -212,15 +214,20 @@ func alter(name, value string, restart bool) string {
 
 // ArchiveCommand is the archive_command advised for a server: barman-wal-archive
 // sends each WAL file to pgCellar's Barman over SSH (package barman-cli on the
-// PostgreSQL server). host is how PostgreSQL reaches the pgCellar host.
-func ArchiveCommand(host, server string) string {
+// PostgreSQL server). host is how PostgreSQL reaches the pgCellar host and port
+// the port of the SSH companion container (0 or 22: the default, no option).
+func ArchiveCommand(host string, port int, server string) string {
 	if strings.TrimSpace(host) == "" {
 		host = "<pgcellar host>"
 	}
 	if strings.TrimSpace(server) == "" {
 		server = "<server>"
 	}
-	return "barman-wal-archive " + host + " " + server + " %p"
+	opt := ""
+	if port > 0 && port != 22 {
+		opt = "--port " + strconv.Itoa(port) + " "
+	}
+	return "barman-wal-archive " + opt + host + " " + server + " %p"
 }
 
 const insufficientPrivilege = "<insufficient privilege>"
@@ -228,7 +235,7 @@ const insufficientPrivilege = "<insufficient privilege>"
 func archiveCommandCheck(in SetupInput, s PGSetting) SetupCheck {
 	cmd := strings.TrimSpace(s.Value)
 	c := SetupCheck{Key: "archive_command", Name: "archive_command", Value: cmd, Restart: needsRestart(s)}
-	want := ArchiveCommand(in.SSHHost, in.ServerName)
+	want := ArchiveCommand(in.SSHHost, in.SSHPort, in.ServerName)
 	fix := alter("archive_command", "'"+want+"'", c.Restart)
 	switch {
 	case !in.ArchiverOn:
@@ -241,21 +248,14 @@ func archiveCommandCheck(in SetupInput, s PGSetting) SetupCheck {
 		if cmd == "" {
 			c.Value = "(empty)"
 		}
-		c.Level, c.Expected = SetupError, "barman-wal-archive "+orPlaceholder(in.SSHHost, "<pgcellar host>")+" "+orPlaceholder(in.ServerName, "<server>")+" %p"
+		c.Level, c.Expected = SetupError, ArchiveCommand(in.SSHHost, in.SSHPort, in.ServerName)
 		c.Why = "This server is backed up with archiver = on but PostgreSQL does not send its WAL files to Barman: archive_command is empty or is not barman-wal-archive."
-		c.Fix = fix + "\n-- barman-cli must be installed on the PostgreSQL server, and the SSH key of pgCellar authorised for the postgres user (page SSH key)."
+		c.Fix = fix + "\n-- barman-cli must be installed on the PostgreSQL server, and the SSH key of the postgres user authorised on the pgCellar SSH companion (page SSH key, section PostgreSQL servers allowed to push WAL)."
 	default:
 		c.Level, c.Why = SetupInfo, "PostgreSQL sends WAL files to Barman with this command. pgCellar cannot test it from here: run switch-wal --archive on the server page and look at the WAL archive check."
 		c.Fix = fix
 	}
 	return c
-}
-
-func orPlaceholder(v, p string) string {
-	if strings.TrimSpace(v) == "" {
-		return p
-	}
-	return v
 }
 
 func needsRestart(s PGSetting) bool { return s.Context == "postmaster" }
@@ -329,7 +329,7 @@ func EvaluateSetup(in SetupInput) []SetupCheck {
 			c.Level, c.Expected = SetupError, "on"
 			c.Why = "This server is backed up with archiver = on (archive_command) but PostgreSQL does not archive WAL."
 			c.Fix = alter("archive_mode", "'on'", c.Restart) + "\n-- archive_mode needs a restart of PostgreSQL; a reload is not enough.\n" +
-				alter("archive_command", "'"+ArchiveCommand(in.SSHHost, in.ServerName)+"'", false)
+				alter("archive_command", "'"+ArchiveCommand(in.SSHHost, in.SSHPort, in.ServerName)+"'", false)
 		}
 		out = append(out, c)
 	}

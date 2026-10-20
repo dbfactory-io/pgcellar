@@ -257,7 +257,7 @@ func TestReadSetupThroughTheAuditedRunner(t *testing.T) {
 	r := CLIRunner{Audit: func(e AuditEntry) { entries = append(entries, e) }}
 	tools := SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 
-	rows := ReadSetup(WithActor(context.Background(), "tester"), r, tools, Server{Name: "pg-main", ConnInfo: "host=pg-main.example.com user=barman password=nope dbname=postgres"}, "")
+	rows := ReadSetup(WithActor(context.Background(), "tester"), r, tools, Server{Name: "pg-main", ConnInfo: "host=pg-main.example.com user=barman password=nope dbname=postgres"}, "", 0)
 	got := levels(rows)
 	if got["wal_level"] != SetupOK || got["archive_timeout"] != SetupWarning || got["client_version"] != SetupOK || got["summarize_wal"] != SetupInfo {
 		t.Fatalf("rows = %v", got)
@@ -274,7 +274,7 @@ func TestReadSetupThroughTheAuditedRunner(t *testing.T) {
 	}
 
 	// An unreachable server gives one error line and nothing else.
-	rows = ReadSetup(context.Background(), r, tools, Server{Name: "x", ConnInfo: "host=nowhere.example.com user=barman"}, "")
+	rows = ReadSetup(context.Background(), r, tools, Server{Name: "x", ConnInfo: "host=nowhere.example.com user=barman"}, "", 0)
 	if len(rows) != 1 || rows[0].Key != SetupKeyUnreadable || rows[0].Level != SetupError || !strings.HasPrefix(rows[0].Why, "Could not read the server settings: psql: error: connection to server") {
 		t.Errorf("rows = %+v", rows)
 	}
@@ -331,8 +331,15 @@ func TestSetupArchiveCommand(t *testing.T) {
 		}
 	}
 	// Without a host the fix holds a placeholder, never an empty word.
-	if got := ArchiveCommand("", ""); got != "barman-wal-archive <pgcellar host> <server> %p" {
+	if got := ArchiveCommand("", 0, ""); got != "barman-wal-archive <pgcellar host> <server> %p" {
 		t.Errorf("ArchiveCommand = %q", got)
+	}
+	// The SSH companion listens on another port than 22: the option is advised.
+	if got := ArchiveCommand("cellar.example.com", 2222, "pg-main"); got != "barman-wal-archive --port 2222 cellar.example.com pg-main %p" {
+		t.Errorf("ArchiveCommand with a port = %q", got)
+	}
+	if got := ArchiveCommand("cellar.example.com", 22, "pg-main"); got != "barman-wal-archive cellar.example.com pg-main %p" {
+		t.Errorf("ArchiveCommand on port 22 = %q", got)
 	}
 }
 

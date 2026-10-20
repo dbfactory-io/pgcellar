@@ -13,11 +13,11 @@
 <section>
   <h2>Set up WAL shipping on a PostgreSQL server</h2>
   <p class="muted">WAL shipping means PostgreSQL pushes every finished WAL file to pgCellar's Barman with <code>archive_command</code> (Barman option <code>archiver = on</code>). Choose the WAL method <em>archive_command</em> or <em>both</em> in the server form first. Then, on the PostgreSQL server:</p>
-  <p class="muted"><strong>Prerequisite:</strong> PostgreSQL pushes the WAL files over SSH, so the pgCellar host must run an SSH server that the PostgreSQL servers can reach, with the barman user allowed to log in by key. The pgCellar Docker image contains an SSH client only; publish the port of an SSH server that shares the Barman data volume, or use WAL streaming.</p>
+  <p class="muted"><strong>Prerequisite:</strong> PostgreSQL pushes the WAL files over SSH to the <strong>SSH companion</strong> of pgCellar: a second container of the same image that runs <code>sshd</code> as the barman user (no root), shares the Barman volume and listens on port <strong>{{.Key.Port}}</strong> (<code>ssh_port</code>, see <code>deploy/docker-compose.yml</code>, service <code>pgcellar-ssh</code>). Set <code>ssh_host</code> in <code>pgcellar.yaml</code> to the name or address under which the PostgreSQL servers reach that port (now <code>{{.Key.Host}}</code>). Only keys listed in the section <em>PostgreSQL servers allowed to push WAL</em> below are accepted, each one for <code>barman put-wal &lt;server&gt;</code> and nothing else. Without the companion, use WAL streaming.</p>
   <ol class="steps">
     <li><strong>The SSH trust, in the right direction.</strong>
       <ul>
-        <li><em>WAL shipping (PostgreSQL to pgCellar):</em> <code>barman-wal-archive</code> runs as the <code>postgres</code> user and connects to <code>barman@{{.Key.Host}}</code>. So the key of the <code>postgres</code> user of the PostgreSQL server goes into <code>authorized_keys</code> of the barman user on the pgCellar host (<code>~barman/.ssh/authorized_keys</code>). Create a key for <code>postgres</code> if it has none: <code>sudo -u postgres ssh-keygen -t ed25519</code>.</li>
+        <li><em>WAL shipping (PostgreSQL to pgCellar):</em> <code>barman-wal-archive</code> runs as the <code>postgres</code> user and connects to <code>barman@{{.Key.Host}}</code>. So the public key of the <code>postgres</code> user of the PostgreSQL server must be authorised in the section below (pgCellar writes it to <code>~barman/.ssh/authorized_keys</code>, restricted to <code>barman put-wal &lt;server&gt;</code>). Create a key for <code>postgres</code> if it has none: <code>sudo -u postgres ssh-keygen -t ed25519</code>, then print it with <code>sudo -u postgres cat ~postgres/.ssh/id_ed25519.pub</code>. The first connection also needs the host key of the companion in <code>~postgres/.ssh/known_hosts</code>: connect once as <code>postgres</code> (<code>ssh -p {{.Key.Port}} barman@{{.Key.Host}}</code>, answer yes; the forced command then runs and ends at once, which is fine). A key restricted this way cannot use <code>barman-wal-archive --test</code>.</li>
         <li><em>Backups with rsync, the connection test, and Barman's checks (pgCellar to PostgreSQL):</em> Barman connects to the PostgreSQL server as the user of <code>ssh_command</code> (usually <code>postgres@db1</code>). So the public key above goes into <code>~postgres/.ssh/authorized_keys</code> on the PostgreSQL server:
 <pre class="fixbox">sudo -u postgres mkdir -p ~postgres/.ssh &amp;&amp; sudo -u postgres chmod 700 ~postgres/.ssh
 echo '{{.Key.PublicKey}}' | sudo -u postgres tee -a ~postgres/.ssh/authorized_keys
@@ -28,10 +28,53 @@ sudo -u postgres chmod 600 ~postgres/.ssh/authorized_keys</pre></li>
     <li><strong>Install <code>barman-cli</code></strong> on the PostgreSQL server (package from PGDG or the Barman repository): it provides <code>barman-wal-archive</code>.</li>
     <li><strong>Turn archiving on</strong> in <code>postgresql.conf</code> (or with <code>ALTER SYSTEM</code>), replacing <code>&lt;server&gt;</code> with the name of the server in pgCellar:
 <pre class="fixbox">archive_mode = on
-archive_command = 'barman-wal-archive {{.Key.Host}} &lt;server&gt; %p'</pre>
+archive_command = 'barman-wal-archive{{if ne .Key.Port 22}} --port {{.Key.Port}}{{end}} {{.Key.Host}} &lt;server&gt; %p'</pre>
       <code>archive_mode</code> needs a <strong>restart</strong> of PostgreSQL; <code>SELECT pg_reload_conf();</code> is not enough for it. <code>archive_command</code> alone can be reloaded.</li>
     <li><strong>Check.</strong> Close a WAL file and look at it arriving: <code>barman switch-wal --archive &lt;server&gt;</code> (the <em>Switch WAL</em> button of the server page does it), then <code>barman check &lt;server&gt;</code> (<em>Run check now</em>). The <em>Server setup</em> section of the server page tells what is still wrong.</li>
   </ol>
+</section>
+
+<section>
+  <h2>{{t "sshkey.allowed_title"}}</h2>
+  <p class="muted">Each line of <code>~barman/.ssh/authorized_keys</code> is read again every time this page is shown. A key added here gets <code>restrict,command="barman put-wal &lt;server&gt;"</code>: no terminal, no forwarding, no other command.</p>
+  {{if $.Err}}<div class="flash bad" role="alert">{{$.Err}}</div>{{end}}
+  {{if .Allowed}}
+  <ul class="rows">
+  {{range .Allowed}}
+  {{if and $.Data.Confirm (eq $.Data.Confirm .Fingerprint)}}
+  <li class="row bad">
+    <div class="grow"><strong>{{t "sshkey.revoke_ask"}} <code>{{.Server}}</code> {{t "sshkey.revoke_warn"}}</strong>
+      <div class="meta"><code>{{.Fingerprint}}</code></div></div>
+    <form method="post" action="/ssh-key/authorized-keys/revoke" class="btns">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}">
+      <input type="hidden" name="fingerprint" value="{{.Fingerprint}}">
+      <button class="btn" type="submit">{{t "btn.revoke_yes"}}</button>
+      <a class="btn alt" href="/ssh-key">{{t "btn.keep"}}</a>
+    </form>
+  </li>
+  {{else}}
+  <li class="row">
+    <div class="grow"><strong>{{if .Server}}{{.Server}}{{else}}(not written by pgCellar){{end}}</strong>
+      <div class="meta">{{.Type}} &middot; <code>{{.Fingerprint}}</code>{{if not .Managed}} &middot; <span class="pill warn">not restricted to put-wal</span>{{end}}</div></div>
+    <div><a class="btn alt" href="/ssh-key?confirm={{.Fingerprint}}">{{t "btn.revoke_ask"}}</a></div>
+  </li>
+  {{end}}
+  {{end}}
+  </ul>
+  {{else}}<p class="muted">{{t "sshkey.allowed_empty"}}</p>{{end}}
+
+  {{if .Servers}}
+  <form method="post" action="/ssh-key/authorized-keys">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}">
+    <label>Server
+      <select name="server" required>
+        {{range .Servers}}<option value="{{.Name}}"{{if eq .Name $.Data.FormServer}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select></label>
+    <label>Public key of its <code>postgres</code> user (one line, from <code>id_ed25519.pub</code>)
+      <textarea name="public_key" rows="3" required spellcheck="false" autocomplete="off" placeholder="ssh-ed25519 AAAA... postgres@db1">{{.FormKey}}</textarea></label>
+    <button class="btn" type="submit">{{t "btn.allow_key"}}</button>
+  </form>
+  {{end}}
 </section>
 
 <section>

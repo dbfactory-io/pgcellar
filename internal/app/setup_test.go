@@ -196,7 +196,7 @@ func TestSetupWALShippingChecks(t *testing.T) {
 	if mode.Level != barman.SetupError || !mode.Restart {
 		t.Errorf("archive_mode = %+v", mode)
 	}
-	want := "archive_command = 'barman-wal-archive " + host + " pg-main %p';"
+	want := "archive_command = 'barman-wal-archive --port 2222 " + host + " pg-main %p';"
 	if cmd.Level != barman.SetupError || !strings.Contains(cmd.Fix, strings.Replace(want, "archive_command = ", "ALTER SYSTEM SET archive_command = ", 1)) {
 		t.Errorf("archive_command = %+v (want %s)", cmd, want)
 	}

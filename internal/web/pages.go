@@ -12,6 +12,7 @@ import (
 	"github.com/stranix79/pgcellar/internal/app"
 	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/stranix79/pgcellar/internal/sshkeys"
 )
 
 // ---- status ----
@@ -615,15 +616,20 @@ type sshServerRow struct {
 type sshKeyData struct {
 	Key     app.SSHKeyView
 	Servers []sshServerRow
+	Allowed []sshkeys.AuthorizedKey
+	// Confirm is the fingerprint whose removal waits for a click on "Yes, remove".
+	Confirm string
+	// The allow form, kept when it is sent back with a problem.
+	FormServer, FormKey string
+	AllowCommand        string // an example forced command, for the help text
 }
 
-func (s *Server) sshKeyPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
+func (s *Server) sshKeyData(r *http.Request, u *userCtx, formServer, formKey string) (sshKeyData, error) {
 	key, err := s.app.SSHKey(u.Name)
 	if err != nil {
-		s.fail(w, r, u, err)
-		return
+		return sshKeyData{}, err
 	}
-	data := sshKeyData{Key: key}
+	data := sshKeyData{Key: key, FormServer: formServer, FormKey: formKey, AllowCommand: sshkeys.ForcedCommand("<server>")}
 	if list, err := s.app.ListServers(r.Context()); err == nil {
 		for _, d := range list {
 			if !d.HasFile {
@@ -631,11 +637,74 @@ func (s *Server) sshKeyPage(w http.ResponseWriter, r *http.Request, u *userCtx) 
 			}
 			row := sshServerRow{Name: d.Name, SSHCommand: d.SSHCommand, WALMethod: d.WALMethod}
 			row.Archive = d.WALMethod == app.WALArchiveCommand || d.WALMethod == app.WALBoth
-			row.Command = barman.ArchiveCommand(key.Host, d.Name)
+			row.Command = barman.ArchiveCommand(key.Host, key.Port, d.Name)
 			data.Servers = append(data.Servers, row)
 		}
 	}
+	data.Allowed, err = s.app.AuthorizedKeys()
+	if err != nil {
+		s.app.Logf("read authorized_keys: %v", err)
+	}
+	fp := r.URL.Query().Get("confirm")
+	for _, k := range data.Allowed {
+		if fp != "" && k.Fingerprint == fp {
+			data.Confirm = fp
+		}
+	}
+	return data, nil
+}
+
+func (s *Server) sshKeyPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	data, err := s.sshKeyData(r, u, "", "")
+	if err != nil {
+		s.fail(w, r, u, err)
+		return
+	}
 	s.render(w, http.StatusOK, "ssh_key", s.newPage(r, u, tr("nav.ssh_key"), "ssh-key", data))
+}
+
+func (s *Server) sshKeyAllow(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	server, pub := strings.TrimSpace(r.FormValue("server")), r.FormValue("public_key")
+	_, err := s.app.AllowSSHKey(u.Name, server, pub)
+	if err == nil {
+		http.Redirect(w, r, "/ssh-key?ok=allowed", http.StatusSeeOther)
+		return
+	}
+	var pe *app.ProblemsError
+	var ce *app.ConflictError
+	msg := ""
+	status := http.StatusUnprocessableEntity
+	switch {
+	case errors.As(err, &pe):
+		msg = strings.Join(pe.Problems, " ")
+	case errors.As(err, &ce):
+		msg, status = ce.Msg, http.StatusConflict
+	case errors.Is(err, app.ErrNotFound):
+		msg = "Choose one of the servers of the list."
+	default:
+		s.fail(w, r, u, err)
+		return
+	}
+	data, derr := s.sshKeyData(r, u, server, pub)
+	if derr != nil {
+		s.fail(w, r, u, derr)
+		return
+	}
+	p := s.newPage(r, u, tr("nav.ssh_key"), "ssh-key", data)
+	p.Err = msg
+	s.render(w, status, "ssh_key", p)
+}
+
+func (s *Server) sshKeyRevoke(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	err := s.app.RevokeSSHKey(u.Name, r.FormValue("fingerprint"))
+	switch {
+	case err == nil:
+		http.Redirect(w, r, "/ssh-key?ok=revoked", http.StatusSeeOther)
+	case errors.Is(err, app.ErrNotFound):
+		http.Redirect(w, r, "/ssh-key?ok=gone", http.StatusSeeOther)
+	default:
+		s.fail(w, r, u, err)
+	}
 }
 
 func (s *Server) serverSSHTest(w http.ResponseWriter, r *http.Request, u *userCtx) {

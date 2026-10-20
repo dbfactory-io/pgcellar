@@ -152,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /servers/{name}/backups/{id}/delete", s.guard(app.RoleAdmin, s.serverBackupDelete))
 	mux.HandleFunc("POST /servers/{name}/ssh-test", s.guard(app.RoleAdmin, s.serverSSHTest))
 	mux.HandleFunc("GET /ssh-key", s.guard(app.RoleAdmin, s.sshKeyPage))
+	mux.HandleFunc("POST /ssh-key/authorized-keys", s.guard(app.RoleAdmin, s.sshKeyAllow))
+	mux.HandleFunc("POST /ssh-key/authorized-keys/revoke", s.guard(app.RoleAdmin, s.sshKeyRevoke))
 	mux.HandleFunc("GET /servers/{name}/restore", s.guard(app.RoleOperator, s.restoreForm))
 	mux.HandleFunc("POST /servers/{name}/restore", s.guard(app.RoleOperator, s.restoreSubmit))
 	mux.HandleFunc("GET /servers/{name}/recoveries/list", s.guard(app.RoleViewer, s.recoveryListFragment))
@@ -220,6 +222,12 @@ func (s *Server) newPage(r *http.Request, u *userCtx, title, active string, data
 			p.Msg = "Server created and recorded in git."
 		case "updated":
 			p.Msg = "Changes saved and recorded in git."
+		case "allowed":
+			p.Msg = "Key authorised: it can push the WAL files of that server, and run nothing else."
+		case "revoked":
+			p.Msg = "Key removed: that PostgreSQL server can no longer push WAL files."
+		case "gone":
+			p.Msg = "That key was already gone."
 		}
 		if r.URL.Query().Get("warn") == "git" {
 			p.Warn = "The change was saved but could not be recorded in git. See the pgCellar log."

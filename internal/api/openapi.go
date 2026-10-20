@@ -123,6 +123,13 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			"/audit": m{
 				"get": op("Audit log", "admin", m{"parameters": []m{{"name": "limit", "in": "query", "schema": m{"type": "integer"}}}, "responses": m{"200": resp("Audit entries", nil)}}),
 			},
+			"/ssh/authorized-keys": m{
+				"get": op("Keys allowed to push WAL files to the SSH companion (the file ~barman/.ssh/authorized_keys, read at each call)", "admin", m{"responses": m{"200": resp("Authorised keys", m{"type": "object", "properties": m{"data": m{"type": "array", "items": ref("AuthorizedKey")}}})}}),
+				"post": op("Authorise the public key of the postgres user of a PostgreSQL server; the line is restricted to `barman put-wal <server>`", "admin", m{
+					"requestBody": m{"required": true, "content": m{"application/json": m{"schema": m{"type": "object", "required": []string{"server", "public_key"}, "properties": m{"server": m{"type": "string"}, "public_key": m{"type": "string", "description": "One line: ssh-ed25519, ssh-rsa or ecdsa-sha2-* key, no options"}}}}}},
+					"responses":   m{"201": resp("Key authorised", dataOf(ref("AuthorizedKey"))), "404": errResp, "409": resp("Key already authorised", ref("Error")), "422": errResp}}),
+				"delete": op("Remove an authorised key", "admin", m{"parameters": []m{{"name": "fingerprint", "in": "query", "required": true, "schema": m{"type": "string"}, "description": "SHA256:... as listed by GET"}}, "responses": m{"204": resp("Removed", nil), "404": errResp}}),
+			},
 			"/openapi.json": m{
 				"get": m{"summary": "This document", "responses": m{"200": resp("OpenAPI 3 description", nil)}},
 			},
@@ -130,7 +137,8 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 		"components": m{
 			"securitySchemes": m{"bearer": m{"type": "http", "scheme": "bearer"}},
 			"schemas": m{
-				"Error": m{"type": "object", "properties": m{"error": m{"type": "string"}, "problems": m{"type": "array", "items": m{"type": "string"}}}},
+				"AuthorizedKey": m{"type": "object", "properties": m{"server": m{"type": "string"}, "type": m{"type": "string"}, "fingerprint": m{"type": "string"}, "comment": m{"type": "string"}, "managed": m{"type": "boolean", "description": "the line carries the put-wal restriction written by pgCellar"}}},
+				"Error":         m{"type": "object", "properties": m{"error": m{"type": "string"}, "problems": m{"type": "array", "items": m{"type": "string"}}}},
 				"ServerInput": m{"type": "object", "properties": m{
 					"name": m{"type": "string"}, "label": m{"type": "string"}, "description": m{"type": "string"},
 					"backup_method": m{"type": "string", "enum": []string{"postgres", "rsync"}},

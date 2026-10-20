@@ -31,6 +31,10 @@ type Config struct {
 	// shown in the archive_command pgCellar advises (barman-wal-archive
 	// <ssh_host> <server> %p). Empty = the host name of this machine.
 	SSHHost string `yaml:"ssh_host" json:"ssh_host"`
+	// SSHPort is the port of the SSH companion container (the sshd that
+	// receives WAL files), used in the advised archive_command
+	// (barman-wal-archive --port <ssh_port> ...). 0 = 2222.
+	SSHPort int `yaml:"ssh_port" json:"ssh_port"`
 	// AuditRetentionDays: audit lines older than this are purged daily. 0 = keep forever.
 	AuditRetentionDays int `yaml:"audit_retention_days" json:"audit_retention_days"`
 }

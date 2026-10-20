@@ -149,6 +149,13 @@ var messages = map[string]string{
 	"recover.ready":               "The directory is a ready-to-start PostgreSQL data directory: start a server of the same major version on it.",
 	"sched.next":                  "Next backup",
 	"sched.last":                  "Last scheduled run",
+	"btn.allow_key":               "Authorise this key",
+	"btn.revoke_ask":              "Remove…",
+	"btn.revoke_yes":              "Yes, remove",
+	"sshkey.allowed_title":        "PostgreSQL servers allowed to push WAL",
+	"sshkey.allowed_empty":        "No PostgreSQL server is allowed to push WAL files yet.",
+	"sshkey.revoke_ask":           "Remove this key? The PostgreSQL server of",
+	"sshkey.revoke_warn":          "will no longer be able to push WAL files, and its archive_command will fail until a key is authorised again.",
 }
 
 // tr returns the text for a key.
