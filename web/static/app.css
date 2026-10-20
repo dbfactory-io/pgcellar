@@ -92,6 +92,11 @@ button.link{background:none;border:0;color:var(--acc);cursor:pointer;font:inheri
 .srv .name{font-size:1.25rem;font-weight:750;letter-spacing:-.01em}
 .srv .lines{margin-top:.25rem;color:var(--mut);font-size:.95rem}
 .srv .lines div{margin-top:.1rem}
+.srv>a:has(+.lines.tail){padding-bottom:.1rem}
+.srv .lines.tail{margin:0;padding:0 1.3rem 1rem}
+.srv .lines.tail>div{margin:0}
+a.pill{text-decoration:none}
+a.pill:hover{text-decoration:underline}
 .srv .probs{margin:0;padding:.7rem 1.3rem .9rem 2.6rem;border-top:1px dashed var(--line);font-size:.95rem}
 .srv .probs li{margin:.15rem 0}
 .srv.lv-fail .probs{background:var(--bad-soft)}

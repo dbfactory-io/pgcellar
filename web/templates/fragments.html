@@ -63,10 +63,9 @@
       <div>{{if .LastBackupID}}{{t "status.last_backup"}} {{ageSec .LastBackupAgeSeconds}} ago{{if .LastBackupSize}} &middot; {{size .LastBackupSize}}{{end}}{{else}}{{t "status.no_backup"}}{{end}}</div>
       <div>{{t "wal.streaming"}}: {{if .StreamingLive}}<span class="pill ok">{{t "wal.live"}}</span>{{if not .LastDataReceived.IsZero}} &middot; {{t "wal.data"}} {{ageSec .LastDataReceivedAgeSeconds}} ago{{end}}{{else if .StreamingMonitored}}<span class="pill bad">{{t "wal.stopped"}}</span>{{else}}{{t "wal.not_used"}}{{end}}</div>
       <div>{{t "wal.filled"}}: {{if .LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .LastFilledWALAgeSeconds}} ago{{end}}</div>
-      <div>{{.BackupCount}} {{if eq .BackupCount 1}}{{t "unit.backup"}}{{else}}{{t "unit.backups"}}{{end}} &middot; {{if .CheckOK}}<span class="pill ok">checks OK</span>{{else if .Checks}}<span class="pill bad">check FAILED</span>{{else}}<span class="pill warn">check unknown</span>{{end}}</div>
     </div>
   </a>
-  {{template "setup_pill" .}}
+  <div class="lines tail"><div>{{.BackupCount}} {{if eq .BackupCount 1}}{{t "unit.backup"}}{{else}}{{t "unit.backups"}}{{end}} &middot; {{if .CheckOK}}<span class="pill ok">checks OK</span>{{else if .Checks}}<span class="pill bad">check FAILED</span>{{else}}<span class="pill warn">check unknown</span>{{end}}{{if .SetupLevel}} &middot; {{template "setup_pill" .}}{{end}}</div></div>
   {{if or .Problems .Error}}<ul class="probs">{{range .Problems}}<li>{{.}}</li>{{end}}{{if .Error}}<li>{{.Error}}</li>{{end}}</ul>{{end}}
 </article>
 {{end}}
