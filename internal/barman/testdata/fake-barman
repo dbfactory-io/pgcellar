@@ -123,6 +123,11 @@ case "$cmd" in
     exit 0
     ;;
   cron)
+    # FAKE_BARMAN_CRON_DELAY (seconds): a slow cron, logged as "cron-done" when it ends.
+    if [ -n "${FAKE_BARMAN_CRON_DELAY:-}" ]; then
+      sleep "$FAKE_BARMAN_CRON_DELAY"
+      [ -n "${FAKE_BARMAN_LOG:-}" ] && printf 'cron-done\n' >>"$FAKE_BARMAN_LOG"
+    fi
     [ "$format" = json ] && printf '{"_INFO": []}'
     exit 0
     ;;

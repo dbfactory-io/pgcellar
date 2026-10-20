@@ -74,6 +74,8 @@ type App struct {
 	cacheErr    string
 	refreshOnce sync.Mutex
 
+	firstCron chan struct{} // closed once the first `barman cron` has run (or is not wanted)
+
 	wg   sync.WaitGroup // background loops
 	jobs sync.WaitGroup // backups in progress
 }
@@ -112,6 +114,9 @@ func Load(configPath string, dev bool) (*App, error) {
 	a.ConfigDir = filepath.Dir(abs)
 	a.cfg = cfg
 	a.CronInterval = cfg.Barman.CronInterval
+	if cfg.StatusInterval > 0 {
+		a.StatusInterval = cfg.StatusInterval
+	}
 	a.noteModTime()
 
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
@@ -226,18 +231,23 @@ func (a *App) Logf(format string, args ...any) { a.Logger.Printf(format, args...
 // Start launches the background loops (status cache, barman cron, session
 // cleanup). They stop when ctx ends.
 func (a *App) Start(ctx context.Context) {
-	a.wg.Add(1)
-	go func() {
-		defer a.wg.Done()
-		a.statusLoop(ctx)
-	}()
+	// `barman cron` starts the WAL receivers; the first status refresh waits
+	// for it, otherwise every server shows "receive-wal running" as failed.
+	a.firstCron = make(chan struct{})
 	if a.CronInterval > 0 {
 		a.wg.Add(1)
 		go func() {
 			defer a.wg.Done()
 			a.cronLoop(ctx)
 		}()
+	} else {
+		close(a.firstCron)
 	}
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		a.statusLoop(ctx)
+	}()
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -279,6 +289,8 @@ func (a *App) PurgeAudit() int64 {
 }
 
 func (a *App) cronLoop(ctx context.Context) {
+	a.runCron(ctx)
+	close(a.firstCron)
 	t := time.NewTicker(a.CronInterval)
 	defer t.Stop()
 	for {
@@ -286,12 +298,16 @@ func (a *App) cronLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			cctx, cancel := context.WithTimeout(barman.WithActor(ctx, systemActor), 5*time.Minute)
-			if err := a.Engine.Cron(cctx); err != nil && ctx.Err() == nil {
-				a.Logf("barman cron failed: %v", err)
-			}
-			cancel()
+			a.runCron(ctx)
 		}
+	}
+}
+
+func (a *App) runCron(ctx context.Context) {
+	cctx, cancel := context.WithTimeout(barman.WithActor(ctx, systemActor), 5*time.Minute)
+	defer cancel()
+	if err := a.Engine.Cron(cctx); err != nil && ctx.Err() == nil {
+		a.Logf("barman cron failed: %v", err)
 	}
 }
 
