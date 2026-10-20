@@ -173,6 +173,22 @@ var messages = map[string]string{
 	"sshkey.allowed_empty":        "No PostgreSQL server is allowed to push WAL files yet.",
 	"sshkey.revoke_ask":           "Remove this key? The PostgreSQL server of",
 	"sshkey.revoke_warn":          "will no longer be able to push WAL files, and its archive_command will fail until a key is authorised again.",
+	"storage.title":               "Storage",
+	"storage.backups":             "Backups",
+	"storage.wal":                 "WAL",
+	"storage.restores":            "restores",
+	"storage.on_disk":             "on disk",
+	"storage.free_of":             "free of",
+	"storage.used":                "used",
+	"storage.on":                  "on",
+	"storage.restores_on":         "Restores are on",
+	"storage.pace_a":              "At this pace the disk is full in",
+	"storage.day":                 "day",
+	"storage.days":                "days",
+	"storage.pace_b":              "About",
+	"storage.pace_c":              "is added per day (WAL and backups, last 7 days at most; retention is not taken into account).",
+	"storage.status_line":         "Storage: %s free of %s on %s (%d %% used)",
+	"storage.help":                "Measured at each refresh from Barman's own files and the file system, never by running a command.",
 }
 
 // tr returns the text for a key.

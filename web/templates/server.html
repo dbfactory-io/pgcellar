@@ -44,6 +44,7 @@
   {{else}}<p class="muted" style="margin:0">First refresh pending: pgCellar has not read Barman for this server yet.</p>{{end}}
   </div>
 </section>
+{{template "storage_card" .Detail.State}}
 
 <section id="timeline">
   <h2>{{t "section.timeline"}}</h2>

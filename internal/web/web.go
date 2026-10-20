@@ -67,7 +67,7 @@ func New(a *app.App) (*Server, error) {
 		return nil, err
 	}
 	for _, p := range pages {
-		t, err := template.New(p).Funcs(funcs(s.assets)).ParseFS(web.FS, "templates/layout.html", "templates/fragments.html", "templates/"+p+".html")
+		t, err := template.New(p).Funcs(funcs(s.assets)).ParseFS(web.FS, "templates/layout.html", "templates/fragments.html", "templates/storage.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", p, err)
 		}

@@ -94,6 +94,7 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		}
 		return fmt.Sprint(st.Drill.Last.AgeSeconds), true
 	})
+	writeStorageMetrics(&b, states)
 	_, _ = b.WriteString("# HELP pgcellar_recoveries_total Restores to a directory that finished successfully, since the database was created.\n# TYPE pgcellar_recoveries_total counter\n")
 	done, _ := s.app.Store.CountRuns("recover")
 	for _, st := range states {

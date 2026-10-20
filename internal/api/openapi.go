@@ -176,7 +176,19 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"problems": m{"type": "array", "items": m{"type": "string"}}, "error": m{"type": "string"},
 					"setup": m{"type": "array", "items": ref("SetupCheck")}, "setup_level": m{"type": "string", "enum": []string{"ok", "warning", "error"}}, "setup_issues": m{"type": "integer"}, "setup_at": m{"type": "string", "format": "date-time"},
 					"updated_at": m{"type": "string", "format": "date-time"},
+					"storage":    ref("Storage"),
 					"drill":      m{"type": "object", "description": "Restore drills: scheduled, schedule, next, last {id, ok, backup_id, finished_at, step_failed, has_report, summary, age_seconds}, last_ok_at, last_ok_age_seconds, running, stale (the schedule is set and the last drill failed, or none succeeded for drills.max_age: the server is then warn), text (\"Last drill: 3 d ago\" + a check mark or a cross), why"},
+				}},
+				"Storage": m{"type": "object", "description": "What the server takes on disk and what is left; measured at each refresh, never by running a command", "properties": m{
+					"backup_bytes": m{"type": "integer", "description": "sum of size of the DONE backups"}, "backup_disk_bytes": m{"type": "integer", "description": "sum of deduplicated_size (size when Barman does not say)"}, "backups": m{"type": "integer"},
+					"wal_bytes": m{"type": "integer", "description": "sum of the sizes in the WAL catalogue"}, "wal_files": m{"type": "integer"},
+					"recoveries_bytes": m{"type": "integer", "description": "restores of the server under recoveries.dir"}, "total_bytes": m{"type": "integer", "description": "backup_disk_bytes + wal_bytes + recoveries_bytes"},
+					"added_per_day": m{"type": "integer", "description": "WAL and backups of the last 7 days (or since the oldest data, at least 1 day) per day"}, "days_until_full": m{"type": "integer", "description": "free space / added_per_day, present only when under 90"},
+					"fs": ref("Filesystem"), "recoveries_fs": ref("Filesystem"), "error": m{"type": "string"},
+				}},
+				"Filesystem": m{"type": "object", "properties": m{
+					"path": m{"type": "string"}, "total_bytes": m{"type": "integer"}, "free_bytes": m{"type": "integer", "description": "available to a normal user"}, "used_bytes": m{"type": "integer"},
+					"used_percent": m{"type": "number"}, "level": m{"type": "string", "enum": []string{"ok", "warn", "fail"}, "description": "against alerts.min_free_percent and alerts.min_free_bytes"},
 				}},
 				"Timeline": m{"type": "object", "properties": m{
 					"server": m{"type": "string"}, "available": m{"type": "boolean"}, "unavailable": m{"type": "string", "description": "\"unavailable: <reason>\" when available is false"},

@@ -54,6 +54,8 @@ servers:
 alerts:
   max_backup_age: 26h                  # alert if the last good backup is older than this
   max_wal_age: 24h                     # alert if the last archived WAL is older than this; a quiet database closes a segment only at 16 MB, at a backup, or every archive_timeout on the PostgreSQL side
+  min_free_percent: 10                 # the file system holding the backups has less free space than this (percent): its servers go orange, under half of it red. Default 10, 0 = off
+  min_free_bytes: 0                    # same, in bytes (for example 50000000000 for 50 GB). 0 = off (default). Either threshold alone is enough to raise the alert
   mail:
     smtp_host: smtp.example.com
     smtp_port: 587

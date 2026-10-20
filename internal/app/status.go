@@ -281,6 +281,7 @@ func (a *App) stateFrom(name string, bs *barman.ServerStatus) *ServerState {
 			st.Problems = append(st.Problems, fmt.Sprintf("The last filled WAL file is %s old, more than the %s allowed.", HumanDuration(segmentAge), HumanDuration(maxWAL)))
 		}
 	}
+	level = a.applyStorage(st, level)
 	if level == LevelOK && len(st.Problems) > 0 {
 		level = LevelWarn
 	}

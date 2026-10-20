@@ -22,6 +22,9 @@ const (
 	MinSetupInterval     = time.Minute
 )
 
+// DefaultMinFreePercent is alerts.min_free_percent when the file does not say.
+const DefaultMinFreePercent = 10
+
 // DefaultRecoveriesDir is where restores go when recoveries.dir is not set.
 const DefaultRecoveriesDir = "/var/lib/pgcellar/recoveries"
 
@@ -40,6 +43,7 @@ func Defaults() *Config {
 			KeepLast: true, MaxAge: DefaultDrillMaxAge, BinDir: DefaultPGBinDir},
 		Scheduler:          Scheduler{Enabled: true, CatchUp: DefaultCatchUp, Parallel: 1},
 		StatusInterval:     time.Minute,
+		Alerts:             Alerts{MinFreePercent: DefaultMinFreePercent},
 		SetupInterval:      DefaultSetupInterval,
 		AuditRetentionDays: 90,
 		Recoveries: Recoveries{
@@ -235,6 +239,12 @@ func Validate(cfg *Config) []string {
 	}
 	if cfg.Alerts.MaxWALAge < 0 {
 		add("alerts.max_wal_age cannot be negative")
+	}
+	if cfg.Alerts.MinFreePercent < 0 || cfg.Alerts.MinFreePercent > 100 {
+		add("alerts.min_free_percent must be between 0 and 100")
+	}
+	if cfg.Alerts.MinFreeBytes < 0 {
+		add("alerts.min_free_bytes cannot be negative")
 	}
 	if m := cfg.Alerts.Mail; m != nil {
 		if m.SMTPHost == "" || m.From == "" || len(m.To) == 0 {

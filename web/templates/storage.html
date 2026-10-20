@@ -1,0 +1,27 @@
+{{define "storage_bar"}}<div class="stbar" aria-hidden="true"><i style="width:{{.Other}}%"></i><b style="width:{{.Mine}}%"></b></div>{{end}}
+
+{{define "storage_card"}}{{with .}}{{with .Storage}}{{$st := .}}
+<section id="storage">
+  <h2>{{t "storage.title"}}</h2>
+  <div class="card">
+    <p style="margin:0">{{t "storage.backups"}} <strong>{{.BackupsText}}</strong>{{if .Dedup}} ({{.DiskText}} {{t "storage.on_disk"}}){{end}} &middot; {{t "storage.wal"}} <strong>{{.WALText}}</strong> &middot; {{t "storage.restores"}} <strong>{{.RestoresText}}</strong></p>
+    {{with .FS}}
+    <p style="margin:.6rem 0 0">{{t "storage.on"}} <code>{{.Path}}</code>: <strong>{{.FreeText}}</strong> {{t "storage.free_of"}} {{.TotalText}} ({{.UsedPct}} % {{t "storage.used"}})</p>
+    {{template "storage_bar" $st.Bar}}
+    {{end}}
+    {{with .RecoveriesFS}}
+    <p style="margin:.6rem 0 0">{{t "storage.restores_on"}} <code>{{.Path}}</code>: <strong>{{.FreeText}}</strong> {{t "storage.free_of"}} {{.TotalText}} ({{.UsedPct}} % {{t "storage.used"}})</p>
+    {{template "storage_bar" $st.RecBar}}
+    {{end}}
+    {{if .DaysUntilFull}}<p class="stline">{{t "storage.pace_a"}} {{.Days}} {{if eq .Days 1}}{{t "storage.day"}}{{else}}{{t "storage.days"}}{{end}}.</p>{{end}}
+    {{if .AddedPerDay}}<p class="muted" style="margin:.4rem 0 0">{{t "storage.pace_b"}} {{.PerDayText}} {{t "storage.pace_c"}}</p>{{end}}
+    {{if .Error}}<p class="muted" style="margin:.4rem 0 0">{{.Error}}</p>{{end}}
+    <p class="muted" style="margin:.6rem 0 0">{{t "storage.help"}}</p>
+  </div>
+</section>
+{{end}}{{end}}{{end}}
+
+{{define "storage_row"}}{{with .Storage}}<div>{{.BackupsText}} + {{.WALText}} {{t "storage.wal"}}</div>{{end}}{{end}}
+
+{{define "storage_status"}}{{range .}}<p class="stline {{.Level}}">{{.Text}}</p>
+{{end}}{{end}}

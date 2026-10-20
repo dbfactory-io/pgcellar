@@ -251,3 +251,9 @@ svg.tl{display:block;width:100%;min-width:28rem;height:auto;font-family:var(--sa
 .drillhero.ok{border-left:4px solid var(--ok,#1a8a4d)}
 .drillhero.bad{border-left:4px solid var(--bad,#c62828)}
 .drillhero p{margin:0 0 .4rem}
+.stbar{display:flex;height:.5rem;margin:.6rem 0;background:var(--soft);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.stbar i{background:var(--mut);opacity:.5}
+.stbar b{background:var(--acc)}
+.stline{margin:.5rem 0 0;font-weight:600}
+.stline.warn{color:var(--warn)}
+.stline.fail{color:var(--bad)}

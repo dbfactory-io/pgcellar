@@ -99,6 +99,11 @@ type Alerts struct {
 	MaxBackupAge time.Duration `yaml:"max_backup_age" json:"max_backup_age"` // e.g. 26h
 	// MaxWALAge: alert when the last archived WAL is older than this.
 	MaxWALAge time.Duration `yaml:"max_wal_age" json:"max_wal_age"` // e.g. 1h
+	// MinFreePercent: a file system holding backups with less free space than
+	// this (percent) turns its servers orange, under half of it red. 0 = off.
+	MinFreePercent float64 `yaml:"min_free_percent" json:"min_free_percent"`
+	// MinFreeBytes: same, in bytes. 0 = off.
+	MinFreeBytes int64 `yaml:"min_free_bytes" json:"min_free_bytes"`
 }
 
 type MailAlert struct {

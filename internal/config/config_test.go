@@ -97,6 +97,8 @@ func TestValidate(t *testing.T) {
 		{"no admin", func(c *Config) { c.Users[0].Role = "viewer" }, "at least one user with the admin"},
 		{"bad schedule", func(c *Config) { c.Servers[0].Schedule.Backup = "whenever" }, "cannot understand"},
 		{"neg duration", func(c *Config) { c.Alerts.MaxWALAge = -time.Hour }, "max_wal_age"},
+		{"min free percent", func(c *Config) { c.Alerts.MinFreePercent = 101 }, "min_free_percent"},
+		{"min free bytes", func(c *Config) { c.Alerts.MinFreeBytes = -1 }, "min_free_bytes"},
 		{"both retention", func(c *Config) { c.Servers[0].Retention.Redundancy = 3 }, "not both"},
 		{"min > red", func(c *Config) {
 			c.Servers[0].Retention = Retention{Redundancy: 2, MinimumRedundancy: 5}
