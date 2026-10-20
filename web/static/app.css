@@ -239,3 +239,12 @@ svg.tl{display:block;width:100%;min-width:28rem;height:auto;font-family:var(--sa
 .tl-legend .sw.band{background:var(--line)}
 .tl-hint{font-size:.8rem;margin:.2rem 0 0}
 @media (min-width:700px){.tl-hint{display:none}}
+
+/* header on one line from 900px; nav on its own line below */
+.bar{gap:.4rem 1rem}
+.logo,.who{flex-shrink:0}
+.bar nav{gap:.1rem}
+.bar nav a{padding:.45rem .7rem}
+@media (max-width:899px){.bar nav{order:3;flex-basis:100%}.who{margin-left:auto}}
+@media (min-width:900px){.bar{flex-wrap:nowrap}}
+.top .wrap.bar{max-width:68rem}

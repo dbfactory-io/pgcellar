@@ -147,10 +147,12 @@ func (p *tlPlacer) place(x1, x2 float64) int {
 
 func textWidth(s string) float64 { return float64(len([]rune(s))) * tlChar }
 
-// shortID drops the year of a backup id: 20261020T123810 -> 1020T123810.
+// shortID drops the year of a backup id and says so with an ellipsis:
+// 20261020T123810 -> …1020T123810. It is the second choice when the full id
+// does not fit.
 func shortID(id string) string {
 	if len(id) == 15 && id[8] == 'T' {
-		return id[4:]
+		return "…" + id[4:]
 	}
 	return id
 }
@@ -235,7 +237,7 @@ func buildTimelineView(t *app.Timeline) tlView {
 			title += " Incremental, parent " + b.ParentID + "."
 		}
 		v.Blocks = append(v.Blocks, tlRect{X: x1, Y: tlBlockY, W: w, H: tlBlockH, Class: class, Title: title})
-		for _, label := range []string{shortID(b.ID) + " · " + humanSize(b.Size), humanSize(b.Size)} {
+		for _, label := range []string{b.ID + " · " + humanSize(b.Size), shortID(b.ID) + " · " + humanSize(b.Size), humanSize(b.Size)} {
 			lw := textWidth(label)
 			lx := x1
 			if lx+lw > tlW-tlMargin {
