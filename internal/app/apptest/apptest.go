@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -97,7 +98,8 @@ func New(t *testing.T) *Env {
 		}
 		line := ""
 		if srv == "pg-main" { // last WAL archived at 02:10 on 2026-10-20
-			line = fmt.Sprintf("000000010000000000000007\t16777216\t%d.0\tgzip\tNone\n", time.Date(2026, 10, 20, 2, 10, 29, 0, time.Local).Unix())
+			line = pgMainCatalogue()
+			writePgMainMeta(t, filepath.Join(home, srv, "meta"))
 		}
 		if err := os.WriteFile(filepath.Join(wals, srv+"-xlog.db"), []byte(line), 0o640); err != nil {
 			t.Fatal(err)
@@ -174,4 +176,38 @@ func Calls(t *testing.T, e *Env) string {
 		return ""
 	}
 	return fmt.Sprint(string(b))
+}
+
+// pgMainCatalogue is the WAL catalogue of pg-main: seven segments of 16 MiB on
+// timeline 1, the last one (07) archived at 02:10 on 2026-10-20, the first
+// ones around the three nightly backups of the fixtures.
+func pgMainCatalogue() string {
+	at := func(day, h, m int) int64 { return time.Date(2026, 10, day, h, m, 29, 0, time.Local).Unix() }
+	stamps := []int64{at(18, 2, 5), at(18, 14, 0), at(19, 2, 4), at(19, 14, 0), at(20, 0, 30), at(20, 1, 40), at(20, 2, 10)}
+	var b strings.Builder
+	for i, ts := range stamps {
+		fmt.Fprintf(&b, "%08X%08X%08X\t16777216\t%d.0\tgzip\tNone\n", 1, 0, i+1, ts)
+	}
+	return b.String()
+}
+
+// writePgMainMeta writes the backup.info files of the three pg-main backups
+// of the fixtures (ids 20261018T020001, 20261019T020001, 20261020T020001).
+func writePgMainMeta(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for i, day := range []int{18, 19, 20} {
+		begin := time.Date(2026, 10, day, 2, 0, 1, 0, time.Local)
+		wal := []int{1, 3, 6}[i]
+		sizes := []int{1503238553, 1509949440, 1516560384}
+		layout := "2006-01-02 15:04:05.000000-07:00"
+		body := fmt.Sprintf("begin_time=%s\nend_time=%s\nbegin_wal=%08X%08X%08X\nend_wal=%08X%08X%08X\ntimeline=1\nsize=%d\ndeduplicated_size=%d\nstatus=DONE\nparent_backup_id=None\nxlog_segment_size=16777216\n",
+			begin.Format(layout), begin.Add(9*time.Minute).Format(layout), 1, 0, wal, 1, 0, wal, sizes[i], sizes[i])
+		id := fmt.Sprintf("202610%02dT020001", day)
+		if err := os.WriteFile(filepath.Join(dir, id+"-backup.info"), []byte(body), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

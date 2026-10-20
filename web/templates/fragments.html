@@ -200,3 +200,31 @@
   <div class="msg">{{.Why}}{{if .Fix}}<pre class="fixbox">{{.Fix}}</pre><div class="fixnote">{{if .Restart}}{{t "setup.restart"}}{{else}}{{t "setup.reload"}}{{end}}</div>{{end}}</div>
 </li>
 {{end}}
+
+{{define "timeline_svg"}}{{if .Available}}
+<div class="tl-wrap"><svg class="tl" viewBox="0 0 {{f1 .W}} {{f1 .H}}" width="100%" role="img" aria-labelledby="tl-title tl-desc">
+<title id="tl-title">{{t "section.timeline"}}</title><desc id="tl-desc">{{.Desc}}</desc>
+<defs><pattern id="tl-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" class="tl-hatch-bg"/><line x1="0" y1="0" x2="0" y2="5" class="tl-hatch-ln"/></pattern></defs>
+{{with .Band}}<rect class="{{.Class}}" x="{{f1 .X}}" y="{{f1 .Y}}" width="{{f1 .W}}" height="{{f1 .H}}"><title>{{.Title}}</title></rect>{{end}}
+{{range .Ticks}}<line class="tl-grid" x1="{{f1 .X}}" y1="{{f1 $.GridTop}}" x2="{{f1 .X}}" y2="{{f1 $.GridBottom}}"/><text class="tl-axis{{if .Major}} major{{end}}" x="{{f1 .X}}" y="28" text-anchor="middle">{{.Label}}</text>
+{{end}}
+{{range .Blocks}}<rect class="{{.Class}}" x="{{f1 .X}}" y="{{f1 .Y}}" width="{{f1 .W}}" height="{{f1 .H}}" rx="3"><title>{{.Title}}</title></rect>
+{{end}}
+{{range .Cover}}<rect class="{{.Class}}" x="{{f1 .X}}" y="{{f1 .Y}}" width="{{f1 .W}}" height="{{f1 .H}}" rx="2"><title>{{.Title}}</title></rect>
+{{end}}
+{{range .Holes}}<rect class="{{.Class}}" x="{{f1 .X}}" y="{{f1 .Y}}" width="{{f1 .W}}" height="{{f1 .H}}" fill="url(#tl-hatch)"><title>{{.Title}}</title></rect>
+{{end}}
+{{with .Dotted}}<line class="{{.Class}}" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}" stroke-dasharray="2 3"><title>{{.Title}}</title></line>{{end}}
+{{range .Rows}}{{if .Link}}<path class="tl-link" d="{{.Link}}"/><circle class="tl-dot" cx="{{f1 .Dot.X}}" cy="{{f1 .Dot.Y}}" r="3"><title>{{.Dot.Title}}</title></circle>{{end}}<rect class="{{.Bar.Class}}" x="{{f1 .Bar.X}}" y="{{f1 .Bar.Y}}" width="{{f1 .Bar.W}}" height="{{f1 .Bar.H}}" rx="3"><title>{{.Bar.Title}}</title></rect><text class="{{.Label.Class}}" x="{{f1 .Label.X}}" y="{{f1 .Label.Y}}" text-anchor="{{.Label.Anchor}}"><title>{{.Label.Title}}</title>{{.Label.Text}}</text>
+{{end}}
+{{with .Range}}<rect class="{{.Bar.Class}}" x="{{f1 .Bar.X}}" y="{{f1 .Bar.Y}}" width="{{f1 .Bar.W}}" height="{{f1 .Bar.H}}" rx="2"><title>{{.Bar.Title}}</title></rect><line class="{{.Line.Class}}" x1="{{f1 .Line.X1}}" y1="{{f1 .Line.Y1}}" x2="{{f1 .Line.X2}}" y2="{{f1 .Line.Y2}}"><title>{{.Line.Title}}</title></line><text class="{{.Label.Class}}" x="{{f1 .Label.X}}" y="{{f1 .Label.Y}}" text-anchor="{{.Label.Anchor}}"><title>{{.Label.Title}}</title>{{.Label.Text}}</text>{{end}}
+{{range .Labels}}<text class="tl-lbl {{.Class}}" x="{{f1 .X}}" y="{{f1 .Y}}" text-anchor="{{.Anchor}}"><title>{{.Title}}</title>{{.Text}}</text>
+{{end}}
+{{with .Now}}<line class="{{.Class}}" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}"><title>{{.Title}}</title></line><text class="tl-sub" x="{{f1 $.NowLabel.X}}" y="{{f1 $.NowLabel.Y}}" text-anchor="{{$.NowLabel.Anchor}}">{{$.NowLabel.Text}}</text>{{end}}
+{{with .Next}}<line class="{{.Class}}" x1="{{f1 .X1}}" y1="{{f1 .Y1}}" x2="{{f1 .X2}}" y2="{{f1 .Y2}}" stroke-dasharray="4 3"><title>{{.Title}}</title></line><text class="tl-sub" x="{{f1 $.NextLabel.X}}" y="{{f1 $.NextLabel.Y}}" text-anchor="{{$.NextLabel.Anchor}}">{{$.NextLabel.Text}}</text>{{end}}
+</svg></div>
+<ul class="tl-legend" aria-hidden="true"><li><i class="sw bk"></i>{{t "tl.legend_backup"}}</li><li><i class="sw wal"></i>{{t "tl.legend_wal"}}</li><li><i class="sw hole"></i>{{t "tl.legend_hole"}}</li><li><i class="sw live"></i>{{t "tl.legend_live"}}</li><li><i class="sw band"></i>{{t "tl.legend_retention"}}</li></ul>
+<p class="tl-summary">{{.Summary}}</p>
+{{range .Notes}}<p class="muted">{{.}}</p>{{end}}
+<p class="muted tl-hint">{{t "tl.scroll_hint"}}</p>
+{{else}}<p class="muted">{{.Unavailable}}</p>{{end}}{{end}}

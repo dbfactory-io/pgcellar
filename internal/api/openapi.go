@@ -4,6 +4,8 @@ import "net/http"
 
 type m = map[string]any
 
+var dt = m{"type": "string", "format": "date-time"}
+
 func ref(name string) m { return m{"$ref": "#/components/schemas/" + name} }
 
 func dataOf(schema m) m {
@@ -77,6 +79,9 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			"/servers/{name}/setup": m{
 				"get": op("Server setup: what pgCellar read in the PostgreSQL settings of the server and what to change there (fix is the exact SQL or line; restart tells whether a restart is needed, else a reload is enough). Cached, read again every setup_interval and by POST /check; never runs a command. level is unknown until the first read. Warnings do not change the health level of the server, errors do.", "viewer", m{"parameters": server, "responses": m{"200": resp("Setup", dataOf(ref("Setup"))), "404": errResp}}),
 			},
+			"/servers/{name}/timeline": m{
+				"get": op("Timeline: what the server can be restored to, built on the fly from Barman's own files (meta/*-backup.info, wals/*-xlog.db, wals/*.history; a few milliseconds, never runs Barman). earliest_restore_point is the begin_time of the oldest DONE backup whose WAL chain is unbroken from its begin_wal up to the last filled WAL file; latest_restore_point is the last data received while streaming is live, else the last filled WAL file. When the metadata cannot be read, available is false and unavailable says why.", "viewer", m{"parameters": server, "responses": m{"200": resp("Timeline", dataOf(ref("Timeline"))), "404": errResp}}),
+			},
 			"/servers/{name}/check": m{
 				"post": op("Run barman check now and explain each line", "operator", m{"parameters": server, "responses": m{"200": resp("Checks", dataOf(m{"type": "object", "properties": m{"ok": m{"type": "boolean"}, "checks": m{"type": "array", "items": ref("Check")}}})), "404": errResp, "502": errResp}}),
 			},
@@ -149,6 +154,32 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"problems": m{"type": "array", "items": m{"type": "string"}}, "error": m{"type": "string"},
 					"setup": m{"type": "array", "items": ref("SetupCheck")}, "setup_level": m{"type": "string", "enum": []string{"ok", "warning", "error"}}, "setup_issues": m{"type": "integer"}, "setup_at": m{"type": "string", "format": "date-time"},
 					"updated_at": m{"type": "string", "format": "date-time"},
+				}},
+				"Timeline": m{"type": "object", "properties": m{
+					"server": m{"type": "string"}, "available": m{"type": "boolean"}, "unavailable": m{"type": "string", "description": "\"unavailable: <reason>\" when available is false"},
+					"now": dt, "axis_start": dt, "axis_end": dt,
+					"retention":              m{"type": "object", "properties": m{"recovery_window_days": m{"type": "integer"}, "redundancy": m{"type": "integer"}, "minimum_redundancy": m{"type": "integer"}, "start": dt}},
+					"backups":                m{"type": "array", "items": ref("TimelineBackup")},
+					"intervals":              m{"type": "array", "description": "WAL between the begin of one DONE backup and the next (the last one runs to the newest data)", "items": ref("TimelineInterval")},
+					"timelines":              m{"type": "array", "description": "PostgreSQL timelines seen in the WAL, with their fork point", "items": ref("WALTimeline")},
+					"wal_gaps":               m{"type": "array", "items": m{"type": "object", "properties": m{"timeline": m{"type": "integer"}, "from": dt, "to": dt, "missing_wal_files": m{"type": "integer"}}}},
+					"earliest_restore_point": dt, "earliest_backup": m{"type": "string"}, "latest_restore_point": dt, "latest_source": m{"type": "string", "enum": []string{"streaming", "last_filled_wal"}},
+					"last_filled_wal": m{"type": "string"}, "last_filled_wal_time": dt, "last_data_received": dt, "next_backup": dt,
+					"totals": m{"type": "object", "properties": m{"backups": m{"type": "integer"}, "full_backups": m{"type": "integer"}, "incremental_backups": m{"type": "integer"}, "backup_bytes": m{"type": "integer"}, "wal_files": m{"type": "integer"}, "wal_bytes": m{"type": "integer"}, "wal_gaps": m{"type": "integer"}, "missing_wal_files": m{"type": "integer"}, "failed_backups": m{"type": "integer"}}},
+					"notes":  m{"type": "array", "items": m{"type": "string"}},
+				}},
+				"TimelineBackup": m{"type": "object", "properties": m{
+					"id": m{"type": "string"}, "status": m{"type": "string"}, "begin_time": dt, "end_time": dt, "size": m{"type": "integer"}, "deduplicated_size": m{"type": "integer"},
+					"timeline": m{"type": "integer"}, "begin_wal": m{"type": "string"}, "end_wal": m{"type": "string"}, "parent_backup_id": m{"type": "string"},
+					"restorable": m{"type": "boolean", "description": "DONE and the WAL chain is unbroken up to the last filled WAL file"},
+				}},
+				"TimelineInterval": m{"type": "object", "properties": m{
+					"from": dt, "to": dt, "from_backup": m{"type": "string"}, "to_backup": m{"type": "string"}, "wal_files": m{"type": "integer"}, "wal_bytes": m{"type": "integer", "description": "Bytes as stored in xlog.db"},
+					"continuous": m{"type": "boolean"}, "missing_wal_files": m{"type": "integer"},
+				}},
+				"WALTimeline": m{"type": "object", "properties": m{
+					"id": m{"type": "integer"}, "parent": m{"type": "integer"}, "branched_at": dt, "switch_lsn": m{"type": "string"}, "reason": m{"type": "string"},
+					"first_wal_time": dt, "last_wal_time": dt, "wal_files": m{"type": "integer"}, "wal_bytes": m{"type": "integer"}, "current": m{"type": "boolean"},
 				}},
 				"Setup": m{"type": "object", "properties": m{
 					"server": m{"type": "string"}, "level": m{"type": "string", "enum": []string{"ok", "warning", "error", "unknown"}},

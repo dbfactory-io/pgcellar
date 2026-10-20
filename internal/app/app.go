@@ -54,6 +54,8 @@ type App struct {
 	ConfigDir  string // its directory, a git repository
 	Store      *store.Store
 	Engine     barman.Engine
+	// BarmanHome is barman_home of barman.conf (empty = Barman's default).
+	BarmanHome string
 	Runner     barman.Runner
 	Logger     *log.Logger
 	// Now can be replaced in tests.
@@ -156,6 +158,7 @@ func Load(configPath string, dev bool) (*App, error) {
 	eng := barman.NewEngine(runner)
 	if g, gerr := barman.LoadGlobal(cfg.Barman.ConfigFile); gerr == nil {
 		eng.BarmanHome = g.BarmanHome
+		a.BarmanHome = g.BarmanHome
 	}
 	a.Engine = eng
 
@@ -241,6 +244,13 @@ func (a *App) closeStaleRuns() {
 }
 
 func (a *App) now() time.Time { return a.Now() }
+
+func (a *App) barmanHome() string {
+	if a.BarmanHome == "" {
+		return barman.DefaultBarmanHome
+	}
+	return a.BarmanHome
+}
 
 // Logf writes to the application log.
 func (a *App) Logf(format string, args ...any) { a.Logger.Printf(format, args...) }

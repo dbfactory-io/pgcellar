@@ -46,6 +46,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET "+v+"/servers/{name}", a.auth(app.RoleViewer, a.getServer))
 	mux.HandleFunc("PUT "+v+"/servers/{name}", a.auth(app.RoleAdmin, a.putServer))
 	mux.HandleFunc("GET "+v+"/servers/{name}/setup", a.auth(app.RoleViewer, a.setup))
+	mux.HandleFunc("GET "+v+"/servers/{name}/timeline", a.auth(app.RoleViewer, a.timeline))
 	mux.HandleFunc("POST "+v+"/servers/{name}/check", a.auth(app.RoleOperator, a.check))
 	mux.HandleFunc("POST "+v+"/servers/{name}/backup", a.auth(app.RoleOperator, a.backup))
 	mux.HandleFunc("POST "+v+"/servers/{name}/switch-wal", a.auth(app.RoleOperator, a.switchWAL))
@@ -257,6 +258,15 @@ func (a *API) setup(w http.ResponseWriter, r *http.Request, p principal) {
 		return
 	}
 	writeData(w, http.StatusOK, v)
+}
+
+func (a *API) timeline(w http.ResponseWriter, r *http.Request, p principal) {
+	t, err := a.app.GetTimeline(r.Context(), r.PathValue("name"))
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, t)
 }
 
 func (a *API) backups(w http.ResponseWriter, r *http.Request, p principal) {

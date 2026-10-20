@@ -131,6 +131,7 @@ type serverPageData struct {
 	Form       formData
 	BackupList backupListData
 	Recoveries recoveryListData
+	Timeline   tlView
 	Updated    time.Time // when the cache entry of the server was built
 	Runs       []app.RunView
 	CanOperate bool
@@ -158,6 +159,11 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 	}
 	if override != nil {
 		data.Form = *override
+	}
+	if tl, err := s.app.GetTimeline(r.Context(), name); err == nil {
+		data.Timeline = buildTimelineView(tl)
+	} else {
+		data.Timeline = tlView{Unavailable: "unavailable: " + err.Error()}
 	}
 	data.BackupList = s.backupList(r, u, name)
 	data.Recoveries = s.recoveryList(u, name)

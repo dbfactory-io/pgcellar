@@ -48,6 +48,7 @@ func funcs(assets map[string]string) template.FuncMap {
 		"size":      humanSize,
 		"retention": fmtRetention,
 		"runtime":   runtime,
+		"f1":        f1,
 	}
 }
 
