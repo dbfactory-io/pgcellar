@@ -4,3 +4,4 @@
 *.db
 *.db-journal
 .DS_Store
+!internal/barman/testdata/**/*-xlog.db
