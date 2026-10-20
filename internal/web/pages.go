@@ -21,11 +21,13 @@ type statusData struct {
 	Dev     bool   // the app clock is frozen for the fixtures
 	Every   string // refresh interval, for people
 	Stale   bool   // states come from before the restart; the first refresh is running
+	Summary summary
 }
 
 func (s *Server) statusData() statusData {
 	states, at, errMsg := s.app.States()
-	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: s.app.CacheStale()}
+	stale := s.app.CacheStale()
+	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale)}
 }
 
 func (s *Server) statusPage(w http.ResponseWriter, r *http.Request, u *userCtx) {

@@ -1,23 +1,22 @@
 {{define "content"}}
 <div class="head"><h1>{{t "servers.title"}}</h1>{{if .CanAdmin}}<a class="btn" href="/servers/new">{{t "btn.add_server"}}</a>{{end}}</div>
 {{if .Data}}
-<div class="tablewrap">
-<table>
-<thead><tr><th>Server</th><th>State</th><th>Method</th><th>Schedule</th><th>Retention</th><th>Notes</th></tr></thead>
-<tbody>
+<ul class="rows">
 {{range .Data}}
-<tr>
-  <td><a href="/servers/{{.Name}}">{{.Name}}</a>{{if .Label}}<br><small>{{.Label}}</small>{{end}}</td>
-  <td>{{if .State}}{{template "level" .State.Level}}{{else}}<small>unknown</small>{{end}}</td>
-  <td>{{if .HasFile}}{{.BackupMethod}}{{else}}-{{end}}</td>
-  <td>{{if .Schedule.Enabled}}{{.ScheduleHuman}}{{else}}<small>off</small>{{end}}</td>
-  <td>{{retention .Retention}}</td>
-  <td>{{if not .HasFile}}<small>No file in barman.d</small>{{else if not .InBarman}}<small>Barman does not list it</small>{{end}}{{if .Problems}}<small class="warnt"> {{len .Problems}} definition problem(s)</small>{{end}}</td>
-</tr>
+<li class="row">
+  <div class="grow">
+    <a href="/servers/{{.Name}}"><strong>{{.Name}}</strong></a>{{if .Label}}<div class="meta">{{.Label}}</div>{{end}}
+    {{if not .HasFile}}<div class="meta">No file in barman.d</div>{{else if not .InBarman}}<div class="meta">Barman does not list it</div>{{end}}
+    {{if .Problems}}<div class="meta warnt">{{len .Problems}} definition problem(s)</div>{{end}}
+  </div>
+  <div>{{if .State}}{{template "level" .State.Level}}{{else}}<small>unknown</small>{{end}}</div>
+  <div class="meta">{{if .HasFile}}{{.BackupMethod}}{{else}}-{{end}}</div>
+  <div class="meta">{{if .Schedule.Enabled}}{{.ScheduleHuman}}{{else}}<span aria-hidden="true">💤</span> schedule off{{end}}</div>
+  <div class="meta">{{retention .Retention}}</div>
+</li>
 {{end}}
-</tbody></table>
-</div>
+</ul>
 {{else}}
-<p class="empty">No server yet.{{if .CanAdmin}} <a href="/servers/new">Add the first one.</a>{{end}}</p>
+<div class="empty"><strong>{{t "status.none"}}</strong>{{if .CanAdmin}}<p><a href="/servers/new">Add the first one.</a></p>{{else}}<p>No server yet.</p>{{end}}</div>
 {{end}}
 {{end}}

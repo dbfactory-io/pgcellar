@@ -2,15 +2,11 @@
 <h1>{{t "history.title"}}</h1>
 <p class="muted">Every change made through pgCellar is a git commit in the configuration directory, with the user as author.</p>
 {{if .Data.Entries}}
-<div class="tablewrap">
-<table>
-<thead><tr><th>Commit</th><th>Date</th><th>Author</th><th>Change</th></tr></thead>
-<tbody>
+<ul class="rows">
 {{range .Data.Entries}}
-<tr><td><a href="/history?repo={{.Repo}}&amp;diff={{.Hash}}"><code>{{.Hash}}</code></a>{{if eq .Repo "barman"}} <small>barman.d</small>{{end}}</td><td>{{.Date}}</td><td>{{.Author}}</td><td>{{.Message}}</td></tr>
+<li class="row"><div class="grow"><strong>{{.Message}}</strong><div class="meta">{{.Author}}{{if eq .Repo "barman"}} &middot; barman.d{{end}}</div></div><div class="meta">{{.Date}}</div><div><a href="/history?repo={{.Repo}}&amp;diff={{.Hash}}"><code>{{.Hash}}</code></a></div></li>
 {{end}}
-</tbody></table>
-</div>
-{{else}}<p class="empty">No change recorded yet.</p>{{end}}
-{{if .Data.Diff}}<h2>Commit {{.Data.DiffHash}}</h2><pre class="out diff">{{.Data.Diff}}</pre>{{end}}
+</ul>
+{{else}}<div class="empty"><strong>No change recorded yet.</strong><p>The first edit made through pgCellar will appear here.</p></div>{{end}}
+{{if .Data.Diff}}<h2 style="margin-top:2rem">Commit {{.Data.DiffHash}}</h2><pre class="out diff">{{.Data.Diff}}</pre>{{end}}
 {{end}}

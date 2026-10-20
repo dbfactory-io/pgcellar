@@ -2,33 +2,32 @@
 {{if .}}<div class="flash bad" role="alert"><strong>Please fix:</strong><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
 {{end}}
 
-{{define "level"}}<span class="dot {{.}}" title="{{.}}"></span><span class="lvl {{.}}">{{if eq . "ok"}}Healthy{{else if eq . "warn"}}Attention{{else}}Failing{{end}}</span>{{end}}
+{{define "level"}}<span class="lvl {{.}}"><span class="dot {{.}}" aria-hidden="true"></span><span aria-hidden="true">{{if eq . "ok"}}✅{{else if eq . "warn"}}⚠️{{else}}❌{{end}}</span>{{if eq . "ok"}}{{t "level.ok"}}{{else if eq . "warn"}}{{t "level.warn"}}{{else}}{{t "level.fail"}}{{end}}</span>{{end}}
 
 {{define "check_fragment"}}
 <div class="checks">
 {{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{else}}
-<table>
-<thead><tr><th>Check</th><th>Result</th><th>What it verifies</th></tr></thead>
-<tbody>
+<ul class="rows">
 {{range .Checks}}
-<tr class="{{if .OK}}rowok{{else}}rowbad{{end}}">
-  <td>{{.Display}}</td>
-  <td>{{if .OK}}<span class="pill ok">OK</span>{{else}}<span class="pill bad">FAILED</span>{{end}}</td>
-  <td>{{.What}}{{if .Fix}}<div class="fix"><strong>How to fix:</strong> {{.Fix}}</div>{{end}}</td>
-</tr>
-{{else}}<tr><td colspan="3">Barman returned no check.</td></tr>{{end}}
-</tbody></table>
+<li class="row{{if not .OK}} bad{{end}}">
+  <div class="grow"><strong><span aria-hidden="true">{{if .OK}}✅{{else}}❌{{end}}</span> {{.Display}}</strong></div>
+  <div>{{if .OK}}<span class="pill ok">OK</span>{{else}}<span class="pill bad">FAILED</span>{{end}}</div>
+  <div class="msg">{{.What}}{{if .Fix}}<div class="fix"><strong>How to fix:</strong> {{.Fix}}</div>{{end}}</div>
+</li>
+{{else}}<li class="row">Barman returned no check.</li>{{end}}
+</ul>
 {{end}}
 </div>
 {{end}}
 
 {{define "run_fragment"}}
 <div id="run-{{.Run.ID}}" class="runbox"{{if eq .Run.Status "running"}} hx-get="/runs/{{.Run.ID}}/fragment" hx-trigger="every 3s" hx-swap="outerHTML"{{end}}>
+  {{if and (eq .Run.Status "ok") (eq .Run.Kind "backup")}}<p class="cheer">{{t "run.done"}} {{runtime .Run}}. {{t "run.stocked"}}</p>{{end}}
   <p>
     Run <a href="/runs/{{.Run.ID}}">#{{.Run.ID}}</a> ({{.Run.Kind}} of {{.Run.Server}}):
     {{if eq .Run.Status "running"}}<span class="pill warn">running</span> started {{ago .Run.StartedAt}} ago, this panel refreshes every 3 seconds.
     {{else if eq .Run.Status "ok"}}<span class="pill ok">finished</span> in {{runtime .Run}}.
-    {{else}}<span class="pill bad">failed</span> with exit code {{if .Run.ExitCode}}{{.Run.ExitCode}}{{end}} after {{runtime .Run}}.{{end}}
+    {{else}}<span class="pill bad">failed</span> with exit code {{if .Run.ExitCode}}{{.Run.ExitCode}}{{end}} after {{runtime .Run}}. {{t "run.failed_hint"}}{{end}}
   </p>
   {{if .Run.Stdout}}<pre class="out">{{.Run.Stdout}}</pre>{{end}}
   {{if .Run.Stderr}}<pre class="out err">{{.Run.Stderr}}</pre>{{end}}
@@ -38,28 +37,30 @@
 {{define "status_table"}}
 <div id="status-table" hx-get="/status/table" hx-trigger="every 30s" hx-swap="outerHTML">
 {{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{end}}
-{{if .States}}
-<div class="tablewrap">
-<table class="status">
-<thead><tr><th>Server</th><th>State</th><th>Last backup</th><th>{{t "status.wal"}}</th><th>Backups</th><th>Check</th></tr></thead>
-<tbody>
-{{range .States}}
-<tr class="lv-{{.Level}}">
-  <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
-  <td>{{template "level" .Level}}</td>
-  <td>{{if .LastBackupID}}{{.LastBackupID}}<br><small>{{ageSec .LastBackupAgeSeconds}} ago &middot; {{size .LastBackupSize}}</small>{{else}}<small>none yet</small>{{end}}</td>
-  <td>{{t "wal.streaming"}}: {{if .StreamingLive}}<span class="pill ok">{{t "wal.live"}}</span>{{if not .LastDataReceived.IsZero}} &middot; {{t "wal.data"}} {{ageSec .LastDataReceivedAgeSeconds}} ago{{end}}{{else if .StreamingMonitored}}<span class="pill bad">{{t "wal.stopped"}}</span>{{else}}<small>{{t "wal.not_used"}}</small>{{end}}<br><small>{{t "wal.filled"}}: {{if .LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .LastFilledWALAgeSeconds}} ago{{end}}</small></td>
-  <td>{{.BackupCount}}</td>
-  <td>{{if .CheckOK}}<span class="pill ok">OK</span>{{else if .Checks}}<span class="pill bad">FAILED</span>{{else}}<span class="pill warn">unknown</span>{{end}}</td>
-</tr>
-{{if .Problems}}<tr class="probs lv-{{.Level}}"><td></td><td colspan="5"><ul>{{range .Problems}}<li>{{.}}</li>{{end}}</ul></td></tr>{{end}}
-{{if .Error}}<tr class="probs lv-fail"><td></td><td colspan="5">{{.Error}}</td></tr>{{end}}
-{{end}}
-</tbody></table>
+<div class="headline {{.Summary.Level}}" role="status">
+  <h1>{{.Summary.Text}}</h1>
+  {{if .Summary.Sub}}<p>{{.Summary.Sub}}</p>{{end}}
 </div>
-<p class="muted">Cached status, refreshed every {{.Every}}{{if .Stale}}; as of {{ts .Updated}}, refreshing{{else if not .Updated.IsZero}}; last refresh {{ago .Updated}} ago{{if .Dev}} (clock frozen for fixtures){{end}}{{end}}.</p>
+{{if .States}}
+<div class="rows">
+{{range .States}}
+<article class="srv lv-{{.Level}}">
+  <a href="/servers/{{.Name}}">
+    <div class="top1"><span class="name">{{.Name}}</span>{{template "level" .Level}}</div>
+    <div class="lines">
+      <div>{{if .LastBackupID}}{{t "status.last_backup"}} {{ageSec .LastBackupAgeSeconds}} ago{{if .LastBackupSize}} &middot; {{size .LastBackupSize}}{{end}}{{else}}{{t "status.no_backup"}}{{end}}</div>
+      <div>{{t "wal.streaming"}}: {{if .StreamingLive}}<span class="pill ok">{{t "wal.live"}}</span>{{if not .LastDataReceived.IsZero}} &middot; {{t "wal.data"}} {{ageSec .LastDataReceivedAgeSeconds}} ago{{end}}{{else if .StreamingMonitored}}<span class="pill bad">{{t "wal.stopped"}}</span>{{else}}{{t "wal.not_used"}}{{end}}</div>
+      <div>{{t "wal.filled"}}: {{if .LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .LastFilledWALAgeSeconds}} ago{{end}}</div>
+      <div>{{.BackupCount}} {{if eq .BackupCount 1}}{{t "unit.backup"}}{{else}}{{t "unit.backups"}}{{end}} &middot; {{if .CheckOK}}<span class="pill ok">checks OK</span>{{else if .Checks}}<span class="pill bad">check FAILED</span>{{else}}<span class="pill warn">check unknown</span>{{end}}</div>
+    </div>
+  </a>
+  {{if or .Problems .Error}}<ul class="probs">{{range .Problems}}<li>{{.}}</li>{{end}}{{if .Error}}<li>{{.Error}}</li>{{end}}</ul>{{end}}
+</article>
+{{end}}
+</div>
+<p class="muted" style="margin-top:1rem">Cached status, refreshed every {{.Every}}{{if .Stale}}; as of {{ts .Updated}}, refreshing{{else if not .Updated.IsZero}}; last refresh {{ago .Updated}} ago{{if .Dev}} (clock frozen for fixtures){{end}}{{end}}.</p>
 {{else}}
-<p class="empty">No server yet, or the first status check is still running. <a href="/servers">Servers</a></p>
+<div class="empty"><strong>{{t "status.none"}}</strong><p>{{t "status.none_hint"}} <a href="/servers">Servers</a></p></div>
 {{end}}
 </div>
 {{end}}
@@ -103,18 +104,16 @@
 
 {{define "runs_table"}}
 {{if .}}
-<div class="tablewrap">
-<table>
-<thead><tr><th>Run</th><th>Server</th><th>Kind</th><th>Status</th><th>Started</th><th>By</th></tr></thead>
-<tbody>
+<ul class="rows">
 {{range .}}
-<tr><td><a href="/runs/{{.ID}}">#{{.ID}}</a></td><td><a href="/servers/{{.Server}}">{{.Server}}</a></td><td>{{.Kind}}</td>
-<td>{{if eq .Status "ok"}}<span class="pill ok">ok</span>{{else if eq .Status "running"}}<span class="pill warn">running</span>{{else}}<span class="pill bad">failed</span>{{end}}</td>
-<td>{{ts .StartedAt}}</td><td>{{.Actor}}</td></tr>
+<li class="row">
+  <div class="grow"><a href="/runs/{{.ID}}"><strong>#{{.ID}}</strong></a> {{.Kind}} of <a href="/servers/{{.Server}}">{{.Server}}</a></div>
+  <div>{{if eq .Status "ok"}}<span class="pill ok">ok</span>{{else if eq .Status "running"}}<span class="pill warn">running</span>{{else}}<span class="pill bad">failed</span>{{end}}</div>
+  <div class="meta">{{when .StartedAt}}</div><div class="meta">{{.Actor}}</div>
+</li>
 {{end}}
-</tbody></table>
-</div>
-{{else}}<p class="empty">Nothing was run yet.</p>{{end}}
+</ul>
+{{else}}<div class="empty"><strong>{{t "runs.empty_fun"}}</strong></div>{{end}}
 {{end}}
 
 {{define "result_fragment"}}

@@ -1,5 +1,6 @@
 {{define "content"}}
 <section class="login">
+  <div class="brand">pg<span>Cellar</span></div>
   <h1>{{t "login.title"}}</h1>
   {{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{end}}
   <form method="post" action="/login">
@@ -9,6 +10,6 @@
     <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn" type="submit">{{t "btn.login"}}</button>
   </form>
-  <p class="muted">The barman serves, the cellar keeps.</p>
+  <p class="motto">{{t "motto"}}</p>
 </section>
 {{end}}

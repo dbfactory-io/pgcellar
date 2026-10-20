@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FBF8F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1C1917" media="(prefers-color-scheme: dark)">
 <meta name="htmx-config" content='{"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true}]}'>
 <title>{{.Title}} - pgCellar</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -35,7 +38,7 @@
 {{if .Warn}}<div class="flash warn" role="status">{{.Warn}}</div>{{end}}
 {{template "content" .}}
 </main>
-<footer class="wrap foot">pgCellar {{.Version}} &middot; <span>the barman serves, the cellar keeps</span></footer>
+<footer class="wrap foot">pgCellar {{.Version}} &middot; <span>{{t "motto"}}</span></footer>
 </body>
 </html>
 {{end}}

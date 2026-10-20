@@ -199,7 +199,7 @@ func TestStatusLevels(t *testing.T) {
 	f := newFixture(t)
 	c, _ := f.login(t, "viewer")
 	body := f.get("/status", c).Body.String()
-	for _, want := range []string{`lv-ok`, `lv-warn`, `lv-fail`, "Healthy", "Attention", "Failing", "No completed backup exists for broken"} {
+	for _, want := range []string{`lv-ok`, `lv-warn`, `lv-fail`, "Healthy", "Attention", "Failing", "No completed backup exists for broken", "is failing", "Last backup finished"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/status lacks %q", want)
 		}

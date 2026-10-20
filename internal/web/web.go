@@ -35,6 +35,7 @@ func funcs() template.FuncMap {
 	return template.FuncMap{
 		"t":         tr,
 		"ts":        fmtTime,
+		"when":      fmtWhen,
 		"ago":       func(t time.Time) string { return app.HumanDuration(time.Since(t)) },
 		"ageSec":    ageSec,
 		"size":      humanSize,

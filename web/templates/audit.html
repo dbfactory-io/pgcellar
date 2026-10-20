@@ -2,12 +2,8 @@
 <h1>{{t "audit.title"}}</h1>
 <p class="muted">Every Barman command pgCellar ran, who asked for it, and how it ended.</p>
 {{if .Data}}
-<div class="tablewrap">
-<table>
-<thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
-<tbody>
-{{range .Data}}<tr><td>{{ts .At}}</td><td>{{.Actor}}</td><td><code>{{.Action}}</code></td><td>{{.Target}}</td><td>{{.Details}}</td></tr>{{end}}
-</tbody></table>
-</div>
-{{else}}<p class="empty">Nothing yet.</p>{{end}}
+<ul class="rows">
+{{range .Data}}<li class="row"><div class="grow"><code>{{.Action}}</code> {{.Target}}</div><div class="meta">{{.Actor}}</div><div class="meta">{{when .At}}</div>{{if .Details}}<div class="msg meta">{{.Details}}</div>{{end}}</li>{{end}}
+</ul>
+{{else}}<div class="empty"><strong>Nothing yet.</strong></div>{{end}}
 {{end}}

@@ -1,4 +1,4 @@
 {{define "content"}}
 <h1>{{t "runs.title"}}</h1>
-{{if .Data}}{{template "runs_table" .Data}}{{else}}<p class="empty">{{t "runs.empty"}}</p>{{end}}
+{{if .Data}}{{template "runs_table" .Data}}{{else}}<div class="empty"><strong>{{t "runs.empty_fun"}}</strong><p>{{t "runs.empty"}}</p></div>{{end}}
 {{end}}
