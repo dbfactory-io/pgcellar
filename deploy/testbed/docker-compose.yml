@@ -6,9 +6,10 @@ services:
     image: pgcellar:testbed
     container_name: pgcellar
     ports:
-      # Loopback only: reach it through a tunnel (ssh -L 8082:127.0.0.1:8082 rasp001)
-      # or from the Pi itself. Nothing is exposed on the LAN.
+      # Loopback for the Pi itself, and the Pi's LAN address for the relay on hawking
+      # (https://pgcellar.stranix.net, VPN-only). 10.79.0.212 is eth0 of rasp001.
       - "127.0.0.1:8082:8080"
+      - "10.79.0.212:8082:8080"
     volumes:
       - /mnt/usbdata/pgcellar/barman:/var/lib/barman
       - /mnt/usbdata/pgcellar/data:/var/lib/pgcellar

@@ -292,7 +292,7 @@ sudo docker exec pgcellar pgcellar check --config /etc/pgcellar/pgcellar.yaml
 sudo docker exec -u barman pgcellar barman check chutag
 ```
 
-`check-from-pi.sh` fails on 5438 until A7 is done, and on any port whose role does not exist yet; read its output port by port (`HOST` can be overridden). Web UI: `http://127.0.0.1:8082` on the Pi (8080 is taken by cadvisor there, 8081 by qbittorrent), or from the Mac `ssh -L 8082:127.0.0.1:8082 rasp001` then `http://localhost:8082`.
+`check-from-pi.sh` fails on 5438 until A7 is done, and on any port whose role does not exist yet; read its output port by port (`HOST` can be overridden). Web UI: **https://pgcellar.stranix.net** from any WireGuard peer (tunnel DNS resolves it to 10.8.0.1, ghost_nginx on hawking terminates TLS and relays to the Pi through the `pgcellar-vpn` socat in the wireguard netns; everything else gets 403). Fallbacks: `http://127.0.0.1:8082` on the Pi (8080 is taken by cadvisor there, 8081 by qbittorrent), or `ssh -L 8082:127.0.0.1:8082 rasp001` then `http://localhost:8082`.
 
 On the first `barman check chutag` expect PostgreSQL, `pg_basebackup` compatibility and connection lines OK; the replication slot missing; and the minimum redundancy failing until the first backup. `create_slot = auto` makes Barman create the slot at the first `barman cron`, which is the first persistent object on production (TESTBED.md step 11, needs its own go): until then keep `streaming_archiver = off` in the server file, or leave the server out of `etc/barman.d` and of `servers:`.
 

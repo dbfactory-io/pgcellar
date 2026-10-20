@@ -3,7 +3,7 @@
 # token comes from the environment (.env).
 
 listen: ":8080"
-base_url: ""
+base_url: "https://pgcellar.stranix.net"
 data_dir: /var/lib/pgcellar
 audit_retention_days: 90
 
