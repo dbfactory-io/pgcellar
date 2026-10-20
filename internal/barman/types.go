@@ -14,64 +14,64 @@ import (
 // is kept verbatim in Extra so that a round trip never loses a line a
 // sysadmin wrote by hand.
 type Server struct {
-	Name        string            // section name, e.g. "pg-main"
-	Description string            // description
-	ConnInfo    string            // conninfo (libpq string)
-	SSHCommand  string            // ssh_command (rsync method), empty for streaming
-	BackupMethod string           // backup_method: postgres | rsync
-	StreamingConnInfo string      // streaming_conninfo
-	StreamingArchiver string      // streaming_archiver: on | off
-	Slot        string            // slot_name
-	Archiver    string            // archiver: on | off
-	RetentionPolicy string        // retention_policy, e.g. "RECOVERY WINDOW OF 7 DAYS"
-	MinimumRedundancy string      // minimum_redundancy
-	Extra       map[string]string // every other key, untouched
-	Order       []string          // key order as found in the file, to write it back the same way
-	File        string            // absolute path of the .conf file this section came from
+	Name              string            // section name, e.g. "pg-main"
+	Description       string            // description
+	ConnInfo          string            // conninfo (libpq string)
+	SSHCommand        string            // ssh_command (rsync method), empty for streaming
+	BackupMethod      string            // backup_method: postgres | rsync
+	StreamingConnInfo string            // streaming_conninfo
+	StreamingArchiver string            // streaming_archiver: on | off
+	Slot              string            // slot_name
+	Archiver          string            // archiver: on | off
+	RetentionPolicy   string            // retention_policy, e.g. "RECOVERY WINDOW OF 7 DAYS"
+	MinimumRedundancy string            // minimum_redundancy
+	Extra             map[string]string // every other key, untouched
+	Order             []string          // key order as found in the file, to write it back the same way
+	File              string            // absolute path of the .conf file this section came from
 }
 
 // GlobalConfig is the [barman] section of /etc/barman.conf.
 type GlobalConfig struct {
-	BarmanHome string            // barman_home
-	BarmanUser string            // barman_user
-	LogFile    string            // log_file
+	BarmanHome                  string // barman_home
+	BarmanUser                  string // barman_user
+	LogFile                     string // log_file
 	ConfigurationFilesDirectory string // configuration_files_directory
-	Extra      map[string]string
-	Order      []string
-	File       string
+	Extra                       map[string]string
+	Order                       []string
+	File                        string
 }
 
 // Backup is one entry of `barman list-backups --format json` enriched by
 // `show-backup` when available.
 type Backup struct {
 	Server    string
-	ID        string    // e.g. 20261020T020001
-	Status    string    // DONE, FAILED, STARTED, WAITING_FOR_WALS...
+	ID        string // e.g. 20261020T020001
+	Status    string // DONE, FAILED, STARTED, WAITING_FOR_WALS...
 	BeginTime time.Time
 	EndTime   time.Time
-	Size      int64     // bytes
-	WALSize   int64     // bytes of WALs since this backup, if reported
+	Size      int64 // bytes
+	WALSize   int64 // bytes of WALs since this backup, if reported
 	PGVersion string
 	Raw       map[string]any // the JSON object as returned, for the UI "details" view
 }
 
 // CheckResult is one line of `barman check <server>`.
 type CheckResult struct {
-	Name   string // e.g. "WAL archive", "PostgreSQL", "ssh"
-	OK     bool
-	Hint   string // Barman's own hint when FAILED, may be empty
+	Name string // e.g. "WAL archive", "PostgreSQL", "ssh"
+	OK   bool
+	Hint string // Barman's own hint when FAILED, may be empty
 }
 
 // ServerStatus is the digest pgCellar shows per server: built from `status`,
 // `list-backups` and `check`.
 type ServerStatus struct {
-	Server        string
-	LastBackup    *Backup
-	LastWALTime   time.Time
-	BackupCount   int
-	Checks        []CheckResult
-	Healthy       bool
-	Problems      []string // human sentences, already explained
+	Server      string
+	LastBackup  *Backup
+	LastWALTime time.Time
+	BackupCount int
+	Checks      []CheckResult
+	Healthy     bool
+	Problems    []string // human sentences, already explained
 }
 
 // Runner executes Barman commands. There is exactly one implementation that
@@ -89,7 +89,8 @@ type Audit func(entry AuditEntry)
 // AuditEntry describes one executed Barman command.
 type AuditEntry struct {
 	When     time.Time
-	Args     []string
+	Args     []string // barman arguments as passed to Run (without binary or sudo)
+	Command  string   // exact command line that was executed, including any sudo prefix
 	ExitCode int
 	Duration time.Duration
 	Actor    string // user or api key name, set by the caller
@@ -104,7 +105,7 @@ type Engine interface {
 	ListBackups(ctx context.Context, server string) ([]Backup, error)
 	ShowBackup(ctx context.Context, server, backupID string) (*Backup, error)
 	Status(ctx context.Context, server string) (*ServerStatus, error)
-	Backup(ctx context.Context, server string) error       // runs `barman backup <server>`
-	SwitchWAL(ctx context.Context, server string) error    // `barman switch-wal --force --archive <server>`
-	Cron(ctx context.Context) error                        // `barman cron`
+	Backup(ctx context.Context, server string) error    // runs `barman backup <server>`
+	SwitchWAL(ctx context.Context, server string) error // `barman switch-wal --force --archive <server>`
+	Cron(ctx context.Context) error                     // `barman cron`
 }

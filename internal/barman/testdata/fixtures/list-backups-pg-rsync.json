@@ -1,0 +1,1 @@
+{"pg-rsync": [{"backup_id": "20261019T230001", "backup_type": "rsync", "end_time": "Mon Oct 19 23:41:07 2026", "end_time_timestamp": "1792446067", "retention_status": "VALID", "size": "38.2 GiB", "size_bytes": 41018760192, "status": "DONE", "wal_size": "1.1 GiB", "wal_size_bytes": 1181116006}, {"backup_id": "20261020T230001", "status": "FAILED"}]}

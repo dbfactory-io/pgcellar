@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# fake-barman: a stand-in for the Barman command line, used by the tests and
+# by `pgcellar serve --dev`. It accepts the same global options and
+# sub-commands pgCellar uses and serves JSON fixtures from ./fixtures.
+#
+# Servers it knows: pg-main (healthy, streaming), pg-rsync (healthy, rsync,
+# last backup failed), broken (every check fails, exit status 1).
+#
+# If FAKE_BARMAN_LOG is set, the arguments of every call are appended to it.
+
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fx="$here/fixtures"
+
+if [ -n "${FAKE_BARMAN_LOG:-}" ]; then
+  printf '%s\n' "$*" >>"$FAKE_BARMAN_LOG"
+fi
+
+format=console
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -f|--format) format="${2:-}"; shift 2 ;;
+    --format=*) format="${1#--format=}"; shift ;;
+    -c|--config|--log-level) shift 2 ;;
+    -q|--quiet|-d|--debug) shift ;;
+    -h|--help) echo "usage: barman [-h] [-c CONFIG] [-q] [-d] [-f {json,console}] {check,list-servers,list-backups,show-backup,status,backup,switch-wal,cron} ..."; exit 0 ;;
+    -*) echo "barman: error: unrecognized arguments: $1" >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+
+if [ $# -eq 0 ]; then
+  echo "usage: barman [-h] ... command" >&2
+  exit 2
+fi
+cmd="$1"; shift
+
+known_server() {
+  case "$1" in pg-main|pg-rsync|broken) return 0 ;; *) return 1 ;; esac
+}
+
+# fail NAME: Barman style error (JSON when asked), exit status 1.
+fail() {
+  if [ "$format" = json ]; then
+    printf '{"_ERROR": ["%s"]}' "$1"
+  else
+    echo "ERROR: $1" >&2
+  fi
+  exit 1
+}
+
+need_server() {
+  [ $# -ge 1 ] && [ -n "$1" ] || { echo "barman: error: the following arguments are required: server_name" >&2; exit 2; }
+  known_server "$1" || fail "Unknown server '$1'"
+}
+
+# emit FILE: print the fixture in JSON mode; in console mode print a short text.
+emit() {
+  if [ "$format" = json ]; then
+    cat "$fx/$1"
+  else
+    echo "(console output of '$cmd' not simulated, use --format json)"
+  fi
+}
+
+minimal=0
+args=()
+for a in "$@"; do
+  case "$a" in
+    --minimal) minimal=1 ;;
+    --force|--archive|--wait|--no-wait) ;;
+    -*) echo "barman: error: unrecognized arguments: $a" >&2; exit 2 ;;
+    *) args+=("$a") ;;
+  esac
+done
+set -- "${args[@]+"${args[@]}"}"
+
+case "$cmd" in
+  list-servers)
+    if [ "$minimal" = 1 ]; then
+      if [ "$format" = json ]; then cat "$fx/list-servers-minimal.json"; else printf 'pg-main\npg-rsync\nbroken\n'; fi
+    else
+      if [ "$format" = json ]; then cat "$fx/list-servers.json"; else printf 'pg-main - Main database (streaming)\npg-rsync - Legacy ERP over rsync\nbroken - Unreachable server\n'; fi
+    fi
+    ;;
+  check)
+    need_server "${1:-}"
+    emit "check-$1.json"
+    [ "$1" = broken ] && exit 1
+    exit 0
+    ;;
+  status)
+    need_server "${1:-}"
+    emit "status-$1.json"
+    ;;
+  list-backups)
+    need_server "${1:-}"
+    emit "list-backups-$1.json"
+    ;;
+  show-backup)
+    need_server "${1:-}"
+    id="${2:-}"
+    [ -n "$id" ] || { echo "barman: error: the following arguments are required: backup_id" >&2; exit 2; }
+    case "$id" in
+      latest|last) id=$(ls "$fx" | sed -n "s/^show-backup-$1-\(.*\)\.json$/\1/p" | sort | tail -n 1) ;;
+      first|oldest) id=$(ls "$fx" | sed -n "s/^show-backup-$1-\(.*\)\.json$/\1/p" | sort | head -n 1) ;;
+    esac
+    [ -f "$fx/show-backup-$1-$id.json" ] || fail "Unknown backup '$2' for server '$1'"
+    emit "show-backup-$1-$id.json"
+    ;;
+  backup)
+    need_server "${1:-}"
+    [ "$1" = broken ] && fail "Cannot connect to PostgreSQL for server 'broken'"
+    if [ "$format" = json ]; then sed -e "s/SERVER/$1/g" -e "s/ID/20261020T120000/g" "$fx/backup.json"; else echo "Backup completed"; fi
+    ;;
+  switch-wal)
+    need_server "${1:-}"
+    [ "$1" = broken ] && fail "Cannot connect to PostgreSQL for server 'broken'"
+    [ "$format" = json ] && printf '{"_INFO": ["The WAL file 000000010000000000000008 has been closed on server %s"]}' "$1"
+    exit 0
+    ;;
+  cron)
+    [ "$format" = json ] && printf '{"_INFO": []}'
+    exit 0
+    ;;
+  *)
+    echo "barman: error: argument command: invalid choice: '$cmd'" >&2
+    exit 2
+    ;;
+esac
