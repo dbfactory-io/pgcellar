@@ -198,3 +198,13 @@ func setupOK(list []barman.SetupCheck) int {
 	}
 	return n
 }
+
+// failedStep is the label of the step that failed in a drill.
+func failedStep(steps []app.DrillStep) string {
+	for _, st := range steps {
+		if st.Status == app.StepFailed {
+			return st.Label
+		}
+	}
+	return "?"
+}

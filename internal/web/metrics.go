@@ -79,6 +79,21 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		}
 		return "", false
 	})
+	family("pgcellar_last_drill_ok", "1 when the last restore drill of the server passed, 0 when it failed. Absent until a drill ran.", func(st app.ServerState) (string, bool) {
+		if st.Drill == nil || st.Drill.Last == nil {
+			return "", false
+		}
+		if st.Drill.Last.OK {
+			return "1", true
+		}
+		return "0", true
+	})
+	family("pgcellar_last_drill_age_seconds", "Seconds since the last restore drill of the server ended, whatever its result. Absent until a drill ran.", func(st app.ServerState) (string, bool) {
+		if st.Drill == nil || st.Drill.Last == nil {
+			return "", false
+		}
+		return fmt.Sprint(st.Drill.Last.AgeSeconds), true
+	})
 	_, _ = b.WriteString("# HELP pgcellar_recoveries_total Restores to a directory that finished successfully, since the database was created.\n# TYPE pgcellar_recoveries_total counter\n")
 	done, _ := s.app.Store.CountRuns("recover")
 	for _, st := range states {

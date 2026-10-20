@@ -102,6 +102,23 @@ var messages = map[string]string{
 	"setup.hint":        "The settings are read every setup_interval, and again by \"Run check now\".",
 	"setup.none":        "Not read yet: the settings are read after the first refresh.",
 
+	// Restore drills.
+	"section.drills":    "Restore drills",
+	"drill.intro":       "A drill restores a backup into a throwaway PostgreSQL of the same version, checks that it starts and what it holds, and writes a dated PDF report.",
+	"btn.drill_now":     "Run a drill now",
+	"busy.drill":        "Restoring and starting a copy, this takes a while...",
+	"btn.report":        "Report (PDF)",
+	"drill.verified":    "Restore verified",
+	"drill.failed":      "Restore drill failed",
+	"drill.none":        "No drill yet.",
+	"drill.none_hint":   "The first one runs at the next due time, or press \"Run a drill now\".",
+	"drill.unscheduled": "No automatic drill for this server: set drills.schedule for it in pgcellar.yaml (for example weekly sun 04:30).",
+	"drill.schedule":    "Drill schedule",
+	"drill.next":        "Next drill",
+	"drill.history":     "History",
+	"drill.copy_kept":   "The restored copy is kept at",
+	"drill.running":     "A drill is running now.",
+
 	// Backup deletion.
 	"btn.delete":          "Delete",
 	"btn.delete_ask":      "Delete…",

@@ -14,6 +14,8 @@
   <span id="backup-busy" class="busy" role="status">{{t "busy.backup"}}</span>
   <button class="btn alt" hx-post="/servers/{{.Detail.Name}}/switch-wal" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#backup-busy" hx-disabled-elt="this">{{t "btn.switch_wal"}}</button>
   <a class="btn alt" href="/servers/{{.Detail.Name}}/restore">{{t "btn.restore_ask"}}</a>
+  <button class="btn alt" hx-post="/servers/{{.Detail.Name}}/drill" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#drill-busy" hx-disabled-elt="this" hx-confirm="Restore the latest backup of {{.Detail.Name}} into a throwaway PostgreSQL now? It uses disk space and some CPU for a few minutes.">{{t "btn.drill_now"}}</button>
+  <span id="drill-busy" class="busy" role="status">{{t "busy.drill"}}</span>
   {{if and .CanAdmin .Detail.SSHCommand}}<button class="btn alt" hx-post="/servers/{{.Detail.Name}}/ssh-test" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#ssh-busy" hx-disabled-elt="this">{{t "btn.ssh_test"}}</button>
   <span id="ssh-busy" class="busy" role="status">{{t "busy.checking"}}</span>{{end}}
 </div>
@@ -73,6 +75,11 @@
 <section>
   <h2>{{t "section.recoveries"}}</h2>
   <div id="recovery-list" aria-live="polite">{{template "recovery_list" .Recoveries}}</div>
+</section>
+
+<section id="drills">
+  <h2>{{t "section.drills"}}</h2>
+  {{template "drill_list" .Drills}}
 </section>
 
 <section>

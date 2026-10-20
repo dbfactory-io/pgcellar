@@ -133,6 +133,7 @@ type serverPageData struct {
 	Form       formData
 	BackupList backupListData
 	Recoveries recoveryListData
+	Drills     drillListData
 	Timeline   tlView
 	Updated    time.Time // when the cache entry of the server was built
 	Runs       []app.RunView
@@ -169,6 +170,7 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 	}
 	data.BackupList = s.backupList(r, u, name)
 	data.Recoveries = s.recoveryList(u, name)
+	data.Drills = s.drillList(u, name)
 	data.Runs, _ = s.app.Runs(name, 10)
 	s.render(w, status, "server", s.newPage(r, u, name, "servers", data))
 }
@@ -287,6 +289,7 @@ func (s *Server) serverCheck(w http.ResponseWriter, r *http.Request, u *userCtx)
 type runData struct {
 	Run        app.RunView
 	Recovery   *app.RecoveryView // the restore a finished recover run produced
+	Drill      *app.DrillView    // the drill a finished drill run produced
 	CanOperate bool
 	CanAdmin   bool
 }
@@ -300,6 +303,11 @@ func (s *Server) newRunData(run *app.RunView, u *userCtx) runData {
 	if run.Kind == "recover" && run.Status != app.RunRunning {
 		if rec, ok := s.app.RecoveryOfRun(run.ID); ok {
 			d.Recovery = rec
+		}
+	}
+	if run.Kind == "drill" && run.Status != app.RunRunning {
+		if dr, ok := s.app.DrillOfRun(run.ID); ok {
+			d.Drill = dr
 		}
 	}
 	return d
@@ -723,4 +731,59 @@ func (s *Server) serverSSHTest(w http.ResponseWriter, r *http.Request, u *userCt
 		return
 	}
 	s.fragment(w, http.StatusOK, "result_fragment", out)
+}
+
+// ---- restore drills ----
+
+// drillListData feeds the "drill_list" fragment on the server page.
+type drillListData struct {
+	Server     string
+	Status     *app.DrillStatus
+	Drills     []app.DrillView
+	CanOperate bool
+}
+
+func (s *Server) drillList(u *userCtx, name string) drillListData {
+	d := drillListData{Server: name, CanOperate: app.RoleAtLeast(u.Role, app.RoleOperator)}
+	d.Status = s.app.DrillStatusOf(name, s.app.Now())
+	d.Drills, _ = s.app.ListDrills(name, 10)
+	return d
+}
+
+func (s *Server) serverDrill(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	id, err := s.app.StartDrill(r.Context(), u.Name, r.PathValue("name"), app.DrillInput{})
+	if err != nil {
+		s.fail(w, r, u, err)
+		return
+	}
+	if !isHX(r) {
+		http.Redirect(w, r, "/runs/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		return
+	}
+	run, err := s.app.Run(id)
+	if err != nil {
+		s.fail(w, r, u, err)
+		return
+	}
+	s.fragment(w, http.StatusOK, "run_fragment", s.newRunData(run, u))
+}
+
+func (s *Server) drillReport(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	id, perr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if perr != nil {
+		s.fail(w, r, u, app.ErrNotFound)
+		return
+	}
+	path, _, err := s.app.DrillReport(u.Name, id)
+	if errors.Is(err, app.ErrNotFound) {
+		s.errorPage(w, r, u, http.StatusNotFound, "This drill has no report to download.")
+		return
+	}
+	if err != nil {
+		s.fail(w, r, u, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
+	http.ServeFile(w, r, path)
 }

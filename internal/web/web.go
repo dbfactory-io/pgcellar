@@ -35,23 +35,24 @@ var pages = []string{"login", "status", "servers", "server_new", "server", "rest
 
 func funcs(assets map[string]string) template.FuncMap {
 	return template.FuncMap{
-		"asset":     func(name string) string { return "/static/" + name + "?v=" + assets[name] },
-		"t":         tr,
-		"ts":        fmtTime,
-		"when":      fmtWhen,
-		"span":      fmtSpan,
-		"whenstr":   fmtWhenStr,
-		"okcount":   okCount,
-		"setupok":   setupOK,
-		"ago":       func(t time.Time) string { return app.HumanDuration(time.Since(t)) },
-		"ageSec":    ageSec,
-		"size":      humanSize,
-		"retention": fmtRetention,
-		"nexttext":  fmtNext,
-		"lastsched": fmtLastScheduled,
-		"actor":     actorLabel,
-		"runtime":   runtime,
-		"f1":        f1,
+		"asset":      func(name string) string { return "/static/" + name + "?v=" + assets[name] },
+		"t":          tr,
+		"ts":         fmtTime,
+		"when":       fmtWhen,
+		"span":       fmtSpan,
+		"whenstr":    fmtWhenStr,
+		"okcount":    okCount,
+		"setupok":    setupOK,
+		"ago":        func(t time.Time) string { return app.HumanDuration(time.Since(t)) },
+		"ageSec":     ageSec,
+		"size":       humanSize,
+		"retention":  fmtRetention,
+		"nexttext":   fmtNext,
+		"lastsched":  fmtLastScheduled,
+		"actor":      actorLabel,
+		"runtime":    runtime,
+		"f1":         f1,
+		"failedstep": failedStep,
 	}
 }
 
@@ -159,6 +160,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /servers/{name}/recoveries/list", s.guard(app.RoleViewer, s.recoveryListFragment))
 	mux.HandleFunc("GET /recoveries/{id}/download", s.guard(app.RoleOperator, s.recoveryDownload))
 	mux.HandleFunc("POST /recoveries/{id}/delete", s.guard(app.RoleAdmin, s.recoveryDelete))
+	mux.HandleFunc("POST /servers/{name}/drill", s.guard(app.RoleOperator, s.serverDrill))
+	mux.HandleFunc("GET /drills/{id}/report", s.guard(app.RoleOperator, s.drillReport))
 	mux.HandleFunc("GET /runs", s.guard(app.RoleViewer, s.runsPage))
 	mux.HandleFunc("GET /runs/{id}", s.guard(app.RoleViewer, s.runPage))
 	mux.HandleFunc("GET /runs/{id}/fragment", s.guard(app.RoleViewer, s.runFragment))

@@ -57,6 +57,11 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET "+v+"/recoveries/{id}", a.auth(app.RoleViewer, a.recovery))
 	mux.HandleFunc("GET "+v+"/recoveries/{id}/download", a.auth(app.RoleOperator, a.downloadRecovery))
 	mux.HandleFunc("DELETE "+v+"/recoveries/{id}", a.auth(app.RoleAdmin, a.deleteRecovery))
+	mux.HandleFunc("POST "+v+"/servers/{name}/drills", a.auth(app.RoleOperator, a.startDrill))
+	mux.HandleFunc("GET "+v+"/servers/{name}/drills", a.auth(app.RoleViewer, a.drills))
+	mux.HandleFunc("GET "+v+"/drills", a.auth(app.RoleViewer, a.allDrills))
+	mux.HandleFunc("GET "+v+"/drills/{id}", a.auth(app.RoleViewer, a.drill))
+	mux.HandleFunc("GET "+v+"/drills/{id}/report", a.auth(app.RoleOperator, a.drillReport))
 	mux.HandleFunc("GET "+v+"/status", a.auth(app.RoleViewer, a.status))
 	mux.HandleFunc("GET "+v+"/runs", a.auth(app.RoleViewer, a.runs))
 	mux.HandleFunc("GET "+v+"/runs/{id}", a.auth(app.RoleViewer, a.run))
@@ -472,4 +477,80 @@ func (a *API) revokeKey(w http.ResponseWriter, r *http.Request, p principal) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- restore drills ----
+
+func (a *API) startDrill(w http.ResponseWriter, r *http.Request, p principal) {
+	var in app.DrillInput
+	if r.ContentLength != 0 { // the body is optional: an empty POST drills the latest backup
+		if err := decode(r, &in); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+			return
+		}
+	}
+	id, err := a.app.StartDrill(r.Context(), p.actor(), r.PathValue("name"), in)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	loc := "/api/v1/runs/" + strconv.FormatInt(id, 10)
+	w.Header().Set("Location", loc)
+	writeData(w, http.StatusAccepted, map[string]any{"run_id": id, "status": app.RunRunning, "location": loc})
+}
+
+func (a *API) drills(w http.ResponseWriter, r *http.Request, p principal) {
+	name := r.PathValue("name")
+	if _, err := a.app.GetServer(r.Context(), name); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.writeDrills(w, r, name)
+}
+
+func (a *API) allDrills(w http.ResponseWriter, r *http.Request, p principal) {
+	a.writeDrills(w, r, r.URL.Query().Get("server"))
+}
+
+func (a *API) writeDrills(w http.ResponseWriter, r *http.Request, server string) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	list, err := a.app.ListDrills(server, limit)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, list)
+}
+
+func (a *API) drill(w http.ResponseWriter, r *http.Request, p principal) {
+	id, ok := recoveryID(w, r)
+	if !ok {
+		return
+	}
+	v, err := a.app.GetDrill(id)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, v)
+}
+
+func (a *API) drillReport(w http.ResponseWriter, r *http.Request, p principal) {
+	id, ok := recoveryID(w, r)
+	if !ok {
+		return
+	}
+	path, _, err := a.app.DrillReport(p.actor(), id)
+	if err != nil {
+		if errors.Is(err, app.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "this drill has no report")
+			return
+		}
+		a.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, path)
 }

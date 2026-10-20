@@ -108,6 +108,19 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			"/recoveries/{id}/download": m{
 				"get": op("Download the .tar.gz of a restore (Content-Disposition: attachment, byte ranges supported). The archive holds a copy of the database: operator role. 404 when there is no archive, 413 when it exceeds recoveries.max_download_bytes (read it from the host path instead).", "operator", m{"parameters": []m{recoveryParam()}, "responses": m{"200": m{"description": "The archive", "content": m{"application/gzip": m{"schema": m{"type": "string", "format": "binary"}}}}, "404": errResp, "413": errResp}}),
 			},
+			"/servers/{name}/drills": m{
+				"post": op("Start a restore drill in the background: restore a backup into a throwaway PostgreSQL of the same major version under recoveries.dir, wait for the end of the recovery, check what is inside, stop it, write a PDF report. The body is optional (default: the latest DONE backup, target latest). Follow the run with GET /runs/{id}; the result then shows in GET /servers/{name}/drills. 409 while another drill, or a backup of this server, runs.", "operator", m{"parameters": server, "requestBody": m{"required": false, "content": m{"application/json": m{"schema": ref("DrillInput")}}}, "responses": m{"202": resp("Accepted: follow the run with GET /runs/{id}", dataOf(m{"type": "object", "properties": m{"run_id": m{"type": "integer"}, "status": m{"type": "string"}, "location": m{"type": "string"}}})), "404": errResp, "409": errResp, "422": errResp}}),
+				"get":  op("Drills of a server, newest first (?limit=, default 50)", "viewer", m{"parameters": server, "responses": m{"200": resp("Drills", dataOf(m{"type": "array", "items": ref("Drill")})), "404": errResp}}),
+			},
+			"/drills": m{
+				"get": op("Drills of every server, newest first (?server=, ?limit=)", "viewer", m{"parameters": []m{{"name": "server", "in": "query", "schema": m{"type": "string"}}, {"name": "limit", "in": "query", "schema": m{"type": "integer"}}}, "responses": m{"200": resp("Drills", dataOf(m{"type": "array", "items": ref("Drill")}))}}),
+			},
+			"/drills/{id}": m{
+				"get": op("One drill with its steps, databases and the sentence of the report", "viewer", m{"parameters": []m{recoveryParam()}, "responses": m{"200": resp("Drill", dataOf(ref("Drill"))), "404": errResp}}),
+			},
+			"/drills/{id}/report": m{
+				"get": op("Download the PDF report of a drill (operator role). 404 when no report was written.", "operator", m{"parameters": []m{recoveryParam()}, "responses": m{"200": m{"description": "The report", "content": m{"application/pdf": m{"schema": m{"type": "string", "format": "binary"}}}}, "404": errResp}}),
+			},
 			"/status": m{
 				"get": op("Cached status of every server (refreshed every status interval)", "viewer", m{"responses": m{"200": resp("Status", dataOf(m{"type": "object", "properties": m{"servers": m{"type": "array", "items": ref("ServerState")}, "updated_at": m{"type": "string", "format": "date-time"}}}))}}),
 			},
@@ -163,6 +176,7 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"problems": m{"type": "array", "items": m{"type": "string"}}, "error": m{"type": "string"},
 					"setup": m{"type": "array", "items": ref("SetupCheck")}, "setup_level": m{"type": "string", "enum": []string{"ok", "warning", "error"}}, "setup_issues": m{"type": "integer"}, "setup_at": m{"type": "string", "format": "date-time"},
 					"updated_at": m{"type": "string", "format": "date-time"},
+					"drill":      m{"type": "object", "description": "Restore drills: scheduled, schedule, next, last {id, ok, backup_id, finished_at, step_failed, has_report, summary, age_seconds}, last_ok_at, last_ok_age_seconds, running, stale (the schedule is set and the last drill failed, or none succeeded for drills.max_age: the server is then warn), text (\"Last drill: 3 d ago\" + a check mark or a cross), why"},
 				}},
 				"Timeline": m{"type": "object", "properties": m{
 					"server": m{"type": "string"}, "available": m{"type": "boolean"}, "unavailable": m{"type": "string", "description": "\"unavailable: <reason>\" when available is false"},
@@ -217,6 +231,18 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"path": m{"type": "string", "description": "Directory inside the container, under recoveries.dir"}, "archive_path": m{"type": "string"},
 					"size_bytes": m{"type": "integer"}, "archive_bytes": m{"type": "integer"}, "downloadable": m{"type": "boolean"},
 					"run_id": m{"type": "integer"}, "created_at": m{"type": "string", "format": "date-time"}, "actor": m{"type": "string"},
+				}},
+				"DrillInput": m{"type": "object", "properties": m{
+					"backup_id":   m{"type": "string", "pattern": "^[0-9]{8}T[0-9]{6}$", "description": "Default: the latest backup that is DONE"},
+					"target":      m{"type": "string", "enum": []string{"latest", "backup_end", "time"}, "default": "latest"},
+					"target_time": m{"type": "string", "description": "With target=time"},
+				}},
+				"Drill": m{"type": "object", "properties": m{
+					"id": m{"type": "integer"}, "server": m{"type": "string"}, "backup_id": m{"type": "string"},
+					"started_at": m{"type": "string", "format": "date-time"}, "finished_at": m{"type": "string", "format": "date-time"},
+					"ok": m{"type": "boolean"}, "step_failed": m{"type": "string", "enum": []string{"recover", "version", "configure", "start", "recovery", "checks", "stop", "checksums", "cleanup"}},
+					"run_id": m{"type": "integer"}, "has_report": m{"type": "boolean"},
+					"details": m{"type": "object", "description": "summary (the sentence of the report), steps [{key,label,status,millis,note}], databases [{name,size_bytes,tables,rows}], pg_version, lsn, checksums, size_bytes, duration_ms, error, log_tail, fingerprint (SHA-256 of the report content), data_dir (while the restored copy is kept)"},
 				}},
 				"Run": m{"type": "object", "properties": m{
 					"id": m{"type": "integer"}, "server": m{"type": "string"}, "kind": m{"type": "string"}, "status": m{"type": "string", "enum": []string{"running", "ok", "failed"}},

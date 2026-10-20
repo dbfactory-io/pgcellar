@@ -41,6 +41,13 @@
     <p>{{t "recover.ready"}}</p>
   </div>
   {{end}}{{end}}
+  {{if and (eq .Run.Kind "drill") (ne .Run.Status "running")}}{{with .Drill}}
+  <div class="softnote">
+    {{if .OK}}<p class="cheer"><span aria-hidden="true">✨</span> {{t "drill.verified"}}</p>{{else}}<p class="cheer">{{t "drill.failed"}}</p>{{end}}
+    <p>{{.Details.Summary}}</p>
+    {{if and .HasReport $.CanOperate}}<p><a class="btn" href="/drills/{{.ID}}/report">{{t "btn.report"}}</a></p>{{end}}
+  </div>
+  {{end}}{{end}}
   {{if .Run.Stdout}}<pre class="out">{{.Run.Stdout}}</pre>{{end}}
   {{if .Run.Stderr}}{{if eq .Run.Status "failed"}}<pre class="out err">{{.Run.Stderr}}</pre>{{else}}<div class="softnote"><strong>{{t "run.also_said"}}</strong><pre class="out">{{.Run.Stderr}}</pre></div>{{end}}{{end}}
 </div>
@@ -65,6 +72,7 @@
       <div>{{t "wal.filled"}}: {{if .LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .LastFilledWALAgeSeconds}} ago{{end}}</div>
       {{if not .NextBackup.IsZero}}<div>{{t "sched.next"}}: {{nexttext .NextBackup}}</div>{{end}}
       {{if .LastScheduled}}<div>{{t "sched.last"}}: {{lastsched .LastScheduled}}</div>{{end}}
+      {{if .Drill}}{{if or .Drill.Last .Drill.Scheduled}}<div>{{.Drill.Text}}{{if .Drill.Stale}} <span class="pill warn">drill</span>{{end}}</div>{{end}}{{end}}
     </div>
   </a>
   <div class="lines tail"><div>{{.BackupCount}} {{if eq .BackupCount 1}}{{t "unit.backup"}}{{else}}{{t "unit.backups"}}{{end}} &middot; {{if .CheckOK}}<span class="pill ok">checks OK</span>{{else if .Checks}}<span class="pill bad">check FAILED</span>{{else}}<span class="pill warn">check unknown</span>{{end}}{{if .SetupLevel}} &middot; {{template "setup_pill" .}}{{end}}</div></div>
@@ -198,6 +206,45 @@
 {{end}}
 </ul>
 {{else}}<div class="empty">{{t "recovery.none"}}{{if .CanOperate}} {{t "recovery.none_hint"}}{{end}}</div>{{end}}
+{{end}}
+
+{{define "drill_list"}}
+<p class="muted">{{t "drill.intro"}}</p>
+{{with .Status}}
+{{if .Last}}
+<div class="softnote drillhero {{if .Last.OK}}ok{{else}}bad{{end}}">
+  {{if .Last.OK}}<p class="cheer"><span aria-hidden="true">✨</span> {{t "drill.verified"}}</p>{{else}}<p class="cheer">{{t "drill.failed"}}</p>{{end}}
+  <p>{{.Last.Summary}}</p>
+  <p class="meta">{{.Text}}{{if .Stale}} &middot; {{.Why}}{{end}}</p>
+  {{if and .Last.HasReport $.CanOperate}}<p><a class="btn" href="/drills/{{.Last.ID}}/report">{{t "btn.report"}}</a></p>{{end}}
+</div>
+{{else}}
+<div class="empty">{{t "drill.none"}}{{if $.CanOperate}} {{t "drill.none_hint"}}{{end}}</div>
+{{end}}
+<dl class="facts">
+  {{if .Scheduled}}
+  <div><dt>{{t "drill.schedule"}}</dt><dd><code>{{.Schedule}}</code></dd></div>
+  <div><dt>{{t "drill.next"}}</dt><dd>{{if .Next.IsZero}}-{{else}}{{nexttext .Next}}{{end}}</dd></div>
+  {{else}}
+  <div><dt>{{t "drill.schedule"}}</dt><dd>{{t "drill.unscheduled"}}</dd></div>
+  {{end}}
+  {{if .Running}}<div><dt>&nbsp;</dt><dd><span class="pill warn">{{t "drill.running"}}</span></dd></div>{{end}}
+</dl>
+{{end}}
+{{if .Drills}}
+<h3>{{t "drill.history"}}</h3>
+<ul class="rows">
+{{range .Drills}}
+<li class="row cols">
+  <div class="id">{{if .OK}}<span class="pill ok">verified</span>{{else}}<span class="pill bad">failed</span>{{end}}</div>
+  <div class="metas"><div class="meta">{{when .StartedAt}}</div><div class="meta"><code>{{.BackupID}}</code></div>
+  <div class="meta num">{{if .OK}}{{.Details.DatabasesN}} db, {{.Details.TablesN}} tables{{else}}at "{{.Details.Steps | failedstep}}"{{end}}</div></div>
+  <div class="act">{{if and .HasReport $.CanOperate}}<a class="btn alt" href="/drills/{{.ID}}/report">{{t "btn.report"}}</a>{{end}}</div>
+  {{if .Details.Error}}<div class="msg meta">{{.Details.Error}}</div>{{end}}
+</li>
+{{end}}
+</ul>
+{{end}}
 {{end}}
 
 {{define "setup_pill"}}{{if .SetupLevel}}<a class="pill {{if eq .SetupLevel "ok"}}ok{{else if eq .SetupLevel "warning"}}warn{{else}}bad{{end}}" href="/servers/{{.Name}}#setup"><span aria-hidden="true">🔧</span> {{if eq .SetupLevel "ok"}}{{t "setup.pill_ok"}}{{else if eq .SetupLevel "warning"}}{{.SetupIssues}} {{t "setup.pill_review"}}{{else}}{{t "setup.pill_error"}}{{end}}</a>{{end}}{{end}}
