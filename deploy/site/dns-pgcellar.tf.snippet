@@ -1,0 +1,9 @@
+# A ajouter dans stranix-git/terraform/cloudflare-dns/dns-dbfactory.tf
+resource "cloudflare_record" "dbfactory_pgcellar_cname" {
+  zone_id = local.zones["dbfactory.io"]
+  name    = "pgcellar"
+  type    = "CNAME"
+  content = "hawking.stranix.net" # hawking - site projet pgCellar (statique derriere ghost_nginx)
+  ttl     = 1
+  proxied = false             # DNS-only : Let's Encrypt webroot + TLS termine sur ghost_nginx
+}

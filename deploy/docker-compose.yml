@@ -1,0 +1,28 @@
+# Run from this directory: docker compose up -d
+# Put pgcellar.yaml in ./etc-pgcellar and your Barman server files in ./etc-barman.d
+# (start from pgcellar.example.yaml and barman.d.example/).
+services:
+  pgcellar:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: pgcellar:dev
+    container_name: pgcellar
+    ports:
+      - "8080:8080"
+    volumes:
+      - barman-data:/var/lib/barman
+      - pgcellar-data:/var/lib/pgcellar
+      - ./etc-pgcellar:/etc/pgcellar
+      - ./etc-barman.d:/etc/barman.d
+    environment:
+      TZ: Europe/Brussels
+      # Secrets for alerts are read from the environment, never from the YAML.
+      # PGCELLAR_SMTP_USER: ""
+      # PGCELLAR_SMTP_PASSWORD: ""
+      # PGCELLAR_TELEGRAM_TOKEN: ""
+    restart: unless-stopped
+
+volumes:
+  barman-data:
+  pgcellar-data:

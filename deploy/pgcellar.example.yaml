@@ -1,0 +1,75 @@
+# pgcellar.yaml - the only file that belongs to pgCellar.
+# Barman's own settings stay in /etc/barman.conf and /etc/barman.d/*.conf.
+# Secrets never go here: use *_env keys (name of an environment variable) and hashes.
+
+listen: ":8080"
+base_url: "http://localhost:8080"      # used in links inside alerts and reports
+data_dir: /var/lib/pgcellar            # SQLite and runtime files
+
+barman:
+  binary: barman                       # on PATH, or an absolute path
+  config_file: /etc/barman.conf
+  config_dir: /etc/barman.d
+  user: barman                         # commands run as this user when pgCellar runs as root
+  host: ""                             # empty = local Barman
+
+# What pgCellar adds on top of barman.d. "name" must match a [section] there.
+servers:
+  - name: pg-main                      # streaming (see barman.d.example/pg-main.conf)
+    label: "Main application database"
+    schedule:
+      backup: "daily 02:00"            # or "weekly sun 03:00", or a raw cron expression
+      enabled: true
+    retention:
+      recovery_window_days: 14
+      redundancy: 0
+      minimum_redundancy: 2
+    tags: [production, erp]
+
+  - name: pg-legacy                    # rsync over SSH (see barman.d.example/pg-legacy.conf)
+    label: "Legacy reporting database"
+    schedule:
+      backup: "weekly sun 03:00"
+      enabled: true
+    retention:
+      recovery_window_days: 7
+      redundancy: 0
+      minimum_redundancy: 1
+    tags: [legacy]
+
+alerts:
+  max_backup_age: 26h                  # alert if the last good backup is older than this
+  max_wal_age: 1h                      # alert if the last archived WAL is older than this
+  mail:
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    from: pgcellar@example.com
+    to:
+      - dba@example.com
+    user_env: PGCELLAR_SMTP_USER           # name of the variable, not the value
+    password_env: PGCELLAR_SMTP_PASSWORD
+  telegram:
+    token_env: PGCELLAR_TELEGRAM_TOKEN
+    chat_id: "-1001234567890"
+  webhook:
+    url: https://hooks.example.com/pgcellar
+
+# Roles: admin, operator, viewer. Hashes are bcrypt (fake value below).
+users:
+  - name: admin
+    role: admin
+    password_hash: "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ0123"
+
+# Only the SHA-256 of a key is stored (fake value below).
+api_keys:
+  - name: grafana
+    role: viewer
+    key_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Weekly restore drill: restore the latest backup in a throwaway container,
+# check it, write a dated report.
+drills:
+  enabled: true
+  schedule: "weekly sun 05:00"
+  image: postgres:16
+  report_dir: /var/lib/pgcellar/reports

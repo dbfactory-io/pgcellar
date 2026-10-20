@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pgCellar - PostgreSQL backup control room, on Barman</title>
+<meta name="description" content="pgCellar: self-hosted control room for physical PostgreSQL backups, built on Barman. Go back to any second, weekly restore drill, dated report.">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/en/">
+<link rel="alternate" hreflang="fr" href="https://pgcellar.dbfactory.io/">
+<link rel="alternate" hreflang="en" href="https://pgcellar.dbfactory.io/en/">
+<link rel="alternate" hreflang="x-default" href="https://pgcellar.dbfactory.io/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<meta name="theme-color" content="#1B1F24">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="pgCellar">
+<meta property="og:title" content="pgCellar - PostgreSQL backup control room, on Barman">
+<meta property="og:description" content="pgCellar: self-hosted control room for physical PostgreSQL backups, built on Barman. Go back to any second, weekly restore drill, dated report.">
+<meta property="og:url" content="https://pgcellar.dbfactory.io/en/">
+<meta property="og:locale" content="en_GB">
+<meta property="og:image" content="https://pgcellar.dbfactory.io/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="pgCellar - PostgreSQL backup control room, on Barman">
+<meta name="twitter:description" content="pgCellar: self-hosted control room for physical PostgreSQL backups, built on Barman. Go back to any second, weekly restore drill, dated report.">
+<meta name="twitter:image" content="https://pgcellar.dbfactory.io/og.png">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "pgCellar", "description": "Self-hosted control room for PostgreSQL backups, built on Barman.", "applicationCategory": "DeveloperApplication", "operatingSystem": "Linux", "url": "https://pgcellar.dbfactory.io/en/", "inLanguage": "en", "offers": [{"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR", "url": "https://dbfactory.io/en/pgcellar/"}], "publisher": {"@type": "Organization", "name": "dbfactory", "url": "https://dbfactory.io"}, "author": {"@id": "https://pgcellar.dbfactory.io/#gilles"}}, {"@context": "https://schema.org", "@type": "Person", "@id": "https://pgcellar.dbfactory.io/#gilles", "name": "Gilles Fauvie", "url": "https://stranix.net/about/", "sameAs": ["https://github.com/stranix79"]}]</script>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><a class="logo" href="/en/">pg<span>Cellar</span></a><nav><a href="#faq">FAQ</a><a href="/" hreflang="en">Français</a></nav></header>
+<main>
+<section class="hero">
+<h1>pg<span>Cellar</span></h1>
+<p class="tag">The barman serves, the cellar keeps.</p>
+<p class="sub">PostgreSQL backup control room, on Barman, self-hosted.</p>
+<a class="btn" href="#acces">Early access</a>
+</section>
+<section id="probleme"><h2>The problem</h2>
+<p>Tools with a nice web interface do logical dumps. A dump is a photo of last night. If someone breaks a table at 14:32, I can not go back to 14:31.</p><p>Physical engines, Barman and pgBackRest, can go back to the second. But they have no interface. And nobody tests his restores.</p><p>So many small companies have backups. Few know if they come back. pgCellar fills this hole.</p>
+</section>
+<section id="fonctions"><h2>What it does</h2>
+<div class="cards">
+<div class="card"><h3>Servers in three clicks</h3><p>You add a PostgreSQL server. The SSH key is generated and deployed. Barman is configured.</p></div><div class="card"><h3>Schedule and retention</h3><p>When to backup, how long to keep. Written in the Barman files, nowhere else.</p></div><div class="card"><h3>A status that does not lie</h3><p>Last backup, age of last WAL, verdict of barman check. Red when it is red.</p></div><div class="card"><h3>Point-in-time restore</h3><p>A wizard: you choose date and time, it prepares the command and the target.</p></div><div class="card"><h3>Weekly restore drill</h3><p>Every week, a real restore in a throwaway container, some checks, a dated report.</p></div><div class="card"><h3>Alerts and API</h3><p>Mail, Telegram, webhook, only when a human must act. JSON API and /metrics for the rest.</p></div>
+</div></section>
+<section id="how"><h2>How it works</h2>
+<p>Files are the truth. The Barman files stay Barman files. What is mine fits in one pgcellar.yaml. Each change is a local git commit.</p><p>The interface and the API are only forms over these files. An admin with a text editor can do everything without pgCellar. This is on purpose.</p><p>One binary, or one Docker image. Barman is installed as is (GPL-3.0) and driven by its command line. I do not modify it, I do not embed it in my code.</p>
+<figure class="mock"><svg viewBox="0 0 720 270" role="img" aria-label="Servers" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="14"><rect width="720" height="270" fill="#1B1F24"/><rect width="720" height="36" fill="#336791"/><text x="16" y="23" fill="#fff" font-weight="700">pgCellar</text><text x="704" y="23" fill="#E8ECEF" text-anchor="end">Servers</text><g fill="#9aa6b0" font-size="12"><text x="40" y="66">Servers</text><text x="200" y="66">PG</text><text x="300" y="66">Last backup</text><text x="480" y="66">Age of last WAL</text><text x="620" y="66">barman check</text></g><line x1="16" x2="704" y1="76" y2="76" stroke="#313a44"/><circle cx="26" cy="94" r="5" fill="#2AA7C4"/><text x="40" y="99" fill="#E8ECEF">prod-erp</text><text x="200" y="99" fill="#9aa6b0">PG 17</text><text x="300" y="99" fill="#E8ECEF">6 h ago</text><text x="480" y="99" fill="#E8ECEF">12 s</text><text x="620" y="99" fill="#2AA7C4">OK</text><line x1="16" x2="704" y1="114" y2="114" stroke="#313a44"/><circle cx="26" cy="132" r="5" fill="#2AA7C4"/><text x="40" y="137" fill="#E8ECEF">prod-crm</text><text x="200" y="137" fill="#9aa6b0">PG 16</text><text x="300" y="137" fill="#E8ECEF">7 h ago</text><text x="480" y="137" fill="#E8ECEF">4 s</text><text x="620" y="137" fill="#2AA7C4">OK</text><line x1="16" x2="704" y1="152" y2="152" stroke="#313a44"/><circle cx="26" cy="170" r="5" fill="#2AA7C4"/><text x="40" y="175" fill="#E8ECEF">prod-web</text><text x="200" y="175" fill="#9aa6b0">PG 15</text><text x="300" y="175" fill="#E8ECEF">5 h ago</text><text x="480" y="175" fill="#E8ECEF">31 s</text><text x="620" y="175" fill="#2AA7C4">OK</text><line x1="16" x2="704" y1="190" y2="190" stroke="#313a44"/><rect x="16" y="214" width="688" height="42" rx="4" fill="#222830" stroke="#2AA7C4"/><text x="32" y="240" fill="#2AA7C4" font-weight="700">Restore drill</text><text x="704" y="240" fill="#E8ECEF" text-anchor="end" transform="translate(-16 0)">Passed, Sunday 03:00</text></svg><figcaption>Dashboard mockup. Sample data.</figcaption></figure>
+</section>
+<section id="proof"><h2>The proof</h2>
+<p>A backup you never restored is a guess. I prefer a proof.</p><p>Every week pgCellar really restores, checks that the database starts, and writes a dated report. You give it to whoever asks.</p><p>NIS2, insurers, ISO 27001 auditors: they all ask the same question. "When did you last restore?" Here the answer fits on one page.</p>
+</section>
+<section id="licence"><h2>Licence and Pro edition</h2>
+<p>The source code is visible, under the FSL licence. Internal use is free, no hidden limit. The beta is free for the first people who sign up.</p><p>Pro licences, support and services are on <a href="https://dbfactory.io/en/pgcellar/">dbfactory.io/pgcellar</a>. The GitHub repository opens soon.</p>
+<p><a class="btn" href="https://dbfactory.io/en/pgcellar/">Licences and services</a></p>
+</section>
+<section id="faq"><h2>Questions</h2>
+<details><summary>Which licence?</summary><p>FSL 1.1 (Functional Source License). The code is visible. Internal use is free. You can not make a competing service with it. Each version becomes Apache 2.0 after two years.</p></details><details><summary>What about Barman and the GPL?</summary><p>Barman belongs to EnterpriseDB, under GPL-3.0. I install it as is and I drive it by its command line. I do not import it. The border is clear, and it is a product rule.</p></details><details><summary>Where is it hosted?</summary><p>At your place, on your machine. If you prefer, at dbfactory in Belgium. Never an imposed US cloud.</p></details><details><summary>And pgBackRest?</summary><p>Planned. The code is made for a second engine, but version 0.1 does only Barman.</p></details><details><summary>When?</summary><p>Beta early 2027. Sign up, I tell the first ones.</p></details>
+</section>
+<section id="acces"><h2>Early access</h2>
+<p>Leave your address. One mail when the beta opens, not one more.</p>
+<form method="post" action="https://lists.stranix.net/subscription/form">
+<input type="hidden" name="l" value="8fc92ab9-4899-4169-ad21-4caa5a7c0695">
+<label>Name<input type="text" name="name" autocomplete="name"></label>
+<label>Email address<input type="email" name="email" required autocomplete="email"></label>
+<label class="chk"><input type="checkbox" name="consent" value="1" required><span>I agree to receive one mail when the pgCellar beta opens.</span></label>
+<button class="btn" type="submit">Sign me up</button>
+</form>
+</section>
+</main>
+<footer><div><a href="https://dbfactory.io">dbfactory.io</a> · <a href="https://stranix.net">stranix.net</a> · A dbfactory product, Gilles Fauvie, Belgium.</div></footer>
+</div>
+</body>
+</html>

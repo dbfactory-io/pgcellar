@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pgCellar - salle de contrôle des sauvegardes PostgreSQL sur Barman</title>
+<meta name="description" content="pgCellar : salle de contrôle auto-hébergée des sauvegardes physiques PostgreSQL, sur Barman. Retour à l'instant voulu, exercice de restauration hebdomadaire, rapport daté.">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/">
+<link rel="alternate" hreflang="fr" href="https://pgcellar.dbfactory.io/">
+<link rel="alternate" hreflang="en" href="https://pgcellar.dbfactory.io/en/">
+<link rel="alternate" hreflang="x-default" href="https://pgcellar.dbfactory.io/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<meta name="theme-color" content="#1B1F24">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="pgCellar">
+<meta property="og:title" content="pgCellar - salle de contrôle des sauvegardes PostgreSQL sur Barman">
+<meta property="og:description" content="pgCellar : salle de contrôle auto-hébergée des sauvegardes physiques PostgreSQL, sur Barman. Retour à l'instant voulu, exercice de restauration hebdomadaire, rapport daté.">
+<meta property="og:url" content="https://pgcellar.dbfactory.io/">
+<meta property="og:locale" content="fr_BE">
+<meta property="og:image" content="https://pgcellar.dbfactory.io/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="pgCellar - salle de contrôle des sauvegardes PostgreSQL sur Barman">
+<meta name="twitter:description" content="pgCellar : salle de contrôle auto-hébergée des sauvegardes physiques PostgreSQL, sur Barman. Retour à l'instant voulu, exercice de restauration hebdomadaire, rapport daté.">
+<meta name="twitter:image" content="https://pgcellar.dbfactory.io/og.png">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "pgCellar", "description": "Salle de contrôle auto-hébergée des sauvegardes PostgreSQL, sur Barman.", "applicationCategory": "DeveloperApplication", "operatingSystem": "Linux", "url": "https://pgcellar.dbfactory.io/", "inLanguage": "fr", "offers": [{"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR", "url": "https://dbfactory.io/fr/pgcellar/"}], "publisher": {"@type": "Organization", "name": "dbfactory", "url": "https://dbfactory.io"}, "author": {"@id": "https://pgcellar.dbfactory.io/#gilles"}}, {"@context": "https://schema.org", "@type": "Person", "@id": "https://pgcellar.dbfactory.io/#gilles", "name": "Gilles Fauvie", "url": "https://stranix.net/about/", "sameAs": ["https://github.com/stranix79"]}]</script>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><a class="logo" href="/">pg<span>Cellar</span></a><nav><a href="#faq">FAQ</a><a href="/en/" hreflang="fr">English</a></nav></header>
+<main>
+<section class="hero">
+<h1>pg<span>Cellar</span></h1>
+<p class="tag">Le barman sert, la cave garde.</p>
+<p class="sub">Salle de contrôle des sauvegardes PostgreSQL, sur Barman, auto-hébergée.</p>
+<a class="btn" href="#acces">Accès anticipé</a>
+</section>
+<section id="probleme"><h2>Le problème</h2>
+<p>Les outils avec une belle interface web font des dumps logiques. Un dump, c'est une photo de la nuit dernière. Si quelqu'un casse une table à 14 h 32, je ne reviens pas à 14 h 31.</p><p>Les moteurs physiques, Barman et pgBackRest, savent revenir à la seconde près. Mais ils n'ont pas d'interface. Et personne ne teste ses restaurations.</p><p>Résultat : beaucoup de PME ont des sauvegardes. Peu savent si elles reviennent. pgCellar comble ce trou.</p>
+</section>
+<section id="fonctions"><h2>Ce que ça fait</h2>
+<div class="cards">
+<div class="card"><h3>Serveurs en trois clics</h3><p>Vous ajoutez un serveur PostgreSQL. La clé SSH est générée et déployée. Barman est configuré.</p></div><div class="card"><h3>Planification et rétention</h3><p>Quand sauvegarder, combien garder. Écrit dans les fichiers de Barman, pas ailleurs.</p></div><div class="card"><h3>Un état qui ne ment pas</h3><p>Dernière sauvegarde, âge du dernier WAL, verdict de barman check. Rouge quand c'est rouge.</p></div><div class="card"><h3>Restauration à un instant donné</h3><p>Un assistant : vous choisissez la date et l'heure, il prépare la commande et la cible.</p></div><div class="card"><h3>Exercice de restauration hebdomadaire</h3><p>Chaque semaine, une vraie restauration dans un conteneur jetable, des vérifications, un rapport daté.</p></div><div class="card"><h3>Alertes et API</h3><p>Mail, Telegram, webhook, uniquement quand un humain doit agir. API JSON et /metrics pour le reste.</p></div>
+</div></section>
+<section id="how"><h2>Comment ça marche</h2>
+<p>Les fichiers sont la vérité. Les fichiers de Barman restent ceux de Barman. Ce qui est à moi tient dans un seul pgcellar.yaml. Chaque changement est un commit git local.</p><p>L'interface et l'API ne sont que des formulaires sur ces fichiers. Un administrateur avec un éditeur de texte peut tout faire sans pgCellar. C'est voulu.</p><p>Un binaire, ou une image Docker. Barman est installé tel quel (GPL-3.0) et piloté par sa ligne de commande. Je ne le modifie pas, je ne l'embarque pas dans mon code.</p>
+<figure class="mock"><svg viewBox="0 0 720 270" role="img" aria-label="Serveurs" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="14"><rect width="720" height="270" fill="#1B1F24"/><rect width="720" height="36" fill="#336791"/><text x="16" y="23" fill="#fff" font-weight="700">pgCellar</text><text x="704" y="23" fill="#E8ECEF" text-anchor="end">Serveurs</text><g fill="#9aa6b0" font-size="12"><text x="40" y="66">Serveurs</text><text x="200" y="66">PG</text><text x="300" y="66">Dernière sauvegarde</text><text x="480" y="66">Âge du dernier WAL</text><text x="620" y="66">barman check</text></g><line x1="16" x2="704" y1="76" y2="76" stroke="#313a44"/><circle cx="26" cy="94" r="5" fill="#2AA7C4"/><text x="40" y="99" fill="#E8ECEF">prod-erp</text><text x="200" y="99" fill="#9aa6b0">PG 17</text><text x="300" y="99" fill="#E8ECEF">il y a 6 h</text><text x="480" y="99" fill="#E8ECEF">12 s</text><text x="620" y="99" fill="#2AA7C4">OK</text><line x1="16" x2="704" y1="114" y2="114" stroke="#313a44"/><circle cx="26" cy="132" r="5" fill="#2AA7C4"/><text x="40" y="137" fill="#E8ECEF">prod-crm</text><text x="200" y="137" fill="#9aa6b0">PG 16</text><text x="300" y="137" fill="#E8ECEF">il y a 7 h</text><text x="480" y="137" fill="#E8ECEF">4 s</text><text x="620" y="137" fill="#2AA7C4">OK</text><line x1="16" x2="704" y1="152" y2="152" stroke="#313a44"/><circle cx="26" cy="170" r="5" fill="#2AA7C4"/><text x="40" y="175" fill="#E8ECEF">prod-web</text><text x="200" y="175" fill="#9aa6b0">PG 15</text><text x="300" y="175" fill="#E8ECEF">il y a 5 h</text><text x="480" y="175" fill="#E8ECEF">31 s</text><text x="620" y="175" fill="#2AA7C4">OK</text><line x1="16" x2="704" y1="190" y2="190" stroke="#313a44"/><rect x="16" y="214" width="688" height="42" rx="4" fill="#222830" stroke="#2AA7C4"/><text x="32" y="240" fill="#2AA7C4" font-weight="700">Exercice de restauration</text><text x="704" y="240" fill="#E8ECEF" text-anchor="end" transform="translate(-16 0)">Réussi, dimanche 03:00</text></svg><figcaption>Maquette du tableau de bord. Données d'exemple.</figcaption></figure>
+</section>
+<section id="proof"><h2>La preuve</h2>
+<p>Une sauvegarde qu'on n'a jamais restaurée est une hypothèse. Je préfère une preuve.</p><p>Chaque semaine pgCellar restaure vraiment, vérifie que la base démarre, et écrit un rapport daté. Vous le donnez à qui le demande.</p><p>NIS2, assureurs, auditeurs ISO 27001 : ils posent tous la même question. "Quand avez-vous restauré pour la dernière fois ?" Ici la réponse tient sur une page.</p>
+</section>
+<section id="licence"><h2>Licence et édition Pro</h2>
+<p>Le code source est visible, sous licence FSL. L'usage interne est gratuit, sans limite cachée. La bêta est gratuite pour les premiers inscrits.</p><p>Les licences Pro, le support et les services sont sur <a href="https://dbfactory.io/fr/pgcellar/">dbfactory.io/pgcellar</a>. Le dépôt GitHub ouvre bientôt.</p>
+<p><a class="btn" href="https://dbfactory.io/fr/pgcellar/">Licences et services</a></p>
+</section>
+<section id="faq"><h2>Questions</h2>
+<details><summary>Quelle licence ?</summary><p>FSL 1.1 (Functional Source License). Le code est visible. L'usage interne est libre. Vous ne pouvez pas en faire un service concurrent. Chaque version passe en Apache 2.0 après deux ans.</p></details><details><summary>Et Barman, et la GPL ?</summary><p>Barman est à EnterpriseDB, sous GPL-3.0. Je l'installe tel quel et je le pilote par sa ligne de commande. Je ne l'importe pas. La frontière est nette, et c'est une règle du produit.</p></details><details><summary>Où est-ce hébergé ?</summary><p>Chez vous, sur votre machine. Si vous préférez, chez dbfactory en Belgique. Jamais de cloud américain imposé.</p></details><details><summary>Et pgBackRest ?</summary><p>Prévu. Le code est pensé pour un deuxième moteur, mais la version 0.1 ne fait que Barman.</p></details><details><summary>C'est pour quand ?</summary><p>Bêta début 2027. Inscrivez-vous, je préviens les premiers.</p></details>
+</section>
+<section id="acces"><h2>Accès anticipé</h2>
+<p>Laissez votre adresse. Un mail quand la bêta ouvre, pas un de plus.</p>
+<form method="post" action="https://lists.stranix.net/subscription/form">
+<input type="hidden" name="l" value="d71470fc-b926-4c53-829e-d524a0fa540a">
+<label>Nom<input type="text" name="name" autocomplete="name"></label>
+<label>Adresse mail<input type="email" name="email" required autocomplete="email"></label>
+<label class="chk"><input type="checkbox" name="consent" value="1" required><span>J'accepte de recevoir un mail à l'ouverture de la bêta de pgCellar.</span></label>
+<button class="btn" type="submit">Je m'inscris</button>
+</form>
+</section>
+</main>
+<footer><div><a href="https://dbfactory.io">dbfactory.io</a> · <a href="https://stranix.net">stranix.net</a> · Un produit dbfactory, Gilles Fauvie, Belgique.</div></footer>
+</div>
+</body>
+</html>
