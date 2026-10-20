@@ -1,0 +1,54 @@
+<!doctype html>
+<!--
+  Couverture du billet stranix.net qui annonce pgCellar, variante B : l'éléphant en héros, avec la capture Restore drills derrière lui.
+  Rendu (même fichier pour les deux formats, tout est proportionnel à la fenêtre) :
+    chrome --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size=1600,840 --screenshot=cover-B-1600x840.png file://.../cover-B.html
+    chrome --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size=1200,675 --screenshot=cover-B-1200x675.png file://.../cover-B.html
+-->
+<html lang="fr"><head><meta charset="utf-8"><title>pgCellar - couverture B</title>
+<style>
+:root{
+  --u: min(100vw / 1600, 100vh / 840);
+  --bg:#0E0C0B; --bg2:#1C1917; --fg:#F3EEE8; --mut:#A89F96; --wine:#8E1F3F; --rose:#F0839F;
+}
+html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
+body{background:linear-gradient(135deg, var(--bg) 0%, var(--bg) 35%, var(--bg2) 100%);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.page{position:relative;width:100%;height:100%;box-sizing:border-box;
+  padding:calc(72*var(--u)) calc(84*var(--u));display:flex;flex-direction:column}
+.bar{position:absolute;left:0;top:0;bottom:0;width:calc(12*var(--u));background:var(--wine)}
+.brand{display:flex;align-items:center;gap:calc(12*var(--u));position:relative;z-index:3}
+.brand .mini{width:calc(44*var(--u));height:calc(44*var(--u));color:var(--rose)}
+.word{font-size:calc(40*var(--u));font-weight:800;letter-spacing:-.03em;margin:0}
+.word span{color:var(--rose)}
+.main{flex:1;display:flex;align-items:center;position:relative;z-index:3}
+h1{margin:0;width:calc(660*var(--u));font-size:calc(80*var(--u));line-height:1.06;font-weight:800;letter-spacing:-.022em}
+h1 em{font-style:normal;color:var(--rose)}
+.foot{position:relative;z-index:3;font:500 calc(38*var(--u))/1 ui-monospace,"SF Mono",Menlo,monospace;color:var(--mut);letter-spacing:-.01em}
+
+/* le héros : l'éléphant, à droite, avec un halo bordeaux diffus */
+.halo{position:absolute;z-index:1;width:calc(900*var(--u));height:calc(900*var(--u));
+  right:calc(-60*var(--u));bottom:calc(-260*var(--u));
+  background:radial-gradient(circle, rgba(142,31,63,.42) 0%, rgba(142,31,63,.16) 38%, transparent 66%)}
+.hero{position:absolute;z-index:2;width:calc(470*var(--u));height:calc(470*var(--u));
+  right:calc(290*var(--u));bottom:calc(-8*var(--u))}
+.hero .s{stroke:var(--bg)}.hero .f{fill:var(--bg)}
+/* capture réduite (~38 % de la largeur), inclinée, en bas à droite, sous l'éléphant */
+.shot{position:absolute;z-index:1;width:calc(610*var(--u));aspect-ratio:775/468;overflow:hidden;
+  right:calc(-80*var(--u));bottom:calc(190*var(--u));transform:rotate(-4deg);
+  border-radius:calc(20*var(--u));border:calc(2*var(--u)) solid #3A3330;background:#1C1917;
+  box-shadow:0 calc(30*var(--u)) calc(70*var(--u)) rgba(0,0,0,.6)}
+.shot img{display:block;width:calc(1493 / 775 * 100%);max-width:none;margin-left:calc(-360 / 775 * 100%);margin-top:calc(-172 / 775 * 100%)}
+</style></head><body><div class="page"><div class="bar"></div>
+<div class="halo"></div>
+<div class="shot"><img src="drills-dark.png" alt=""></div>
+<svg class="hero" viewBox="0 0 64 64" aria-hidden="true">
+<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#F0839F"/><stop offset=".55" stop-color="#E06A8A"/><stop offset="1" stop-color="#8E1F3F"/></linearGradient></defs>
+<g fill="url(#g)"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" class="s" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="url(#g)" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" class="s" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" class="f"/><path d="M50 18c5 3 7 9 5 15" fill="none" class="s" stroke-width="2.2" stroke-linecap="round"/></g></svg>
+<div class="brand">
+<svg class="mini" viewBox="0 0 64 64" fill="currentColor" aria-hidden="true"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" stroke="var(--bg)" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" fill="var(--bg)"/><path d="M50 18c5 3 7 9 5 15" fill="none" stroke="var(--bg)" stroke-width="2.2" stroke-linecap="round"/></svg>
+<p class="word">pg<span>Cellar</span></p></div>
+<div class="main"><h1>Une base restaurée en <em>7&nbsp;secondes.</em><br>Chaque semaine.<br>Avec le PDF.</h1></div>
+<div class="foot">stranix.net · pgcellar.dbfactory.io</div>
+</div></body></html>
