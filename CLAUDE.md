@@ -22,10 +22,14 @@ A control room for PostgreSQL backups, built on top of Barman (EnterpriseDB, GPL
 ## Layout
 cmd/pgcellar (main: `serve`, `check`, `apikey`, `license`, `hash-password`, `version`) · internal/alerts (Telegram, mail, signed webhook channels; the rules that decide what is worth a message are in internal/app/alerts.go) · internal/license (Ed25519 licence keys, embedded public key) · internal/report (PDF writer for the drill report) · internal/barman (INI config read/write, CLI runner, JSON parsing, fake binary for tests) · internal/config (pgcellar.yaml, validation, git history of the config dir) · internal/store (SQLite: runs, audit, sessions, api keys) · internal/web (handlers, templates, HTMX pages, auth) · internal/api (JSON API v1, api keys) · internal/sshkeys (ed25519 keypair, deploy public key, test connection) · web/ (templates, static) · deploy/ (Dockerfile, docker-compose.yml, pgcellar.example.yaml, systemd unit) · docs/ · internal/barman/testdata
 
+## Demo mode
+`pgcellar serve --demo` (`make demo`, `internal/demo`, `deploy/demo/`): public read-only instance with fictional data (Northwind Logistics), fakes embedded in the binary, history rebuilt from the clock, every mutation refused with 403 in `internal/web/demo.go`; see docs/DECISIONS.md.
+
 ## Commands (Makefile)
 - `make build`  -> ./pgcellar
 - `make test`   -> go test ./... (race on)
 - `make lint`   -> gofmt check + go vet + golangci-lint
+- `make demo`   -> ./pgcellar serve --demo (fictional data, demo / demo)
 - `make run`    -> ./pgcellar serve --config deploy/pgcellar.example.yaml --dev (fake barman on PATH)
 - `make docker` -> docker build deploy/
 - `make release-dry` -> goreleaser snapshot (linux amd64/arm64, darwin arm64, checksums in dist/), nothing published; `make version-check` -> the injected version is printed
