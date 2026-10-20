@@ -32,10 +32,9 @@
   {{if and (eq .Run.Kind "recover") (ne .Run.Status "running")}}{{with .Recovery}}
   <div class="softnote">
     {{if eq $.Run.Status "ok"}}<p class="cheer">{{t "recover.done"}}</p>{{end}}
-    <dl class="facts">
-      <div><dt>{{t "recover.path"}}</dt><dd><code class="wrapany">{{.Path}}</code></dd></div>
-      <div><dt>{{t "recover.size"}}</dt><dd>{{size .SizeBytes}}</dd></div>
-      {{if .ArchivePath}}<div><dt>{{t "recover.archive"}}</dt><dd><code class="wrapany">{{.ArchivePath}}</code> ({{size .ArchiveBytes}})</dd></div>{{end}}
+    <dl class="paths">
+      <dt>{{t "recover.path"}}</dt><dd><code class="wrapany">{{.Path}}</code><div class="meta">{{t "recover.size"}}: {{size .SizeBytes}}</div></dd>
+      {{if .ArchivePath}}<dt>{{t "recover.archive"}}</dt><dd><code class="wrapany">{{.ArchivePath}}</code><div class="meta">{{size .ArchiveBytes}}</div></dd>{{end}}
     </dl>
     {{if and .Downloadable $.CanOperate}}<p><a class="btn" href="/recoveries/{{.ID}}/download">{{t "btn.download"}}</a></p>
     {{else if .ArchivePath}}<p class="muted">{{t "recover.no_link"}}</p>{{end}}
@@ -149,12 +148,12 @@
   </div>
 </li>
 {{else}}
-<li class="row{{if eq .Status "FAILED"}} bad{{end}}">
-  <div class="grow"><code>{{.ID}}</code></div>
-  <div>{{if eq .Status "DONE"}}<span class="pill ok">{{.Status}}</span>{{else if eq .Status "FAILED"}}<span class="pill bad">{{.Status}}</span>{{else}}<span class="pill warn">{{.Status}}</span>{{end}}</div>
+<li class="row cols{{if eq .Status "FAILED"}} bad{{end}}">
+  <div class="id"><code>{{.ID}}</code></div>
+  <div class="metas"><div>{{if eq .Status "DONE"}}<span class="pill ok">{{.Status}}</span>{{else if eq .Status "FAILED"}}<span class="pill bad">{{.Status}}</span>{{else}}<span class="pill warn">{{.Status}}</span>{{end}}</div>
   <div class="meta">{{span .BeginTime .EndTime}}</div>
-  <div class="meta num">{{size .SizeBytes}} + {{size .WALSizeBytes}} WAL</div>
-  {{if and $.CanAdmin (ne .Status "STARTED")}}<div><button class="btn alt" hx-get="/servers/{{$.Server}}/backups/list?confirm={{.ID}}" hx-target="#backup-list" hx-swap="innerHTML">{{t "btn.delete_ask"}}</button></div>{{end}}
+  <div class="meta num">{{size .SizeBytes}} + {{size .WALSizeBytes}} WAL</div></div>
+  <div class="act">{{if and $.CanAdmin (ne .Status "STARTED")}}<button class="btn alt" hx-get="/servers/{{$.Server}}/backups/list?confirm={{.ID}}" hx-target="#backup-list" hx-swap="innerHTML">{{t "btn.delete_ask"}}</button>{{end}}</div>
 </li>
 {{end}}
 {{end}}
@@ -176,12 +175,13 @@
   </div>
 </li>
 {{else}}
-<li class="row">
-  <div class="grow"><code>{{.BackupID}}</code> &middot; {{if eq .Target "time"}}{{.TargetTime}}{{else if eq .Target "backup_end"}}{{t "target.backup_end"}}{{else}}{{t "target.latest"}}{{end}}</div>
+<li class="row cols">
+  <div class="id"><code>{{.BackupID}}</code></div>
+  <div class="metas"><div class="meta">{{if eq .Target "time"}}{{.TargetTime}}{{else if eq .Target "backup_end"}}{{t "target.backup_end"}}{{else}}{{t "target.latest"}}{{end}}</div>
   <div class="meta">{{when .CreatedAt}}</div>
-  <div class="meta num">{{size .SizeBytes}}{{if .ArchivePath}} / {{size .ArchiveBytes}} .tar.gz{{end}}</div>
-  {{if and .Downloadable $.CanOperate}}<div><a class="btn alt" href="/recoveries/{{.ID}}/download">{{t "btn.download_short"}}</a></div>{{end}}
-  {{if $.CanAdmin}}<div><button class="btn alt" hx-get="/servers/{{$.Server}}/recoveries/list?confirm={{.ID}}" hx-target="#recovery-list" hx-swap="innerHTML">{{t "btn.delete_ask"}}</button></div>{{end}}
+  <div class="meta num">{{size .SizeBytes}}{{if .ArchivePath}} / {{size .ArchiveBytes}} .tar.gz{{end}}</div></div>
+  <div class="act">{{if and .Downloadable $.CanOperate}}<a class="btn alt" href="/recoveries/{{.ID}}/download">{{t "btn.download_short"}}</a>{{end}}
+  {{if $.CanAdmin}}<button class="btn alt" hx-get="/servers/{{$.Server}}/recoveries/list?confirm={{.ID}}" hx-target="#recovery-list" hx-swap="innerHTML">{{t "btn.delete_ask"}}</button>{{end}}</div>
   <div class="msg meta"><code class="wrapany">{{.Path}}</code></div>
 </li>
 {{end}}

@@ -142,7 +142,8 @@ legend{font-weight:750;font-size:1.05rem;padding:0 .5rem}
 fieldset[disabled]{opacity:.8}
 label{display:block;font-weight:600;margin-bottom:1rem}
 label small{display:block;font-weight:400;margin-top:.25rem}
-input[type=text],input[type=password],input[type=number],select{display:block;width:100%;margin-top:.3rem;padding:.7rem .9rem;min-height:46px;background:var(--bg);color:var(--tx);border:1px solid var(--mut);border-radius:12px;font:inherit}
+input[type=text],input[type=password],input[type=number],input[type=datetime-local],input[type=date],input[type=time],select{display:block;width:100%;margin-top:.3rem;padding:.7rem .9rem;min-height:46px;background:var(--bg);color:var(--tx);border:1px solid var(--mut);border-radius:12px;font:inherit}
+input[type=datetime-local],input[type=date],input[type=time]{color-scheme:inherit;font-family:inherit}
 input:focus,select:focus{outline:3px solid var(--acc);outline-offset:1px;border-color:var(--acc)}
 label.chk{display:flex;gap:.6rem;align-items:center;min-height:44px}
 input[type=checkbox]{width:1.25rem;height:1.25rem;accent-color:var(--acc)}
@@ -176,3 +177,14 @@ details.oks{margin-top:.2rem}
 details.oks summary{cursor:pointer;font-weight:700;padding:.6rem .2rem;min-height:44px;display:flex;align-items:center;gap:.4rem}
 details.oks[open] summary{margin-bottom:.4rem}
 .srv .lines div,.srv .probs li,.row .msg,.flash,dl.facts dd{overflow-wrap:anywhere}
+
+/* stable action rows: id | details | button, button underneath below 500px */
+.row.cols{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,1fr) auto;align-items:center;gap:.3rem 1.2rem}
+.row.cols .id{min-width:0}
+.row.cols .metas{display:flex;flex-wrap:wrap;align-items:baseline;gap:.1rem 1rem;min-width:0}
+.row.cols .act{display:flex;gap:.5rem;justify-content:flex-end;min-width:0}
+.row.cols .msg{grid-column:1/-1}
+dl.paths{margin:0 0 1rem}
+dl.paths dt{color:var(--mut);font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+dl.paths dd{margin:.1rem 0 .9rem;min-width:0;overflow-wrap:anywhere}
+@media (max-width:500px){.row.cols{grid-template-columns:minmax(0,1fr)}.row.cols .act{justify-content:flex-start}.row.cols .act:empty{display:none}}
