@@ -1,13 +1,22 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+// bcrypt at the production cost makes every test that hashes a password slow.
+func TestMain(m *testing.M) {
+	BcryptCost = 4
+	os.Exit(m.Run())
+}
 
 func sampleConfig(t *testing.T) *Config {
 	t.Helper()
@@ -214,5 +223,32 @@ func TestAPIKeys(t *testing.T) {
 	}
 	if _, ok := MatchAPIKey(cfg, ""); ok {
 		t.Error("empty key must not match")
+	}
+}
+
+func TestExampleDecodesStrictly(t *testing.T) {
+	raw, err := os.ReadFile("../../deploy/pgcellar.example.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := Defaults()
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec.KnownFields(true)
+	if err := dec.Decode(cfg); err != nil {
+		t.Fatalf("example file has unknown or invalid keys: %v", err)
+	}
+	if cfg.Barman.CronInterval != time.Minute || cfg.AuditRetentionDays != 90 {
+		t.Errorf("example values: cron_interval=%v audit_retention_days=%d", cfg.Barman.CronInterval, cfg.AuditRetentionDays)
+	}
+}
+
+func TestAuditAndCronDefaults(t *testing.T) {
+	d := Defaults()
+	if d.Barman.CronInterval != time.Minute || d.AuditRetentionDays != 90 {
+		t.Errorf("defaults: %v %d", d.Barman.CronInterval, d.AuditRetentionDays)
+	}
+	d.AuditRetentionDays = -1
+	if len(Validate(d)) == 0 {
+		t.Error("negative audit_retention_days should be a problem")
 	}
 }

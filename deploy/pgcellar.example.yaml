@@ -5,6 +5,7 @@
 listen: ":8080"
 base_url: "http://localhost:8080"      # used in links inside alerts and reports
 data_dir: /var/lib/pgcellar            # SQLite and runtime files
+audit_retention_days: 90               # audit lines older than this are purged daily; 0 = keep forever
 
 barman:
   binary: barman                       # on PATH, or an absolute path
@@ -12,6 +13,7 @@ barman:
   config_dir: /etc/barman.d
   user: barman                         # commands run as this user when pgCellar runs as root
   host: ""                             # empty = local Barman
+  cron_interval: 1m                    # how often pgCellar runs "barman cron"; 0 = never
 
 # What pgCellar adds on top of barman.d. "name" must match a [section] there.
 servers:

@@ -37,7 +37,7 @@ func (a *App) statusLoop(ctx context.Context) {
 // serverNames lists the servers Barman knows. When Barman cannot say, the
 // names found in barman.d are used and the error is returned too.
 func (a *App) serverNames(ctx context.Context) ([]string, error) {
-	names, err := a.Engine.ListServers(barman.WithActor(ctx, "system"))
+	names, err := a.Engine.ListServers(barman.WithActor(ctx, systemActor))
 	if err == nil {
 		return names, nil
 	}
@@ -80,7 +80,9 @@ func (a *App) RefreshStatuses(ctx context.Context) {
 	for _, s := range states {
 		a.cache[s.Name] = s
 	}
-	a.cacheTime = a.now()
+	// Real time on purpose: the dev clock is frozen for the fixtures, but
+	// "last refresh" must say how long ago the refresh really happened.
+	a.cacheTime = time.Now()
 	a.cacheErr = ""
 	if listErr != nil {
 		a.cacheErr = fmt.Sprintf("Barman could not list its servers: %v", listErr)
@@ -100,7 +102,7 @@ func (a *App) refreshServer(ctx context.Context, name string) {
 
 func (a *App) computeState(ctx context.Context, name string) *ServerState {
 	st := &ServerState{Name: name, UpdatedAt: a.now(), Checks: []CheckView{}, Problems: []string{}}
-	bs, err := a.Engine.Status(barman.WithActor(ctx, "system"), name)
+	bs, err := a.Engine.Status(barman.WithActor(ctx, systemActor), name)
 	if err != nil {
 		st.Error = fmt.Sprintf("Barman could not report on %s: %v", name, err)
 		st.Level = LevelFail

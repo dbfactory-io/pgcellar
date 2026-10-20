@@ -137,3 +137,28 @@ func TestSettings(t *testing.T) {
 		t.Errorf("got %q %v %v", v, ok, err)
 	}
 }
+
+func TestGetRunAndPruneAudit(t *testing.T) {
+	s := newStore(t)
+	id, err := s.StartRun("pg1", KindBackup, "gilles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.GetRun(id)
+	if err != nil || r.ID != id || r.Server != "pg1" {
+		t.Fatalf("GetRun = %+v, %v", r, err)
+	}
+	if _, err := s.GetRun(id + 100); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing run: err = %v, want ErrNotFound", err)
+	}
+
+	if err := s.AddAudit("a", "x", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.PruneAudit(time.Now().Add(-time.Hour)); err != nil || n != 0 {
+		t.Errorf("recent entry pruned: n=%d err=%v", n, err)
+	}
+	if n, err := s.PruneAudit(time.Now().Add(time.Hour)); err != nil || n != 1 {
+		t.Errorf("old entry kept: n=%d err=%v", n, err)
+	}
+}

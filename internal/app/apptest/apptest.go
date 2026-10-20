@@ -29,6 +29,11 @@ type Env struct {
 // Password of every test user.
 const Password = "secret-pass"
 
+func init() {
+	// Fast bcrypt for every test that builds an App.
+	config.BcryptCost = 4
+}
+
 // bcrypt is slow on purpose: hash the test password once per process.
 var (
 	hashOnce sync.Once

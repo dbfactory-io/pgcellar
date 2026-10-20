@@ -32,7 +32,11 @@ type userCtx struct {
 }
 
 // dummyHash makes a login for an unknown user cost as much as a real one.
-var dummyHash, _ = config.HashPassword("pgcellar-not-a-password")
+// It is built on first use so it follows config.BcryptCost.
+var dummyHash = sync.OnceValue(func() string {
+	h, _ := config.HashPassword("pgcellar-not-a-password")
+	return h
+})
 
 func hashToken(tok string) string {
 	sum := sha256.Sum256([]byte(tok))
@@ -181,7 +185,7 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 			found = &cfg.Users[i]
 		}
 	}
-	hash := dummyHash
+	hash := dummyHash()
 	if found != nil {
 		hash = found.PasswordHash
 	}

@@ -42,13 +42,13 @@ func inputFrom(s barman.Server, cs *config.Server) ServerInput {
 		in.BackupMethod = "rsync" // Barman's own default
 	}
 	if r, err := config.BuildRetention(s.RetentionPolicy, s.MinimumRedundancy); err == nil {
-		in.Retention = RetentionInput{r.RecoveryWindowDays, r.Redundancy, r.MinimumRedundancy}
+		in.Retention = r
 	}
 	if cs != nil {
 		in.Label = cs.Label
-		in.Schedule = ScheduleInput{Backup: cs.Schedule.Backup, Enabled: cs.Schedule.Enabled}
+		in.Schedule = cs.Schedule
 		if s.RetentionPolicy == "" && s.MinimumRedundancy == "" {
-			in.Retention = RetentionInput{cs.Retention.RecoveryWindowDays, cs.Retention.Redundancy, cs.Retention.MinimumRedundancy}
+			in.Retention = cs.Retention
 		}
 	}
 	return in
@@ -85,8 +85,8 @@ func (a *App) detail(name string, file *barman.Server, cs *config.Server, inBarm
 		d.ServerInput = ServerInput{Name: name}
 		if cs != nil {
 			d.Label = cs.Label
-			d.Schedule = ScheduleInput{Backup: cs.Schedule.Backup, Enabled: cs.Schedule.Enabled}
-			d.Retention = RetentionInput{cs.Retention.RecoveryWindowDays, cs.Retention.Redundancy, cs.Retention.MinimumRedundancy}
+			d.Schedule = cs.Schedule
+			d.Retention = cs.Retention
 		}
 	}
 	if d.Schedule.Backup != "" {
@@ -109,7 +109,7 @@ func (a *App) ListServers(ctx context.Context) ([]ServerDetail, error) {
 	}
 	cfg := a.Config()
 	inBarman := map[string]bool{}
-	if names, err := a.Engine.ListServers(barman.WithActor(ctx, "system")); err == nil {
+	if names, err := a.Engine.ListServers(barman.WithActor(ctx, systemActor)); err == nil {
 		for _, n := range names {
 			inBarman[n] = true
 		}
@@ -364,7 +364,7 @@ func (a *App) knownServer(ctx context.Context, name string) error {
 	if files, err := barman.LoadServers(a.barmanConfigDir()); err == nil && findFile(files, name) != nil {
 		return nil
 	}
-	if names, err := a.Engine.ListServers(barman.WithActor(ctx, "system")); err == nil {
+	if names, err := a.Engine.ListServers(barman.WithActor(ctx, systemActor)); err == nil {
 		for _, n := range names {
 			if n == name {
 				return nil
@@ -523,18 +523,15 @@ func (a *App) Runs(server string, limit int) ([]RunView, error) {
 
 // Run returns one run with its output, or ErrNotFound.
 func (a *App) Run(id int64) (*RunView, error) {
-	// The store has no lookup by id; recent runs are enough in practice.
-	runs, err := a.Store.ListRuns("", 5000)
+	r, err := a.Store.GetRun(id)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
-	for _, r := range runs {
-		if r.ID == id {
-			v := toRunView(r, true)
-			return &v, nil
-		}
-	}
-	return nil, ErrNotFound
+	v := toRunView(*r, true)
+	return &v, nil
 }
 
 // History returns the latest commits of the configuration repositories.

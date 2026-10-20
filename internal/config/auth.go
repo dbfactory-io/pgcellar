@@ -10,14 +10,15 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	bcryptCost   = 12
-	apiKeyPrefix = "pgc_"
-)
+const apiKeyPrefix = "pgc_"
+
+// BcryptCost is the bcrypt work factor used by HashPassword. Tests lower it
+// (before hashing anything) to stay fast.
+var BcryptCost = 12
 
 // HashPassword returns the bcrypt hash of a password.
 func HashPassword(password string) (string, error) {
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	if err != nil {
 		return "", err
 	}

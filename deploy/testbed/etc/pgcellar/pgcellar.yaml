@@ -1,0 +1,101 @@
+# pgCellar configuration for the rasp001 test bed.
+# Secrets never go here: passwords are in /var/lib/barman/.pgpass, the Telegram
+# token comes from the environment (.env).
+
+listen: ":8080"
+base_url: ""
+data_dir: /var/lib/pgcellar
+audit_retention_days: 90
+
+barman:
+  binary: barman
+  config_file: /etc/barman.conf
+  config_dir: /etc/barman.d
+  user: barman
+  cron_interval: 1m                    # runs `barman cron` (WAL streaming, retention)
+
+servers:
+  - name: deckhand
+    label: "Deckhand application database"
+    schedule:
+      backup: "daily 03:00"
+      enabled: true
+    retention:
+      recovery_window_days: 7
+      redundancy: 0
+      minimum_redundancy: 1
+    tags: [testbed, hawking]
+
+  - name: chutag
+    label: "Chutag lost-and-found QR tags"
+    schedule:
+      backup: "daily 03:10"
+      enabled: true
+    retention:
+      recovery_window_days: 7
+      redundancy: 0
+      minimum_redundancy: 1
+    tags: [testbed, hawking]
+
+  - name: sygnet
+    label: "Sygnet application database"
+    schedule:
+      backup: "daily 03:20"
+      enabled: true
+    retention:
+      recovery_window_days: 7
+      redundancy: 0
+      minimum_redundancy: 1
+    tags: [testbed, hawking]
+
+  - name: listmonk
+    label: "Listmonk mailing lists"
+    schedule:
+      backup: "daily 03:30"
+      enabled: true
+    retention:
+      recovery_window_days: 7
+      redundancy: 0
+      minimum_redundancy: 1
+    tags: [testbed, hawking]
+
+  - name: postiz
+    label: "Postiz social scheduler (3 databases)"
+    schedule:
+      backup: "daily 03:40"
+      enabled: true
+    retention:
+      recovery_window_days: 7
+      redundancy: 0
+      minimum_redundancy: 1
+    tags: [testbed, hawking]
+
+  - name: nyx
+    label: "Nyx application database"
+    schedule:
+      backup: "daily 03:50"
+      enabled: true
+    retention:
+      recovery_window_days: 7
+      redundancy: 0
+      minimum_redundancy: 1
+    tags: [testbed, hawking]
+
+alerts:
+  max_backup_age: 26h
+  max_wal_age: 1h
+  telegram:
+    token_env: TELEGRAM_BOT_TOKEN
+    chat_id: "CHANGE_ME"               # numeric chat id of the alert chat
+
+# bcrypt hash expected (see README, part B). Replace the placeholder.
+users:
+  - name: admin
+    role: admin
+    password_hash: "CHANGE_ME_BCRYPT_HASH"
+
+drills:
+  enabled: false                       # switched on after the first manual restore (step 13)
+  schedule: "weekly sun 05:00"
+  image: postgres:17
+  report_dir: /var/lib/pgcellar/reports

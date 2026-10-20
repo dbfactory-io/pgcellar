@@ -38,7 +38,8 @@ func RoleAtLeast(role, min string) bool {
 type App struct {
 	Version string
 	Dev     bool
-	// CronInterval is how often `barman cron` runs. Zero disables it.
+	// CronInterval is how often `barman cron` runs (barman.cron_interval in
+	// pgcellar.yaml, unless the caller overrides it). Zero disables it.
 	CronInterval time.Duration
 	// StatusInterval is how often the status cache is refreshed.
 	StatusInterval time.Duration
@@ -62,6 +63,9 @@ type App struct {
 
 	runMu   sync.Mutex
 	running map[string]int64 // server -> run id of the backup in progress
+
+	auditMu   sync.Mutex
+	auditSeen map[string]time.Time // command -> when its last failure was logged
 
 	cacheMu     sync.RWMutex
 	cache       map[string]*ServerState
@@ -88,7 +92,6 @@ func Load(configPath string, dev bool) (*App, error) {
 	}
 	a := &App{
 		Dev:            dev,
-		CronInterval:   time.Minute,
 		StatusInterval: time.Minute,
 		Logger:         log.New(os.Stderr, "pgcellar: ", log.LstdFlags),
 		Now:            time.Now,
@@ -108,6 +111,7 @@ func Load(configPath string, dev bool) (*App, error) {
 	a.ConfigPath = abs
 	a.ConfigDir = filepath.Dir(abs)
 	a.cfg = cfg
+	a.CronInterval = cfg.Barman.CronInterval
 	a.noteModTime()
 
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
@@ -148,11 +152,24 @@ func Load(configPath string, dev bool) (*App, error) {
 	return a, nil
 }
 
-// audit records one executed Barman command.
+// Background commands (the barman cron ticker and the status refresh) run as
+// this actor. They are audited only when they fail, and an identical failure
+// is written at most once per auditRepeat, so a broken Barman does not bury
+// the audit log under one line per minute.
+const (
+	systemActor = "system"
+	auditRepeat = time.Hour
+)
+
+// audit records one executed Barman command. Everything started by a user or
+// an API key is recorded; background commands only on failure.
 func (a *App) audit(e barman.AuditEntry) {
 	actor := e.Actor
 	if actor == "" {
-		actor = "system"
+		actor = systemActor
+	}
+	if actor == systemActor && !a.backgroundFailureDue(e) {
+		return
 	}
 	target := ""
 	if n := len(e.Args); n > 0 && !strings.HasPrefix(e.Args[n-1], "-") && e.Args[n-1] != "cron" {
@@ -162,6 +179,26 @@ func (a *App) audit(e barman.AuditEntry) {
 	if err := a.Store.AddAudit(actor, e.Command, target, details); err != nil {
 		a.Logger.Printf("audit write failed: %v", err)
 	}
+}
+
+// backgroundFailureDue reports whether a background command deserves an audit
+// line: it failed, and the same command did not fail and get logged within
+// the last auditRepeat.
+func (a *App) backgroundFailureDue(e barman.AuditEntry) bool {
+	if e.ExitCode == 0 {
+		return false
+	}
+	now := time.Now()
+	a.auditMu.Lock()
+	defer a.auditMu.Unlock()
+	if a.auditSeen == nil {
+		a.auditSeen = map[string]time.Time{}
+	}
+	if last, ok := a.auditSeen[e.Command]; ok && now.Sub(last) < auditRepeat {
+		return false
+	}
+	a.auditSeen[e.Command] = now
+	return true
 }
 
 // closeStaleRuns marks runs left open by a previous process as interrupted.
@@ -202,15 +239,39 @@ func (a *App) Start(ctx context.Context) {
 		defer a.wg.Done()
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()
+		lastAuditPurge := time.Time{}
 		for {
+			_, _ = a.Store.PurgeExpiredSessions()
+			if time.Since(lastAuditPurge) >= 24*time.Hour {
+				a.PurgeAudit()
+				lastAuditPurge = time.Now()
+			}
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				_, _ = a.Store.PurgeExpiredSessions()
 			}
 		}
 	}()
+}
+
+// PurgeAudit deletes the audit lines older than audit_retention_days (0 keeps
+// everything) and returns how many were removed. The background loop calls it
+// once a day, and once at startup.
+func (a *App) PurgeAudit() int64 {
+	days := a.Config().AuditRetentionDays
+	if days <= 0 {
+		return 0
+	}
+	n, err := a.Store.PruneAudit(time.Now().AddDate(0, 0, -days))
+	if err != nil {
+		a.Logf("audit purge failed: %v", err)
+		return 0
+	}
+	if n > 0 {
+		a.Logf("audit purge: removed %d line(s) older than %d days", n, days)
+	}
+	return n
 }
 
 func (a *App) cronLoop(ctx context.Context) {
@@ -221,7 +282,7 @@ func (a *App) cronLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			cctx, cancel := context.WithTimeout(barman.WithActor(ctx, "system"), 5*time.Minute)
+			cctx, cancel := context.WithTimeout(barman.WithActor(ctx, systemActor), 5*time.Minute)
 			if err := a.Engine.Cron(cctx); err != nil && ctx.Err() == nil {
 				a.Logf("barman cron failed: %v", err)
 			}

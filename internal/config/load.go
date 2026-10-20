@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,11 +17,13 @@ func Defaults() *Config {
 		Listen:  ":8080",
 		DataDir: "/var/lib/pgcellar",
 		Barman: Barman{
-			Binary:     "barman",
-			ConfigFile: "/etc/barman.conf",
-			ConfigDir:  "/etc/barman.d",
-			User:       "barman",
+			Binary:       "barman",
+			ConfigFile:   "/etc/barman.conf",
+			ConfigDir:    "/etc/barman.d",
+			User:         "barman",
+			CronInterval: time.Minute,
 		},
+		AuditRetentionDays: 90,
 	}
 }
 
@@ -100,6 +103,12 @@ func Validate(cfg *Config) []string {
 	}
 	if cfg.Barman.Binary == "" {
 		add("barman.binary is empty")
+	}
+	if cfg.Barman.CronInterval < 0 {
+		add("barman.cron_interval cannot be negative (0 disables it)")
+	}
+	if cfg.AuditRetentionDays < 0 {
+		add("audit_retention_days cannot be negative (0 keeps everything)")
 	}
 
 	seen := map[string]bool{}

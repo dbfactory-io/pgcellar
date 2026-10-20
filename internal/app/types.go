@@ -1,33 +1,24 @@
 package app
 
-import "time"
+import (
+	"time"
 
-// RetentionInput is the retention of a server, as edited by the user.
-type RetentionInput struct {
-	RecoveryWindowDays int `json:"recovery_window_days"`
-	Redundancy         int `json:"redundancy"`
-	MinimumRedundancy  int `json:"minimum_redundancy"`
-}
-
-// ScheduleInput is the backup schedule of a server ("daily 02:00"...).
-type ScheduleInput struct {
-	Backup  string `json:"backup"`
-	Enabled bool   `json:"enabled"`
-}
+	"github.com/stranix79/pgcellar/internal/config"
+)
 
 // ServerInput is everything the user can set on a server: the Barman options
 // pgCellar understands plus the pgCellar side (label, retention, schedule).
 type ServerInput struct {
-	Name              string         `json:"name"`
-	Label             string         `json:"label"`
-	Description       string         `json:"description"`
-	BackupMethod      string         `json:"backup_method"` // postgres | rsync
-	ConnInfo          string         `json:"conninfo"`
-	StreamingConnInfo string         `json:"streaming_conninfo"`
-	Slot              string         `json:"slot_name"`
-	SSHCommand        string         `json:"ssh_command"`
-	Retention         RetentionInput `json:"retention"`
-	Schedule          ScheduleInput  `json:"schedule"`
+	Name              string           `json:"name"`
+	Label             string           `json:"label"`
+	Description       string           `json:"description"`
+	BackupMethod      string           `json:"backup_method"` // postgres | rsync
+	ConnInfo          string           `json:"conninfo"`
+	StreamingConnInfo string           `json:"streaming_conninfo"`
+	Slot              string           `json:"slot_name"`
+	SSHCommand        string           `json:"ssh_command"`
+	Retention         config.Retention `json:"retention"`
+	Schedule          config.Schedule  `json:"schedule"`
 }
 
 // ServerDetail is a server as shown by the list and detail pages.

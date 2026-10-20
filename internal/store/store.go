@@ -238,6 +238,18 @@ func (s *Store) ListRuns(server string, limit int) ([]Run, error) {
 	return out, rows.Err()
 }
 
+// GetRun returns one run by id, or ErrNotFound.
+func (s *Store) GetRun(id int64) (*Run, error) {
+	r, err := scanRun(s.db.QueryRow(`SELECT `+runCols+` FROM runs WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // LastRun returns the latest run of a kind for a server, or ErrNotFound.
 func (s *Store) LastRun(server, kind string) (*Run, error) {
 	row := s.db.QueryRow(`SELECT `+runCols+` FROM runs WHERE server = ? AND kind = ? ORDER BY started_at DESC, id DESC LIMIT 1`, server, kind)
@@ -279,6 +291,15 @@ func (s *Store) ListAudit(limit int) ([]AuditEntry, error) {
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// PruneAudit deletes the audit entries older than olderThan and returns how many.
+func (s *Store) PruneAudit(olderThan time.Time) (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM audit WHERE at < ?`, ts(olderThan))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // CreateSession stores a session.

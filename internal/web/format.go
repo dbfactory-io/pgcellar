@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/stranix79/pgcellar/internal/config"
 )
 
 func fmtTime(t time.Time) string {
@@ -38,7 +39,7 @@ func humanSize(n int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
-func fmtRetention(r app.RetentionInput) string {
+func fmtRetention(r config.Retention) string {
 	var parts []string
 	if r.RecoveryWindowDays > 0 {
 		parts = append(parts, fmt.Sprintf("%d days", r.RecoveryWindowDays))

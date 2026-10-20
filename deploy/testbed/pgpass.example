@@ -1,0 +1,15 @@
+# Copy to pgpass, replace CHANGE_ME, then install it as /var/lib/barman/.pgpass
+# (mode 0600, owned by the barman user of the container). See README, part B.
+# Format: host:port:database:user:password   (hex passwords need no escaping)
+10.8.0.1:5433:*:barman:CHANGE_ME
+10.8.0.1:5433:*:streaming_barman:CHANGE_ME
+10.8.0.1:5434:*:barman:CHANGE_ME
+10.8.0.1:5434:*:streaming_barman:CHANGE_ME
+10.8.0.1:5435:*:barman:CHANGE_ME
+10.8.0.1:5435:*:streaming_barman:CHANGE_ME
+10.8.0.1:5436:*:barman:CHANGE_ME
+10.8.0.1:5436:*:streaming_barman:CHANGE_ME
+10.8.0.1:5437:*:barman:CHANGE_ME
+10.8.0.1:5437:*:streaming_barman:CHANGE_ME
+10.8.0.1:5438:*:barman:CHANGE_ME
+10.8.0.1:5438:*:streaming_barman:CHANGE_ME

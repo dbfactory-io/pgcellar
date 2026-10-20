@@ -1,0 +1,23 @@
+# pgCellar test bed on rasp001. Run from this directory (see README, part B):
+#   sudo docker compose up -d
+# The image is built beforehand (README B3) and loaded as pgcellar:testbed.
+services:
+  pgcellar:
+    image: pgcellar:testbed
+    container_name: pgcellar
+    ports:
+      # Loopback only: reach it through a tunnel (ssh -L 8080:127.0.0.1:8080 rasp001)
+      # or from the Pi itself. Nothing is exposed on the LAN.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /mnt/usbdata/pgcellar/barman:/var/lib/barman
+      - /mnt/usbdata/pgcellar/data:/var/lib/pgcellar
+      - ./etc/pgcellar:/etc/pgcellar
+      - ./etc/barman.d:/etc/barman.d
+      - ./etc/barman.conf:/etc/barman.conf:ro
+    env_file: .env
+    environment:
+      TZ: Europe/Brussels
+    # The Pi has 3.7 GiB shared with Home Assistant, Grafana, Plex and others.
+    mem_limit: 768m
+    restart: unless-stopped

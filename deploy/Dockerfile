@@ -28,7 +28,7 @@ RUN apt-get update \
       > /etc/apt/sources.list.d/pgdg.list \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      barman barman-cli postgresql-client-16 rsync openssh-client \
+      barman barman-cli postgresql-client-18 rsync openssh-client \
       ca-certificates git tzdata \
  && apt-get purge -y curl gnupg \
  && apt-get autoremove -y \

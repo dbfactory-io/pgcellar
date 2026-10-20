@@ -59,7 +59,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, `usage:
-  pgcellar serve --config FILE [--listen ADDR] [--dev] [--cron-interval 1m]
+  pgcellar serve --config FILE [--listen ADDR] [--dev] [--cron-interval 30s]
   pgcellar check --config FILE [--barman-dir DIR]
   pgcellar version`)
 }
@@ -70,9 +70,22 @@ func serve(args []string, stdout, stderr io.Writer) int {
 	cfgPath := fs.String("config", "/etc/pgcellar/pgcellar.yaml", "path of pgcellar.yaml")
 	listen := fs.String("listen", "", "address to listen on (overrides listen: in pgcellar.yaml)")
 	dev := fs.Bool("dev", false, "development mode: fake Barman, temporary data, user admin/admin")
-	cronEvery := fs.Duration("cron-interval", time.Minute, "how often to run 'barman cron'; 0 disables it")
+	cronEvery := fs.String("cron-interval", "", "how often to run 'barman cron', for example 30s; 0 disables it (default: barman.cron_interval in pgcellar.yaml)")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+
+	var cronOverride time.Duration
+	if *cronEvery != "" {
+		d, err := time.ParseDuration(*cronEvery)
+		if err != nil && *cronEvery == "0" {
+			d, err = 0, nil
+		}
+		if err != nil || d < 0 {
+			fmt.Fprintf(stderr, "pgcellar: invalid --cron-interval %q\n", *cronEvery)
+			return 2
+		}
+		cronOverride = d
 	}
 
 	a, err := app.Load(*cfgPath, *dev)
@@ -81,7 +94,9 @@ func serve(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	a.Version = Version
-	a.CronInterval = *cronEvery
+	if *cronEvery != "" {
+		a.CronInterval = cronOverride
+	}
 	addr := *listen
 	if addr == "" {
 		addr = a.Config().Listen
