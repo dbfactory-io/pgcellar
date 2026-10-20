@@ -94,6 +94,14 @@
         <option value="rsync"{{if eq .In.BackupMethod "rsync"}} selected{{end}}>rsync (over SSH)</option>
       </select>
     </label>
+    <label>WAL method
+      <select name="wal_method">
+        <option value="streaming"{{if or (eq .In.WALMethod "streaming") (eq .In.WALMethod "")}} selected{{end}}>streaming (pg_receivewal, no SSH needed)</option>
+        <option value="archive_command"{{if eq .In.WALMethod "archive_command"}} selected{{end}}>archive_command (WAL shipping: PostgreSQL pushes each WAL file)</option>
+        <option value="both"{{if eq .In.WALMethod "both"}} selected{{end}}>both (streaming and archive_command, the resilient setup)</option>
+      </select>
+      <small>How WAL files reach Barman. archive_command and both need the SSH key of pgCellar on the PostgreSQL server, see <a href="/ssh-key">SSH key</a>. The rsync method needs archive_command or both.</small>
+    </label>
     <label>Connection string (conninfo) <input type="text" name="conninfo" value="{{.In.ConnInfo}}" placeholder="host=db1 user=barman dbname=postgres"></label>
     <label>Streaming connection string <input type="text" name="streaming_conninfo" value="{{.In.StreamingConnInfo}}" placeholder="host=db1 user=streaming_barman dbname=postgres"><small>Streaming method only: the replication connection.</small></label>
     <label>Replication slot <input type="text" name="slot_name" value="{{.In.Slot}}" placeholder="barman"><small>Streaming method only.</small></label>

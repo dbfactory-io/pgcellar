@@ -45,6 +45,9 @@ type App struct {
 	StatusInterval time.Duration
 	// SetupInterval is how often the PostgreSQL settings are read again.
 	SetupInterval time.Duration
+	// SSHHome is the home directory whose ~/.ssh holds the SSH key pair; empty
+	// = the home of the Barman user. Tests point it to a temporary directory.
+	SSHHome string
 	// Tools runs psql and pg_basebackup for the Server setup section, through
 	// the same audited path as Barman. SetupTools names the programs.
 	Tools      barman.BinaryRunner

@@ -14,6 +14,8 @@
   <span id="backup-busy" class="busy" role="status">{{t "busy.backup"}}</span>
   <button class="btn alt" hx-post="/servers/{{.Detail.Name}}/switch-wal" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#backup-busy" hx-disabled-elt="this">{{t "btn.switch_wal"}}</button>
   <a class="btn alt" href="/servers/{{.Detail.Name}}/restore">{{t "btn.restore_ask"}}</a>
+  {{if and .CanAdmin .Detail.SSHCommand}}<button class="btn alt" hx-post="/servers/{{.Detail.Name}}/ssh-test" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#ssh-busy" hx-disabled-elt="this">{{t "btn.ssh_test"}}</button>
+  <span id="ssh-busy" class="busy" role="status">{{t "busy.checking"}}</span>{{end}}
 </div>
 {{end}}
 <div id="backup-run" aria-live="polite"></div>

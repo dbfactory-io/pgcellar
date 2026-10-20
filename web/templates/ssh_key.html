@@ -1,0 +1,55 @@
+{{define "content"}}
+{{with .Data}}
+<h1>SSH key</h1>
+<p class="muted">pgCellar owns one ed25519 key pair, in the <code>.ssh</code> directory of the barman user (the private key stays there, mode 0600, and is never shown). It is used to reach the PostgreSQL servers over SSH: <code>rsync</code> backups, and the connection test. WAL shipping uses a second, opposite trust, explained below.</p>
+
+<section>
+  <h2>Public key of pgCellar</h2>
+  {{if .Key.Created}}<div class="flash ok" role="status">A new key pair was just created.</div>{{end}}
+  <pre class="fixbox" id="pubkey">{{.Key.PublicKey}}</pre>
+  <p class="muted">Select the line (one click) and copy it.</p>
+</section>
+
+<section>
+  <h2>Set up WAL shipping on a PostgreSQL server</h2>
+  <p class="muted">WAL shipping means PostgreSQL pushes every finished WAL file to pgCellar's Barman with <code>archive_command</code> (Barman option <code>archiver = on</code>). Choose the WAL method <em>archive_command</em> or <em>both</em> in the server form first. Then, on the PostgreSQL server:</p>
+  <p class="muted"><strong>Prerequisite:</strong> PostgreSQL pushes the WAL files over SSH, so the pgCellar host must run an SSH server that the PostgreSQL servers can reach, with the barman user allowed to log in by key. The pgCellar Docker image contains an SSH client only; publish the port of an SSH server that shares the Barman data volume, or use WAL streaming.</p>
+  <ol class="steps">
+    <li><strong>The SSH trust, in the right direction.</strong>
+      <ul>
+        <li><em>WAL shipping (PostgreSQL to pgCellar):</em> <code>barman-wal-archive</code> runs as the <code>postgres</code> user and connects to <code>barman@{{.Key.Host}}</code>. So the key of the <code>postgres</code> user of the PostgreSQL server goes into <code>authorized_keys</code> of the barman user on the pgCellar host (<code>~barman/.ssh/authorized_keys</code>). Create a key for <code>postgres</code> if it has none: <code>sudo -u postgres ssh-keygen -t ed25519</code>.</li>
+        <li><em>Backups with rsync, the connection test, and Barman's checks (pgCellar to PostgreSQL):</em> Barman connects to the PostgreSQL server as the user of <code>ssh_command</code> (usually <code>postgres@db1</code>). So the public key above goes into <code>~postgres/.ssh/authorized_keys</code> on the PostgreSQL server:
+<pre class="fixbox">sudo -u postgres mkdir -p ~postgres/.ssh &amp;&amp; sudo -u postgres chmod 700 ~postgres/.ssh
+echo '{{.Key.PublicKey}}' | sudo -u postgres tee -a ~postgres/.ssh/authorized_keys
+sudo -u postgres chmod 600 ~postgres/.ssh/authorized_keys</pre></li>
+      </ul>
+      The first connection also needs the host key of the server in the <code>known_hosts</code> of the barman user: connect once by hand as that user (<code>ssh postgres@db1 true</code>, answer yes), because the tests here run with <code>BatchMode</code> and cannot ask.
+    </li>
+    <li><strong>Install <code>barman-cli</code></strong> on the PostgreSQL server (package from PGDG or the Barman repository): it provides <code>barman-wal-archive</code>.</li>
+    <li><strong>Turn archiving on</strong> in <code>postgresql.conf</code> (or with <code>ALTER SYSTEM</code>), replacing <code>&lt;server&gt;</code> with the name of the server in pgCellar:
+<pre class="fixbox">archive_mode = on
+archive_command = 'barman-wal-archive {{.Key.Host}} &lt;server&gt; %p'</pre>
+      <code>archive_mode</code> needs a <strong>restart</strong> of PostgreSQL; <code>SELECT pg_reload_conf();</code> is not enough for it. <code>archive_command</code> alone can be reloaded.</li>
+    <li><strong>Check.</strong> Close a WAL file and look at it arriving: <code>barman switch-wal --archive &lt;server&gt;</code> (the <em>Switch WAL</em> button of the server page does it), then <code>barman check &lt;server&gt;</code> (<em>Run check now</em>). The <em>Server setup</em> section of the server page tells what is still wrong.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Servers</h2>
+  {{if .Servers}}
+  <ul class="rows">
+  {{range .Servers}}
+  <li class="row">
+    <div class="grow"><a href="/servers/{{.Name}}"><strong>{{.Name}}</strong></a>
+      <div class="meta">WAL method: {{.WALMethod}}{{if .SSHCommand}} &middot; ssh_command: <code>{{.SSHCommand}}</code>{{end}}</div>
+      {{if .Archive}}<pre class="fixbox">archive_command = '{{.Command}}'</pre>{{end}}
+    </div>
+    {{if .SSHCommand}}<div><button class="btn alt" hx-post="/servers/{{.Name}}/ssh-test" hx-target="#ssh-result-{{.Name}}" hx-swap="innerHTML" hx-disabled-elt="this">{{t "btn.ssh_test"}}</button></div>{{end}}
+  </li>
+  <li class="row" style="padding-top:0"><div id="ssh-result-{{.Name}}" class="grow htmx-target" aria-live="polite"></div></li>
+  {{end}}
+  </ul>
+  {{else}}<p class="muted">No server yet.</p>{{end}}
+</section>
+{{end}}
+{{end}}

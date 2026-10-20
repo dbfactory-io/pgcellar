@@ -104,7 +104,7 @@ func (a *App) applySetup(ctx context.Context, st, prev *ServerState, force bool)
 			ctx = barman.WithActor(ctx, systemActor)
 		}
 		rctx, cancel := context.WithTimeout(ctx, setupTimeout)
-		rows = barman.ReadSetup(rctx, a.Tools, a.SetupTools, *srv)
+		rows = barman.ReadSetup(rctx, a.Tools, a.SetupTools, *srv, a.SSHHost())
 		cancel()
 		if ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
 			if prev != nil {

@@ -10,17 +10,29 @@ import (
 // ServerInput is everything the user can set on a server: the Barman options
 // pgCellar understands plus the pgCellar side (label, retention, schedule).
 type ServerInput struct {
-	Name              string           `json:"name"`
-	Label             string           `json:"label"`
-	Description       string           `json:"description"`
-	BackupMethod      string           `json:"backup_method"` // postgres | rsync
-	ConnInfo          string           `json:"conninfo"`
-	StreamingConnInfo string           `json:"streaming_conninfo"`
-	Slot              string           `json:"slot_name"`
-	SSHCommand        string           `json:"ssh_command"`
-	Retention         config.Retention `json:"retention"`
-	Schedule          config.Schedule  `json:"schedule"`
+	Name              string `json:"name"`
+	Label             string `json:"label"`
+	Description       string `json:"description"`
+	BackupMethod      string `json:"backup_method"` // postgres | rsync
+	ConnInfo          string `json:"conninfo"`
+	StreamingConnInfo string `json:"streaming_conninfo"`
+	Slot              string `json:"slot_name"`
+	SSHCommand        string `json:"ssh_command"`
+	// WALMethod says how WAL files reach Barman: streaming (streaming_archiver
+	// = on, archiver = off), archive_command (archiver = on, streaming_archiver
+	// = off) or both. Empty on input = keep the file as it is, or the usual
+	// choice of the backup method for a new server.
+	WALMethod string           `json:"wal_method"`
+	Retention config.Retention `json:"retention"`
+	Schedule  config.Schedule  `json:"schedule"`
 }
+
+// WAL methods of a server.
+const (
+	WALStreaming      = "streaming"
+	WALArchiveCommand = "archive_command"
+	WALBoth           = "both"
+)
 
 // ServerDetail is a server as shown by the list and detail pages.
 type ServerDetail struct {

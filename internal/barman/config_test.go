@@ -244,6 +244,21 @@ func TestValidate(t *testing.T) {
 	if p := Validate(Server{Name: "a", BackupMethod: "postgres", ConnInfo: "x", StreamingConnInfo: "y", StreamingArchiver: "off", Slot: "s"}); len(p) != 1 {
 		t.Errorf("streaming_archiver off: %v", p)
 	}
+	// pg_basebackup + WAL shipped by archive_command is a valid combination:
+	// no slot is needed, streaming_conninfo still is (pg_basebackup uses it).
+	if p := Validate(Server{Name: "a", BackupMethod: "postgres", ConnInfo: "x", StreamingConnInfo: "y", Archiver: "on", StreamingArchiver: "off"}); len(p) != 0 {
+		t.Errorf("postgres + archiver: %v", p)
+	}
+	if p := Validate(Server{Name: "a", BackupMethod: "postgres", ConnInfo: "x", StreamingConnInfo: "y", Archiver: "on", StreamingArchiver: "on"}); len(p) != 1 || !strings.Contains(p[0], "slot_name") {
+		t.Errorf("postgres + both without slot: %v", p)
+	}
+	// rsync without ssh_command is refused whatever the WAL method.
+	if p := Validate(Server{Name: "a", BackupMethod: "rsync", ConnInfo: "x", Archiver: "on"}); len(p) != 1 || !strings.Contains(p[0], "ssh_command") {
+		t.Errorf("rsync without ssh_command: %v", p)
+	}
+	if p := Validate(Server{Name: "a", BackupMethod: "rsync", SSHCommand: "ssh x", ConnInfo: "x", Archiver: "on", StreamingArchiver: "on"}); len(p) != 1 || !strings.Contains(p[0], "streaming_conninfo") {
+		t.Errorf("rsync + both without streaming_conninfo: %v", p)
+	}
 	if p := Validate(Server{Name: "a b", BackupMethod: "tape"}); len(p) != 2 {
 		t.Errorf("bad name and method: %v", p)
 	}

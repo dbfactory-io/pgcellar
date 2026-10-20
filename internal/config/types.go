@@ -25,6 +25,10 @@ type Config struct {
 	// SetupInterval is how often the PostgreSQL settings of every server are
 	// read again for the "Server setup" section (one psql query per server).
 	SetupInterval time.Duration `yaml:"setup_interval" json:"setup_interval"`
+	// SSHHost is the name PostgreSQL servers use to reach this host over SSH,
+	// shown in the archive_command pgCellar advises (barman-wal-archive
+	// <ssh_host> <server> %p). Empty = the host name of this machine.
+	SSHHost string `yaml:"ssh_host" json:"ssh_host"`
 	// AuditRetentionDays: audit lines older than this are purged daily. 0 = keep forever.
 	AuditRetentionDays int `yaml:"audit_retention_days" json:"audit_retention_days"`
 }

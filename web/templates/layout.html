@@ -23,6 +23,7 @@
       <a href="/servers"{{if eq .Active "servers"}} class="on"{{end}}>{{t "nav.servers"}}</a>
       <a href="/runs"{{if eq .Active "runs"}} class="on"{{end}}>{{t "nav.runs"}}</a>
       <a href="/history"{{if eq .Active "history"}} class="on"{{end}}>{{t "nav.history"}}</a>
+      {{if .CanAdmin}}<a href="/ssh-key"{{if eq .Active "ssh-key"}} class="on"{{end}}>{{t "nav.ssh_key"}}</a>{{end}}
       {{if .CanAdmin}}<a href="/audit"{{if eq .Active "audit"}} class="on"{{end}}>{{t "nav.audit"}}</a>{{end}}
     </nav>
     <form class="who" method="post" action="/logout">

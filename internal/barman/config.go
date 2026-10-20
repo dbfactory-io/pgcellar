@@ -458,7 +458,8 @@ func writeAtomic(path string, data []byte, mode os.FileMode) error {
 	return nil
 }
 
-func isOn(v string) bool {
+// IsOn reports whether a Barman boolean option is on.
+func IsOn(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "on", "true", "yes", "1":
 		return true
@@ -487,11 +488,11 @@ func Validate(server Server) []string {
 		if strings.TrimSpace(server.StreamingConnInfo) == "" {
 			p = append(p, "backup_method = postgres needs streaming_conninfo, the replication connection used by pg_basebackup and pg_receivewal.")
 		}
-		if !isOn(server.StreamingArchiver) {
-			p = append(p, "backup_method = postgres needs streaming_archiver = on so that WAL files are streamed.")
+		if !IsOn(server.StreamingArchiver) && !IsOn(server.Archiver) {
+			p = append(p, "backup_method = postgres needs streaming_archiver = on (WAL streamed) or archiver = on (WAL shipped by archive_command) so that WAL files reach Barman.")
 		}
-		if strings.TrimSpace(server.Slot) == "" {
-			p = append(p, "backup_method = postgres needs slot_name, the replication slot that keeps WAL files until Barman has them.")
+		if (IsOn(server.StreamingArchiver) || !IsOn(server.Archiver)) && strings.TrimSpace(server.Slot) == "" {
+			p = append(p, "backup_method = postgres with streamed WAL needs slot_name, the replication slot that keeps WAL files until Barman has them.")
 		}
 	case "rsync":
 		if strings.TrimSpace(server.SSHCommand) == "" {
@@ -500,8 +501,11 @@ func Validate(server Server) []string {
 		if strings.TrimSpace(server.ConnInfo) == "" {
 			p = append(p, "backup_method = rsync needs conninfo, the connection string Barman uses to query PostgreSQL.")
 		}
-		if !isOn(server.Archiver) {
-			p = append(p, "backup_method = rsync needs archiver = on so that PostgreSQL ships its WAL files with archive_command.")
+		if !IsOn(server.Archiver) {
+			p = append(p, "backup_method = rsync needs archiver = on so that PostgreSQL ships its WAL files with archive_command: use the WAL method archive_command or both.")
+		}
+		if IsOn(server.StreamingArchiver) && strings.TrimSpace(server.StreamingConnInfo) == "" {
+			p = append(p, "Streaming WAL needs streaming_conninfo, the replication connection used by pg_receivewal.")
 		}
 	default:
 		p = append(p, fmt.Sprintf("backup_method %q is not supported: use postgres (streaming) or rsync.", server.BackupMethod))

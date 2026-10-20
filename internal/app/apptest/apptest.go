@@ -27,6 +27,8 @@ type Env struct {
 	CallLog   string            // FAKE_BARMAN_LOG
 	PsqlLog   string            // FAKE_PSQL_LOG
 	Home      string            // barman_home of the test barman.conf
+	SSHHome   string            // home whose .ssh holds the test key pair
+	SSHLog    string            // FAKE_SSH_LOG
 	Keys      map[string]string // role -> clear API key
 }
 
@@ -57,6 +59,15 @@ func New(t *testing.T) *Env {
 	root := repoRoot()
 	testdata := filepath.Join(root, "internal", "barman", "testdata")
 	t.Setenv("PATH", testdata+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	// An "ssh" that never connects (see testdata/fake-ssh), first on PATH.
+	sshDir := t.TempDir()
+	if err := os.Symlink(filepath.Join(testdata, "fake-ssh"), filepath.Join(sshDir, "ssh")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", sshDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	sshLog := filepath.Join(t.TempDir(), "ssh-calls.log")
+	t.Setenv("FAKE_SSH_LOG", sshLog)
 
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "barman-calls.log")
@@ -142,12 +153,13 @@ func New(t *testing.T) *Env {
 		t.Fatal(err)
 	}
 	a.Version = "test"
+	a.SSHHome = filepath.Join(dir, "barman-home-dir")
 	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 	fixed := time.Date(2026, 10, 20, 2, 30, 0, 0, time.Local)
 	a.Now = func() time.Time { return fixed }
 	t.Cleanup(func() { _ = a.Close() })
 	a.RefreshStatuses(context.Background())
-	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, Keys: keys}
+	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, SSHHome: a.SSHHome, SSHLog: sshLog, Keys: keys}
 }
 
 // WaitRun waits until a run has finished and returns it.

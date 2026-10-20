@@ -28,6 +28,19 @@ func tail(b []byte) string {
 
 // ---- servers ----
 
+// walMethodOf reads the WAL method out of the two Barman switches.
+func walMethodOf(s barman.Server) string {
+	arch, stream := barman.IsOn(s.Archiver), barman.IsOn(s.StreamingArchiver)
+	switch {
+	case arch && stream:
+		return WALBoth
+	case arch:
+		return WALArchiveCommand
+	default:
+		return WALStreaming
+	}
+}
+
 func inputFrom(s barman.Server, cs *config.Server) ServerInput {
 	in := ServerInput{
 		Name:              s.Name,
@@ -41,6 +54,7 @@ func inputFrom(s barman.Server, cs *config.Server) ServerInput {
 	if in.BackupMethod == "" {
 		in.BackupMethod = "rsync" // Barman's own default
 	}
+	in.WALMethod = walMethodOf(s)
 	if r, err := config.BuildRetention(s.RetentionPolicy, s.MinimumRedundancy); err == nil {
 		in.Retention = r
 	}
@@ -181,6 +195,7 @@ func normalize(in *ServerInput) {
 		*p = strings.TrimSpace(*p)
 	}
 	in.BackupMethod = strings.ToLower(in.BackupMethod)
+	in.WALMethod = strings.ToLower(strings.TrimSpace(in.WALMethod))
 }
 
 // toBarman applies the input on top of an existing section (or a new one).
@@ -203,15 +218,24 @@ func toBarman(in ServerInput, existing *barman.Server) barman.Server {
 	s.StreamingConnInfo = in.StreamingConnInfo
 	s.Slot = in.Slot
 	s.SSHCommand = in.SSHCommand
-	if methodChanged {
-		switch in.BackupMethod {
-		case "postgres":
-			s.StreamingArchiver, s.Archiver = "on", "off"
-			if _, ok := s.Extra["create_slot"]; !ok {
-				s.Extra["create_slot"] = "auto"
-			}
-		case "rsync":
-			s.Archiver, s.StreamingArchiver = "on", "off"
+	wal := in.WALMethod
+	if wal == "" && methodChanged {
+		wal = WALStreaming
+		if in.BackupMethod == "rsync" {
+			wal = WALArchiveCommand
+		}
+	}
+	switch wal {
+	case WALStreaming:
+		s.StreamingArchiver, s.Archiver = "on", "off"
+	case WALArchiveCommand:
+		s.StreamingArchiver, s.Archiver = "off", "on"
+	case WALBoth:
+		s.StreamingArchiver, s.Archiver = "on", "on"
+	}
+	if in.BackupMethod == "postgres" && barman.IsOn(s.StreamingArchiver) {
+		if _, ok := s.Extra["create_slot"]; !ok {
+			s.Extra["create_slot"] = "auto"
 		}
 	}
 	r := config.Retention{RecoveryWindowDays: in.Retention.RecoveryWindowDays, Redundancy: in.Retention.Redundancy, MinimumRedundancy: in.Retention.MinimumRedundancy}
@@ -271,6 +295,11 @@ func (a *App) problemsFor(in ServerInput, bs barman.Server) []string {
 	}
 	if in.Name != "" && !serverNameOK(in.Name) {
 		p = append(p, fmt.Sprintf("The server name %q is not valid: use lowercase letters, digits, '-' and '_' only.", in.Name))
+	}
+	switch in.WALMethod {
+	case "", WALStreaming, WALArchiveCommand, WALBoth:
+	default:
+		p = append(p, fmt.Sprintf("WAL method %q is not known: use streaming, archive_command or both.", in.WALMethod))
 	}
 	p = append(p, barman.Validate(bs)...)
 	return p

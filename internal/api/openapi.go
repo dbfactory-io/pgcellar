@@ -134,6 +134,7 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 				"ServerInput": m{"type": "object", "properties": m{
 					"name": m{"type": "string"}, "label": m{"type": "string"}, "description": m{"type": "string"},
 					"backup_method": m{"type": "string", "enum": []string{"postgres", "rsync"}},
+					"wal_method":    m{"type": "string", "enum": []string{"streaming", "archive_command", "both"}, "description": "How WAL files reach Barman: streaming_archiver on, archiver on, or both. Omitted = unchanged (new server: streaming for postgres, archive_command for rsync)."},
 					"conninfo":      m{"type": "string"}, "streaming_conninfo": m{"type": "string"}, "slot_name": m{"type": "string"}, "ssh_command": m{"type": "string"},
 					"retention": m{"type": "object", "properties": m{"recovery_window_days": m{"type": "integer"}, "redundancy": m{"type": "integer"}, "minimum_redundancy": m{"type": "integer"}}},
 					"schedule":  m{"type": "object", "properties": m{"backup": m{"type": "string", "example": "daily 02:00"}, "enabled": m{"type": "boolean"}}},

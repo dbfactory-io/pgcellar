@@ -24,6 +24,10 @@ const (
 	SetupKeyStreaming  = "streaming_access"
 	SetupKeyPrivileges = "backup_privileges"
 	SetupKeySlot       = "replication_slot"
+	// The three lines below are Barman's own verdict on WAL archiving.
+	SetupKeyBarmanWALArchive     = "barman_wal_archive"
+	SetupKeyBarmanArchiveCommand = "barman_archive_command"
+	SetupKeyBarmanArchiveMode    = "barman_archive_mode"
 	// SetupKeyUnreadable is the single line shown when psql failed.
 	SetupKeyUnreadable = "unreadable"
 )
@@ -43,12 +47,17 @@ type SetupCheck struct {
 
 // IsDerived reports whether the check is built from `barman check` results.
 func (c SetupCheck) IsDerived() bool {
-	return c.Key == SetupKeyStreaming || c.Key == SetupKeyPrivileges || c.Key == SetupKeySlot
+	switch c.Key {
+	case SetupKeyStreaming, SetupKeyPrivileges, SetupKeySlot,
+		SetupKeyBarmanWALArchive, SetupKeyBarmanArchiveCommand, SetupKeyBarmanArchiveMode:
+		return true
+	}
+	return false
 }
 
 // SetupSettings are the pg_settings rows read by SetupQuery.
 var setupNames = []string{
-	"archive_mode", "archive_timeout", "data_checksums", "full_page_writes",
+	"archive_command", "archive_mode", "archive_timeout", "data_checksums", "full_page_writes",
 	"max_replication_slots", "max_slot_wal_keep_size", "max_wal_senders",
 	"server_version_num", "summarize_wal", "wal_compression", "wal_level",
 }
@@ -119,6 +128,8 @@ type SetupInput struct {
 	ClientVersion string // output of `pg_basebackup --version`, empty when it could not be read
 	SlotName      string // slot_name of the Barman server
 	ArchiverOn    bool   // archiver = on in the Barman server (WAL by archive_command)
+	ServerName    string // name of the Barman server, used in the advised archive_command
+	SSHHost       string // how PostgreSQL reaches pgCellar over SSH, used in the advised archive_command
 }
 
 // SetupTools names the PostgreSQL client programs; empty means the usual name
@@ -131,7 +142,7 @@ type SetupTools struct {
 // ReadSetup runs the query and the version probe through r and returns the
 // checks that come from PostgreSQL itself. When psql fails the result is one
 // error line and the rest is not evaluated.
-func ReadSetup(ctx context.Context, r BinaryRunner, tools SetupTools, srv Server) []SetupCheck {
+func ReadSetup(ctx context.Context, r BinaryRunner, tools SetupTools, srv Server, sshHost string) []SetupCheck {
 	ctx = WithTarget(ctx, srv.Name)
 	psql := tools.Psql
 	if psql == "" {
@@ -160,7 +171,9 @@ func ReadSetup(ctx context.Context, r BinaryRunner, tools SetupTools, srv Server
 		Settings:      settings,
 		ClientVersion: client,
 		SlotName:      strings.TrimSpace(srv.Slot),
-		ArchiverOn:    isOn(srv.Archiver),
+		ArchiverOn:    IsOn(srv.Archiver),
+		ServerName:    srv.Name,
+		SSHHost:       sshHost,
 	})
 }
 
@@ -195,6 +208,54 @@ func alter(name, value string, restart bool) string {
 		s += "\nSELECT pg_reload_conf();"
 	}
 	return s
+}
+
+// ArchiveCommand is the archive_command advised for a server: barman-wal-archive
+// sends each WAL file to pgCellar's Barman over SSH (package barman-cli on the
+// PostgreSQL server). host is how PostgreSQL reaches the pgCellar host.
+func ArchiveCommand(host, server string) string {
+	if strings.TrimSpace(host) == "" {
+		host = "<pgcellar host>"
+	}
+	if strings.TrimSpace(server) == "" {
+		server = "<server>"
+	}
+	return "barman-wal-archive " + host + " " + server + " %p"
+}
+
+const insufficientPrivilege = "<insufficient privilege>"
+
+func archiveCommandCheck(in SetupInput, s PGSetting) SetupCheck {
+	cmd := strings.TrimSpace(s.Value)
+	c := SetupCheck{Key: "archive_command", Name: "archive_command", Value: cmd, Restart: needsRestart(s)}
+	want := ArchiveCommand(in.SSHHost, in.ServerName)
+	fix := alter("archive_command", "'"+want+"'", c.Restart)
+	switch {
+	case !in.ArchiverOn:
+		c.Level, c.Why = SetupInfo, "Not used: WAL reaches Barman by streaming, not by archive_command."
+	case cmd == insufficientPrivilege:
+		c.Level, c.Value = SetupInfo, "hidden"
+		c.Why = "The role pgCellar connects with may not read archive_command. Grant it pg_read_all_settings (or pg_monitor) so that pgCellar can check it."
+		c.Fix = "GRANT pg_read_all_settings TO <role>;\n-- the command to expect:\n" + fix
+	case cmd == "" || cmd == "(disabled)" || (!strings.Contains(cmd, "barman-wal-archive") && !strings.Contains(cmd, "/incoming/")):
+		if cmd == "" {
+			c.Value = "(empty)"
+		}
+		c.Level, c.Expected = SetupError, "barman-wal-archive "+orPlaceholder(in.SSHHost, "<pgcellar host>")+" "+orPlaceholder(in.ServerName, "<server>")+" %p"
+		c.Why = "This server is backed up with archiver = on but PostgreSQL does not send its WAL files to Barman: archive_command is empty or is not barman-wal-archive."
+		c.Fix = fix + "\n-- barman-cli must be installed on the PostgreSQL server, and the SSH key of pgCellar authorised for the postgres user (page SSH key)."
+	default:
+		c.Level, c.Why = SetupInfo, "PostgreSQL sends WAL files to Barman with this command. pgCellar cannot test it from here: run switch-wal --archive on the server page and look at the WAL archive check."
+		c.Fix = fix
+	}
+	return c
+}
+
+func orPlaceholder(v, p string) string {
+	if strings.TrimSpace(v) == "" {
+		return p
+	}
+	return v
 }
 
 func needsRestart(s PGSetting) bool { return s.Context == "postmaster" }
@@ -267,9 +328,14 @@ func EvaluateSetup(in SetupInput) []SetupCheck {
 		default:
 			c.Level, c.Expected = SetupError, "on"
 			c.Why = "This server is backed up with archiver = on (archive_command) but PostgreSQL does not archive WAL."
-			c.Fix = alter("archive_mode", "'on'", c.Restart) + "\n-- and archive_command = 'barman-wal-archive <barman host> " + "<server> %p'"
+			c.Fix = alter("archive_mode", "'on'", c.Restart) + "\n-- archive_mode needs a restart of PostgreSQL; a reload is not enough.\n" +
+				alter("archive_command", "'"+ArchiveCommand(in.SSHHost, in.ServerName)+"'", false)
 		}
 		out = append(out, c)
+	}
+
+	if s, ok := in.Settings["archive_command"]; ok {
+		out = append(out, archiveCommandCheck(in, s))
 	}
 
 	if s, ok := get("archive_timeout"); ok {
@@ -398,6 +464,9 @@ func DerivedSetup(checks []CheckResult, srv Server) []SetupCheck {
 		{"postgresql_streaming", SetupKeyStreaming, "Streaming access"},
 		{"superuser_or_standard_user_with_backup_privileges", SetupKeyPrivileges, "Role privileges"},
 		{"replication_slot", SetupKeySlot, "Replication slot"},
+		{"wal_archive", SetupKeyBarmanWALArchive, "WAL archive (Barman check)"},
+		{"archive_command", SetupKeyBarmanArchiveCommand, "archive_command (Barman check)"},
+		{"archive_mode", SetupKeyBarmanArchiveMode, "archive_mode (Barman check)"},
 	}
 	var out []SetupCheck
 	for _, sp := range spec {

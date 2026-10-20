@@ -257,7 +257,7 @@ func TestReadSetupThroughTheAuditedRunner(t *testing.T) {
 	r := CLIRunner{Audit: func(e AuditEntry) { entries = append(entries, e) }}
 	tools := SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 
-	rows := ReadSetup(WithActor(context.Background(), "tester"), r, tools, Server{Name: "pg-main", ConnInfo: "host=pg-main.example.com user=barman password=nope dbname=postgres"})
+	rows := ReadSetup(WithActor(context.Background(), "tester"), r, tools, Server{Name: "pg-main", ConnInfo: "host=pg-main.example.com user=barman password=nope dbname=postgres"}, "")
 	got := levels(rows)
 	if got["wal_level"] != SetupOK || got["archive_timeout"] != SetupWarning || got["client_version"] != SetupOK || got["summarize_wal"] != SetupInfo {
 		t.Fatalf("rows = %v", got)
@@ -274,8 +274,81 @@ func TestReadSetupThroughTheAuditedRunner(t *testing.T) {
 	}
 
 	// An unreachable server gives one error line and nothing else.
-	rows = ReadSetup(context.Background(), r, tools, Server{Name: "x", ConnInfo: "host=nowhere.example.com user=barman"})
+	rows = ReadSetup(context.Background(), r, tools, Server{Name: "x", ConnInfo: "host=nowhere.example.com user=barman"}, "")
 	if len(rows) != 1 || rows[0].Key != SetupKeyUnreadable || rows[0].Level != SetupError || !strings.HasPrefix(rows[0].Why, "Could not read the server settings: psql: error: connection to server") {
 		t.Errorf("rows = %+v", rows)
+	}
+}
+
+func TestSetupArchiveCommand(t *testing.T) {
+	row := func(value string) map[string]PGSetting {
+		m := set()
+		m["archive_command"] = PGSetting{Value: value, Context: "sighup"}
+		return m
+	}
+	find := func(rows []SetupCheck) SetupCheck {
+		for _, c := range rows {
+			if c.Key == "archive_command" {
+				return c
+			}
+		}
+		t.Fatalf("no archive_command line in %v", levels(rows))
+		return SetupCheck{}
+	}
+	in := func(value string, on bool) SetupInput {
+		return SetupInput{Settings: row(value), ArchiverOn: on, ServerName: "pg-main", SSHHost: "cellar.example.com"}
+	}
+	wantFix := "ALTER SYSTEM SET archive_command = 'barman-wal-archive cellar.example.com pg-main %p';\nSELECT pg_reload_conf();"
+
+	if c := find(EvaluateSetup(in("", false))); c.Level != SetupInfo || !strings.Contains(c.Why, "Not used") {
+		t.Errorf("archiver off: %+v", c)
+	}
+	for _, empty := range []string{"", "(disabled)", "/bin/true", "cp %p /mnt/wal/%f"} {
+		c := find(EvaluateSetup(in(empty, true)))
+		if c.Level != SetupError || c.Restart || !strings.Contains(c.Fix, wantFix) {
+			t.Errorf("archive_command %q: %+v", empty, c)
+		}
+	}
+	c := find(EvaluateSetup(in("barman-wal-archive cellar.example.com pg-main %p", true)))
+	if c.Level != SetupInfo || !strings.Contains(c.Fix, wantFix) {
+		t.Errorf("good command: %+v", c)
+	}
+	if c := find(EvaluateSetup(in("rsync -a %p barman@pi:/var/lib/barman/pg-main/incoming/%f", true))); c.Level != SetupInfo {
+		t.Errorf("rsync into incoming/ is a valid way to ship WAL: %+v", c)
+	}
+	if c := find(EvaluateSetup(in("<insufficient privilege>", true))); c.Level != SetupInfo || !strings.Contains(c.Fix, "pg_read_all_settings") {
+		t.Errorf("hidden command: %+v", c)
+	}
+
+	// archive_mode off with archiver on: error, restart, and the exact command.
+	m := set()
+	m["archive_mode"] = PGSetting{Value: "off", Context: "postmaster"}
+	for _, c := range EvaluateSetup(SetupInput{Settings: m, ArchiverOn: true, ServerName: "pg-main", SSHHost: "cellar.example.com"}) {
+		if c.Key == "archive_mode" {
+			if c.Level != SetupError || !c.Restart || !strings.Contains(c.Fix, "ALTER SYSTEM SET archive_mode = 'on';") || !strings.Contains(c.Fix, "restart") || !strings.Contains(c.Fix, wantFix) {
+				t.Errorf("archive_mode fix: %+v", c)
+			}
+		}
+	}
+	// Without a host the fix holds a placeholder, never an empty word.
+	if got := ArchiveCommand("", ""); got != "barman-wal-archive <pgcellar host> <server> %p" {
+		t.Errorf("ArchiveCommand = %q", got)
+	}
+}
+
+func TestDerivedSetupWALArchive(t *testing.T) {
+	rows := DerivedSetup([]CheckResult{
+		{Name: "WAL archive", OK: false},
+		{Name: "archive_command", OK: false},
+		{Name: "archive_mode", OK: true},
+	}, Server{})
+	got := levels(rows)
+	if len(rows) != 3 || got[SetupKeyBarmanWALArchive] != SetupError || got[SetupKeyBarmanArchiveCommand] != SetupError || got[SetupKeyBarmanArchiveMode] != SetupOK {
+		t.Fatalf("rows = %+v", rows)
+	}
+	for _, r := range rows {
+		if !r.IsDerived() {
+			t.Errorf("%s must be derived: it is recomputed from the cached check", r.Key)
+		}
 	}
 }

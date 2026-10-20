@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
 )
 
@@ -61,7 +62,7 @@ type formData struct {
 }
 
 func (s *Server) serverNewForm(w http.ResponseWriter, r *http.Request, u *userCtx) {
-	in := app.ServerInput{BackupMethod: "postgres", Schedule: config.Schedule{Backup: "daily 02:00", Enabled: true}, Retention: config.Retention{RecoveryWindowDays: 14, MinimumRedundancy: 2}}
+	in := app.ServerInput{BackupMethod: "postgres", WALMethod: app.WALStreaming, Schedule: config.Schedule{Backup: "daily 02:00", Enabled: true}, Retention: config.Retention{RecoveryWindowDays: 14, MinimumRedundancy: 2}}
 	s.render(w, http.StatusOK, "server_new", s.newPage(r, u, tr("servers.new"), "servers", formData{In: in, Action: "/servers", CSRF: u.CSRF, New: true}))
 }
 
@@ -86,7 +87,7 @@ func parseServerForm(r *http.Request) (app.ServerInput, []string) {
 	in := app.ServerInput{
 		Name: f("name"), Label: f("label"), Description: f("description"),
 		BackupMethod: f("backup_method"), ConnInfo: f("conninfo"), StreamingConnInfo: f("streaming_conninfo"),
-		Slot: f("slot_name"), SSHCommand: f("ssh_command"),
+		Slot: f("slot_name"), SSHCommand: f("ssh_command"), WALMethod: f("wal_method"),
 		Schedule: config.Schedule{Backup: f("schedule_backup"), Enabled: f("schedule_enabled") != ""},
 	}
 	in.Retention.RecoveryWindowDays = atoi(r, "recovery_window_days", &problems)
@@ -599,4 +600,58 @@ func (s *Server) recoveryDownload(w http.ResponseWriter, r *http.Request, u *use
 	w.Header().Set("Content-Type", "application/gzip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
 	http.ServeFile(w, r, path)
+}
+
+// ---- SSH key ----
+
+type sshServerRow struct {
+	Name       string
+	SSHCommand string
+	WALMethod  string
+	Archive    bool   // WAL is shipped by archive_command
+	Command    string // the archive_command to set on that server
+}
+
+type sshKeyData struct {
+	Key     app.SSHKeyView
+	Servers []sshServerRow
+}
+
+func (s *Server) sshKeyPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	key, err := s.app.SSHKey(u.Name)
+	if err != nil {
+		s.fail(w, r, u, err)
+		return
+	}
+	data := sshKeyData{Key: key}
+	if list, err := s.app.ListServers(r.Context()); err == nil {
+		for _, d := range list {
+			if !d.HasFile {
+				continue
+			}
+			row := sshServerRow{Name: d.Name, SSHCommand: d.SSHCommand, WALMethod: d.WALMethod}
+			row.Archive = d.WALMethod == app.WALArchiveCommand || d.WALMethod == app.WALBoth
+			row.Command = barman.ArchiveCommand(key.Host, d.Name)
+			data.Servers = append(data.Servers, row)
+		}
+	}
+	s.render(w, http.StatusOK, "ssh_key", s.newPage(r, u, tr("nav.ssh_key"), "ssh-key", data))
+}
+
+func (s *Server) serverSSHTest(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	name := r.PathValue("name")
+	res, err := s.app.TestSSH(r.Context(), u.Name, name)
+	if err != nil {
+		s.fail(w, r, u, err)
+		return
+	}
+	out := map[string]any{"Class": "ok", "Text": "SSH connection to the PostgreSQL server of " + name + ": OK."}
+	if !res.OK {
+		out = map[string]any{"Class": "bad", "Text": "SSH connection to the PostgreSQL server of " + name + " failed.", "Output": res.Message}
+	}
+	if !isHX(r) {
+		http.Redirect(w, r, "/servers/"+name, http.StatusSeeOther)
+		return
+	}
+	s.fragment(w, http.StatusOK, "result_fragment", out)
 }

@@ -159,3 +159,48 @@ func TestSetupErrorFailsTheServer(t *testing.T) {
 		t.Error("unknown server should be refused")
 	}
 }
+
+// With archiver on, archive_mode and archive_command are checked on the server.
+func TestSetupWALShippingChecks(t *testing.T) {
+	e := apptest.New(t)
+	ctx := t.Context()
+	in, err := e.App.CurrentInput(ctx, "pg-main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.WALMethod != app.WALStreaming {
+		t.Fatalf("pg-main wal method = %q", in.WALMethod)
+	}
+	in.WALMethod = app.WALBoth
+	if _, err := e.App.UpdateServer("tester", "pg-main", in); err != nil {
+		t.Fatal(err)
+	}
+	changeFixture(t, "archive_timeout\t0\t", "archive_command\t\t\tsighup\narchive_timeout\t0\t")
+	if _, err := e.App.Check(ctx, "tester", "pg-main"); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := e.App.State("pg-main")
+	host, _ := os.Hostname()
+	var mode, cmd *barman.SetupCheck
+	for i := range st.Setup {
+		switch st.Setup[i].Key {
+		case "archive_mode":
+			mode = &st.Setup[i]
+		case "archive_command":
+			cmd = &st.Setup[i]
+		}
+	}
+	if mode == nil || cmd == nil {
+		t.Fatalf("lines missing: %v", setupLevels(st))
+	}
+	if mode.Level != barman.SetupError || !mode.Restart {
+		t.Errorf("archive_mode = %+v", mode)
+	}
+	want := "archive_command = 'barman-wal-archive " + host + " pg-main %p';"
+	if cmd.Level != barman.SetupError || !strings.Contains(cmd.Fix, strings.Replace(want, "archive_command = ", "ALTER SYSTEM SET archive_command = ", 1)) {
+		t.Errorf("archive_command = %+v (want %s)", cmd, want)
+	}
+	if st.Level != app.LevelFail {
+		t.Errorf("health %q: a setup error fails the server", st.Level)
+	}
+}
