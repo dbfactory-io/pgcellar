@@ -338,6 +338,9 @@ func (a *App) CreateServer(actor string, in ServerInput) (*WriteResult, error) {
 	if findFile(files, in.Name) != nil {
 		return nil, &ConflictError{Msg: fmt.Sprintf("A server named %q already exists.", in.Name)}
 	}
+	if msg := a.License().AddError(len(a.serverNameSet(files, a.Config()))); msg != "" {
+		return nil, &ConflictError{Msg: msg}
+	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("cannot create %s: %w", dir, err)
 	}
@@ -348,6 +351,7 @@ func (a *App) CreateServer(actor string, in ServerInput) (*WriteResult, error) {
 		_ = os.Remove(filepath.Join(dir, in.Name+".conf"))
 		return nil, err
 	}
+	a.invalidateServerCount()
 	_ = a.Store.AddAudit(actor, "server.create", in.Name, "")
 	return a.finishWrite("add server "+in.Name, actor), nil
 }

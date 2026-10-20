@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/stranix79/pgcellar/internal/alerts"
 	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
 	"github.com/stranix79/pgcellar/internal/store"
@@ -60,6 +62,14 @@ type App struct {
 	// copy that is recovering (0 = 2 s).
 	DrillTools        DrillTools
 	DrillPollInterval time.Duration
+	// AlertOptions lets tests aim the alert channels at local servers.
+	AlertOptions alerts.Options
+	// AlertsInterval is how often the alert loop looks at the state (0 = 30 s).
+	// AlertsSince is the start of the quiet period after startup; zero = none.
+	AlertsInterval time.Duration
+	AlertsSince    time.Time
+	// LicensePublicKey replaces the embedded verification key (tests).
+	LicensePublicKey ed25519.PublicKey
 
 	ConfigPath string // absolute path of pgcellar.yaml
 	ConfigDir  string // its directory, a git repository
@@ -81,6 +91,8 @@ type App struct {
 	cfgChecked time.Time
 
 	sched   schedState
+	alerts  alertEngine
+	lic     licenseCache
 	runMu   sync.Mutex
 	running map[string]int64 // server -> run id of the backup in progress
 
@@ -294,6 +306,14 @@ func (a *App) Start(ctx context.Context) {
 		defer a.wg.Done()
 		a.statusLoop(ctx)
 	}()
+	if !a.Dev {
+		a.AlertsSince = a.now()
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			a.alertsLoop(ctx)
+		}()
+	}
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()

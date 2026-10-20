@@ -102,48 +102,12 @@ func fmtWhen(t time.Time) template.HTML {
 		t.UTC().Format(time.RFC3339), template.HTMLEscapeString(fmtTime(t)), template.HTMLEscapeString(whenText(t, time.Now()))))
 }
 
-// summary counts the servers by level and writes the one-sentence headline of
-// the status page, with the level it should be dressed in.
-type summary struct {
-	Level string // ok, warn, fail, empty
-	Text  string
-	Sub   string
-}
+// summary is the headline of the status page; the wording lives in
+// app.Summarize so that the daily alert says the same thing.
+type summary = app.Summary
 
 func summarize(states []app.ServerState, stale bool) summary {
-	var fail, warn int
-	for _, s := range states {
-		switch s.Level {
-		case app.LevelFail:
-			fail++
-		case app.LevelWarn:
-			warn++
-		}
-	}
-	var sm summary
-	switch {
-	case len(states) == 0:
-		sm = summary{Level: "empty", Text: tr("status.none")}
-	case fail == 1:
-		sm = summary{Level: app.LevelFail, Text: tr("status.fail_one")}
-	case fail > 1:
-		sm = summary{Level: app.LevelFail, Text: fmt.Sprintf(tr("status.fail_many"), fail)}
-	case warn == 1:
-		sm = summary{Level: app.LevelWarn, Text: tr("status.warn_one")}
-	case warn > 1:
-		sm = summary{Level: app.LevelWarn, Text: fmt.Sprintf(tr("status.warn_many"), warn)}
-	default:
-		sm = summary{Level: app.LevelOK, Text: tr("status.ok")}
-	}
-	if fail > 0 && warn == 1 {
-		sm.Sub = tr("status.also_warn_one")
-	} else if fail > 0 && warn > 1 {
-		sm.Sub = fmt.Sprintf(tr("status.also_warn_many"), warn)
-	}
-	if stale && len(states) > 0 {
-		sm.Sub = strings.TrimSpace(sm.Sub + " " + tr("status.refreshing"))
-	}
-	return sm
+	return app.Summarize(states, stale, tr)
 }
 
 // fmtSpan shows a backup's time: start and duration when it lasted under a

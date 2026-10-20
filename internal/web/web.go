@@ -31,7 +31,7 @@ type Server struct {
 	apiH    http.Handler
 }
 
-var pages = []string{"login", "status", "servers", "server_new", "server", "restore", "ssh_key", "runs", "run", "history", "audit", "error"}
+var pages = []string{"login", "status", "servers", "server_new", "server", "restore", "ssh_key", "runs", "run", "history", "audit", "error", "alerts"}
 
 func funcs(assets map[string]string) template.FuncMap {
 	return template.FuncMap{
@@ -167,6 +167,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /runs/{id}/fragment", s.guard(app.RoleViewer, s.runFragment))
 	mux.HandleFunc("GET /history", s.guard(app.RoleViewer, s.historyPage))
 	mux.HandleFunc("GET /audit", s.guard(app.RoleAdmin, s.auditPage))
+	mux.HandleFunc("GET /alerts", s.guard(app.RoleAdmin, s.alertsPage))
+	mux.HandleFunc("POST /alerts/test", s.guard(app.RoleAdmin, s.alertsTest))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, r, nil, http.StatusNotFound, "This page does not exist.")
 	})
@@ -208,6 +210,7 @@ type page struct {
 	CanAdmin       bool
 	Dev            bool
 	Version        string
+	LicenseFooter  string
 	Msg, Warn, Err string
 	Data           any
 }
@@ -215,6 +218,7 @@ type page struct {
 func (s *Server) newPage(r *http.Request, u *userCtx, title, active string, data any) page {
 	p := page{Title: title, Active: active, Dev: s.app.Dev, Version: s.app.Version, Data: data}
 	if u != nil {
+		p.LicenseFooter = s.app.LicenseInfo().Footer
 		p.User, p.Role, p.CSRF = u.Name, u.Role, u.CSRF
 		p.CanOperate = app.RoleAtLeast(u.Role, app.RoleOperator)
 		p.CanAdmin = app.RoleAtLeast(u.Role, app.RoleAdmin)

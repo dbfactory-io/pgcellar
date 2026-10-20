@@ -397,7 +397,7 @@ func TestMetricsAndHealth(t *testing.T) {
 			t.Errorf("metrics lacks %q", want)
 		}
 	}
-	line := regexp.MustCompile(`^(#.*|[a-z_]+\{[a-z]+="[^"]*"\} [0-9]+)$`)
+	line := regexp.MustCompile(`^(#.*|[a-z_]+(\{[a-z]+="[^"]*"(,[a-z]+="[^"]*")*\})? [0-9]+)$`)
 	for _, l := range strings.Split(strings.TrimSpace(body), "\n") {
 		if !line.MatchString(l) {
 			t.Errorf("not valid exposition format: %q", l)

@@ -26,12 +26,13 @@ type statusData struct {
 	Stale   bool   // states come from before the restart; the first refresh is running
 	Summary summary
 	Storage []storageLine // one line per file system holding backups
+	License string        // discreet banner: over the quota, or expired
 }
 
 func (s *Server) statusData() statusData {
 	states, at, errMsg := s.app.States()
 	stale := s.app.CacheStale()
-	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states)}
+	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states), License: s.app.LicenseInfo().Banner}
 }
 
 func (s *Server) statusPage(w http.ResponseWriter, r *http.Request, u *userCtx) {

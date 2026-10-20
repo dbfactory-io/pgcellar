@@ -136,6 +136,15 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			"/audit": m{
 				"get": op("Audit log", "admin", m{"parameters": []m{{"name": "limit", "in": "query", "schema": m{"type": "integer"}}}, "responses": m{"200": resp("Audit entries", nil)}}),
 			},
+			"/alerts": m{
+				"get": op("Alert channels (no secrets: only whether each environment variable is set) and the journal of the latest messages", "admin", m{"parameters": []m{{"name": "limit", "in": "query", "schema": m{"type": "integer"}}}, "responses": m{"200": resp("Channels and journal", nil)}}),
+			},
+			"/alerts/test": m{
+				"post": op("Send a test message to one channel (JSON body {\"channel\": \"telegram\"}) or to all when the body is empty; audited", "admin", m{"responses": m{"200": resp("One result per channel", nil), "404": errResp, "409": errResp}}),
+			},
+			"/license": m{
+				"get": op("The licence in force: edition, licensee, servers allowed and used, expiry, state", "viewer", m{"responses": m{"200": resp("Licence", nil)}}),
+			},
 			"/ssh/authorized-keys": m{
 				"get": op("Keys allowed to push WAL files to the SSH companion (the file ~barman/.ssh/authorized_keys, read at each call)", "admin", m{"responses": m{"200": resp("Authorised keys", m{"type": "object", "properties": m{"data": m{"type": "array", "items": ref("AuthorizedKey")}}})}}),
 				"post": op("Authorise the public key of the postgres user of a PostgreSQL server; the line is restricted to `barman put-wal <server>`", "admin", m{

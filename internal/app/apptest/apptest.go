@@ -17,6 +17,7 @@ import (
 	"github.com/stranix79/pgcellar/internal/app"
 	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/stranix79/pgcellar/internal/license"
 )
 
 // Env is what a test gets.
@@ -30,6 +31,8 @@ type Env struct {
 	SSHHome   string            // home whose .ssh holds the test key pair
 	SSHLog    string            // FAKE_SSH_LOG
 	Keys      map[string]string // role -> clear API key
+	// LicenseKey issues a licence key that the App of this environment accepts.
+	LicenseKey func(edition string, servers int, expires string) string
 }
 
 // Password of every test user.
@@ -147,6 +150,20 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 		keys[role] = clear
 		cfg.APIKeys = append(cfg.APIKeys, config.APIKey{Name: role + "-key", Role: role, KeyHash: h})
 	}
+	// A test licence (Business, unlimited, valid far ahead) signed by a throw-away
+	// key, so that tests are not limited to the 2 servers of the Free edition.
+	licPub, licPriv, err := license.GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue := func(edition string, servers int, expires string) string {
+		k, err := license.Sign(licPriv, license.Payload{ID: "test", Edition: edition, Licensee: "Test", Servers: servers, Issued: "2026-01-01", Expires: expires})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return k
+	}
+	cfg.License.Key = issue(license.Business, 0, "2099-12-31")
 	if mutate != nil {
 		mutate(cfg)
 	}
@@ -160,6 +177,7 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 		t.Fatal(err)
 	}
 	a.Version = "test"
+	a.LicensePublicKey = licPub
 	a.SSHHome = filepath.Join(dir, "barman-home-dir")
 	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 	a.DrillTools = app.DrillTools{PgCtl: "fake-pg_ctl", PgIsReady: "fake-pg_isready", PgChecksums: "fake-pg_checksums"}
@@ -168,7 +186,7 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 	a.Now = func() time.Time { return fixed }
 	t.Cleanup(func() { _ = a.Close() })
 	a.RefreshStatuses(context.Background())
-	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, SSHHome: a.SSHHome, SSHLog: sshLog, Keys: keys}
+	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, SSHHome: a.SSHHome, SSHLog: sshLog, Keys: keys, LicenseKey: issue}
 }
 
 // WaitRun waits until a run has finished and returns it.

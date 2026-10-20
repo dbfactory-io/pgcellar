@@ -1,5 +1,7 @@
 package web
 
+import "github.com/stranix79/pgcellar/internal/app"
+
 // Every user-visible label that is not part of a sentence goes through here,
 // so that a French (or other) catalogue can be added without touching the
 // templates. Missing keys fall back to the key itself.
@@ -42,51 +44,42 @@ var messages = map[string]string{
 	"audit.title":       "Audit log",
 
 	// Look and feel: the status headline, empty states, small celebrations.
-	"motto":                 "The barman serves, the cellar keeps.",
-	"level.ok":              "Healthy",
-	"level.warn":            "Attention",
-	"level.fail":            "Failing",
-	"status.ok":             "Everything is fine ✅",
-	"status.warn_one":       "1 server needs attention ⚠️",
-	"status.warn_many":      "%d servers need attention ⚠️",
-	"status.fail_one":       "1 server is failing ❌ — start there.",
-	"status.fail_many":      "%d servers are failing ❌ — start there.",
-	"status.also_warn_one":  "1 more server needs attention.",
-	"status.also_warn_many": "%d more servers need attention.",
-	"status.refreshing":     "🔄 Showing the last known state while pgCellar refreshes.",
-	"status.none":           "No server to watch yet 🍷",
-	"status.none_hint":      "Add a server and pgCellar will tell you, in plain words, whether its backups are fine.",
-	"status.last_backup":    "Last backup finished",
-	"status.no_backup":      "No backup yet",
-	"unit.backup":           "backup",
-	"unit.backups":          "backups",
-	"empty.cellar":          "Nothing in the cellar yet 🍷",
-	"empty.cellar_hint":     "The first backup will show up here.",
-	"runs.empty_fun":        "No run yet. Pour the first one?",
-	"run.done":              "Backup done in",
-	"run.stocked":           "The cellar is stocked ✨",
-	"run.failed_hint":       "Read the output below, then run the check on the server page.",
-	"busy.checking":         "Checking…",
-	"busy.backup":           "Starting the backup…",
-	"busy.wal":              "Switching the WAL file…",
-	"section.overview":      "Overview",
-	"section.timeline":      "Timeline",
-	"tl.intro":              "What you can restore to: full backups, the WAL that links them, and how far back you can go. Read from Barman's own files, nothing is run.",
-	"tl.now":                "now",
-	"tl.next":               "next backup",
-	"tl.goback":             "You can go back to",
-	"tl.timeline":           "timeline",
-	"tl.legend_backup":      "Full backup",
-	"tl.legend_wal":         "WAL, no hole",
-	"tl.legend_hole":        "Hole in the WAL",
-	"tl.legend_live":        "Streaming, not yet in a complete file",
-	"tl.legend_retention":   "Retention window",
-	"tl.scroll_hint":        "On a narrow screen the picture scrolls sideways; the sentence above says the same.",
-	"section.backups":       "Backups",
-	"section.checks":        "Checks",
-	"section.config":        "Configuration",
-	"section.runs":          "Recent runs",
-	"checks.hint":           "The list comes from the last refresh. Use \"Run check now\" for a live check.",
+	"motto":               "The barman serves, the cellar keeps.",
+	"level.ok":            "Healthy",
+	"level.warn":          "Attention",
+	"level.fail":          "Failing",
+	"status.none_hint":    "Add a server and pgCellar will tell you, in plain words, whether its backups are fine.",
+	"status.last_backup":  "Last backup finished",
+	"status.no_backup":    "No backup yet",
+	"unit.backup":         "backup",
+	"unit.backups":        "backups",
+	"empty.cellar":        "Nothing in the cellar yet 🍷",
+	"empty.cellar_hint":   "The first backup will show up here.",
+	"runs.empty_fun":      "No run yet. Pour the first one?",
+	"run.done":            "Backup done in",
+	"run.stocked":         "The cellar is stocked ✨",
+	"run.failed_hint":     "Read the output below, then run the check on the server page.",
+	"busy.checking":       "Checking…",
+	"busy.backup":         "Starting the backup…",
+	"busy.wal":            "Switching the WAL file…",
+	"section.overview":    "Overview",
+	"section.timeline":    "Timeline",
+	"tl.intro":            "What you can restore to: full backups, the WAL that links them, and how far back you can go. Read from Barman's own files, nothing is run.",
+	"tl.now":              "now",
+	"tl.next":             "next backup",
+	"tl.goback":           "You can go back to",
+	"tl.timeline":         "timeline",
+	"tl.legend_backup":    "Full backup",
+	"tl.legend_wal":       "WAL, no hole",
+	"tl.legend_hole":      "Hole in the WAL",
+	"tl.legend_live":      "Streaming, not yet in a complete file",
+	"tl.legend_retention": "Retention window",
+	"tl.scroll_hint":      "On a narrow screen the picture scrolls sideways; the sentence above says the same.",
+	"section.backups":     "Backups",
+	"section.checks":      "Checks",
+	"section.config":      "Configuration",
+	"section.runs":        "Recent runs",
+	"checks.hint":         "The list comes from the last refresh. Use \"Run check now\" for a live check.",
 
 	// Server setup.
 	"section.setup":     "Server setup",
@@ -189,6 +182,26 @@ var messages = map[string]string{
 	"storage.pace_c":              "is added per day (WAL and backups, last 7 days at most; retention is not taken into account).",
 	"storage.status_line":         "Storage: %s free of %s on %s (%d %% used)",
 	"storage.help":                "Measured at each refresh from Barman's own files and the file system, never by running a command.",
+	"nav.alerts":                  "Alerts",
+	"btn.alert_test":              "Send a test message",
+	"alerts.title":                "Alerts",
+	"alerts.intro":                "pgCellar writes to you when a server changes level, a backup or a restore drill fails, a scheduled run is skipped, and (if you ask for it) once a day with a summary. Secrets are never kept in pgcellar.yaml: it only names the environment variables that hold them.",
+	"alerts.channels":             "Channels",
+	"alerts.env_set":              "is set",
+	"alerts.env_missing":          "is missing",
+	"alerts.none":                 "No channel configured 🔕",
+	"alerts.none_hint":            "Add telegram, mail or webhook under alerts: in pgcellar.yaml (see deploy/pgcellar.example.yaml), restart or wait a second, and come back here to send a test message.",
+	"alerts.rules":                "A problem that lasts is announced once, not at every refresh.",
+	"alerts.repeat":               "It is announced again after",
+	"alerts.repeat_never":         "It is never announced twice (alerts.repeat_every is 0).",
+	"alerts.daily":                "A summary goes out every day at",
+	"alerts.drill_ok":             "A restore drill that passes is announced too.",
+	"alerts.no_base_url":          "base_url is empty in pgcellar.yaml: messages will carry no link to pgCellar.",
+	"alerts.journal":              "Latest messages",
+	"alerts.journal_empty":        "Nothing sent yet.",
+	"alerts.sent":                 "sent",
+	"alerts.failed":               "failed",
+	"license.banner_title":        "Licence",
 }
 
 // tr returns the text for a key.
@@ -197,4 +210,12 @@ func tr(key string) string {
 		return v
 	}
 	return key
+}
+
+// The headline sentences are written once, in internal/app, so that the daily
+// alert says the same thing as the Status page.
+func init() {
+	for k, v := range app.SummaryTexts {
+		messages[k] = v
+	}
 }

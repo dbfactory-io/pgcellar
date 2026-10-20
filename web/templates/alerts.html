@@ -1,0 +1,37 @@
+{{define "content"}}
+{{with .Data}}
+<h1>{{t "alerts.title"}}</h1>
+<p class="muted">{{t "alerts.intro"}}</p>
+
+<section>
+  <h2>{{t "alerts.channels"}}</h2>
+  {{if .Channels}}
+  <ul class="rows">
+  {{range .Channels}}
+    <li class="row">
+      <div class="grow"><strong>{{.Name}}</strong> <span class="muted">{{.Target}}</span></div>
+      <div class="meta">{{range .Env}}<code>{{.Name}}</code> {{if .Set}}{{t "alerts.env_set"}}{{else}}<strong>{{t "alerts.env_missing"}}</strong>{{end}} {{end}}</div>
+      <div><button class="btn alt" hx-post="/alerts/test" hx-vals='{"channel": "{{.Name}}"}' hx-target="#alert-test" hx-swap="innerHTML" hx-disabled-elt="this">{{t "btn.alert_test"}}</button></div>
+    </li>
+  {{end}}
+  </ul>
+  {{else}}
+  <div class="empty"><strong>{{t "alerts.none"}}</strong><p>{{t "alerts.none_hint"}}</p></div>
+  {{end}}
+  <div id="alert-test" aria-live="polite"></div>
+  <p class="muted">{{t "alerts.rules"}} {{if .RepeatEvery}}{{t "alerts.repeat"}} <strong>{{.RepeatEvery}}</strong>.{{else}}{{t "alerts.repeat_never"}}{{end}}{{if .DailySummary}} {{t "alerts.daily"}} <strong>{{.DailySummary}}</strong>.{{end}}{{if .OnDrillSuccess}} {{t "alerts.drill_ok"}}{{end}}</p>
+  {{if not .BaseURLSet}}<div class="flash warn">{{t "alerts.no_base_url"}}</div>{{end}}
+</section>
+
+<section>
+  <h2>{{t "alerts.journal"}}</h2>
+  {{if .Journal}}
+  <ul class="rows">
+  {{range .Journal}}
+    <li class="row"><div class="grow">{{.Text}}</div><div class="meta">{{.Channel}}</div><div class="meta">{{if .OK}}{{t "alerts.sent"}}{{else}}<strong>{{t "alerts.failed"}}</strong>{{end}}</div><div class="meta">{{when .At}}</div>{{if .Error}}<div class="msg meta">{{.Error}}</div>{{end}}</li>
+  {{end}}
+  </ul>
+  {{else}}<div class="empty"><strong>{{t "alerts.journal_empty"}}</strong></div>{{end}}
+</section>
+{{end}}
+{{end}}

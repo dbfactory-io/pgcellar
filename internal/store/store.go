@@ -157,6 +157,18 @@ var migrations = []string{
 		report_path TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX drills_server_started ON drills (server, started_at);`,
+	`CREATE TABLE alerts_sent (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		at TEXT NOT NULL,
+		channel TEXT NOT NULL,
+		kind TEXT NOT NULL,
+		server TEXT NOT NULL DEFAULT '',
+		level TEXT NOT NULL DEFAULT '',
+		text TEXT NOT NULL DEFAULT '',
+		ok INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX alerts_sent_at ON alerts_sent (at);`,
 }
 
 // Migrate applies pending migrations; calling it again is harmless.

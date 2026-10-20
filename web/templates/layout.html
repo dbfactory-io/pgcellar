@@ -24,6 +24,7 @@
       <a href="/runs"{{if eq .Active "runs"}} class="on"{{end}}>{{t "nav.runs"}}</a>
       <a href="/history"{{if eq .Active "history"}} class="on"{{end}}>{{t "nav.history"}}</a>
       {{if .CanAdmin}}<a href="/ssh-key"{{if eq .Active "ssh-key"}} class="on"{{end}}>{{t "nav.ssh_key"}}</a>{{end}}
+      {{if .CanAdmin}}<a href="/alerts"{{if eq .Active "alerts"}} class="on"{{end}}>{{t "nav.alerts"}}</a>{{end}}
       {{if .CanAdmin}}<a href="/audit"{{if eq .Active "audit"}} class="on"{{end}}>{{t "nav.audit"}}</a>{{end}}
     </nav>
     <form class="who" method="post" action="/logout">
@@ -40,7 +41,7 @@
 {{if .Warn}}<div class="flash warn" role="status">{{.Warn}}</div>{{end}}
 {{template "content" .}}
 </main>
-<footer class="wrap foot">pgCellar {{.Version}} &middot; <span>{{t "motto"}}</span></footer>
+<footer class="wrap foot">pgCellar {{.Version}}{{if .LicenseFooter}} &middot; <span class="licence">{{.LicenseFooter}}</span>{{end}} &middot; <span>{{t "motto"}}</span></footer>
 </body>
 </html>
 {{end}}
