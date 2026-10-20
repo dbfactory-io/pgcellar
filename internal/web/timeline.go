@@ -328,7 +328,7 @@ func buildTimelineView(t *app.Timeline) tlView {
 				anchor, tx = "start", tlW-tlMargin-textWidth(label)
 			}
 		}
-		title := fmt.Sprintf("Point-in-time restore is possible from %s (start of backup %s) to %s", whenShort(t.Earliest), t.EarliestBackup, whenShort(t.Latest))
+		title := fmt.Sprintf("Point-in-time restore is possible from %s (end of backup %s) to %s", whenShort(t.Earliest), t.EarliestBackup, whenShort(t.Latest))
 		v.Range = &tlRangeView{
 			Line:  tlLine{X1: ex, X2: ex, Y1: tlTop, Y2: tlRangeY + tlRangeH, Class: "tl-back", Title: title},
 			Bar:   tlRect{X: ex, Y: tlRangeY, W: lx - ex, H: tlRangeH, Class: "tl-back-bar", Title: title},

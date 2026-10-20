@@ -30,7 +30,7 @@ func TestTimelineEndpoint(t *testing.T) {
 	if tot["backups"] != float64(3) || tot["wal_files"] != float64(7) || tot["wal_bytes"] != float64(7*16777216) || tot["wal_gaps"] != float64(0) {
 		t.Errorf("totals = %v", tot)
 	}
-	if e, _ := d["earliest_restore_point"].(string); !strings.Contains(e, "2026-10-18T02:00:01") || d["earliest_backup"] != "20261018T020001" {
+	if e, _ := d["earliest_restore_point"].(string); !strings.Contains(e, "2026-10-18T02:09:01") || d["earliest_backup"] != "20261018T020001" {
 		t.Errorf("earliest = %v (%v)", d["earliest_restore_point"], d["earliest_backup"])
 	}
 	if d["latest_source"] != "streaming" || !strings.Contains(d["latest_restore_point"].(string), "T02:25:00") {

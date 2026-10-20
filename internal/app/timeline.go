@@ -29,7 +29,7 @@ type Timeline struct {
 	Branches  []WALTimeline   `json:"timelines"` // PostgreSQL timelines seen in the WAL
 	Gaps      []TLGap         `json:"wal_gaps"`  // holes in the WAL chain of a timeline
 
-	// Earliest is the begin time of the oldest DONE backup whose WAL chain is
+	// Earliest is the end time of the oldest DONE backup whose WAL chain is
 	// unbroken from its begin_wal to the last filled WAL file; zero when there
 	// is none. Latest is the last byte received when streaming is live, else
 	// the arrival time of the last filled WAL file.
@@ -280,7 +280,10 @@ func buildTimeline(in timelineInput) *Timeline {
 				t.Totals.Full++
 			}
 			if tb.Restorable && t.Earliest.IsZero() {
-				t.Earliest, t.EarliestBackup = b.BeginTime, b.ID
+				t.Earliest, t.EarliestBackup = b.EndTime, b.ID
+				if t.Earliest.IsZero() {
+					t.Earliest = b.BeginTime
+				}
 			}
 		case "FAILED":
 			t.Totals.FailedBackups++

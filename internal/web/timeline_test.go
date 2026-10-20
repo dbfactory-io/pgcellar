@@ -29,8 +29,8 @@ func TestServerPageHasTheTimelineSection(t *testing.T) {
 	for _, want := range []string{
 		`<svg class="tl" viewBox="0 0 640.0 `, `width="100%"`, "<desc id=\"tl-desc\">", "<title>Backup 20261019T020001 (DONE): 1.4 GiB",
 		"1019T020001 · 1.4 GiB", `class="tl-wal"`, `class="tl-now"`, "<title>Now: 20 Oct 02:30</title>",
-		"You can go back to 18 Oct 02:00", `class="tl-back"`, `class="tl-band"`, "Retention window: 14 days",
-		"4 files · 64.0 MiB", "Point-in-time restore is possible between 18 Oct 02:00 and 20 Oct 02:25 (2 days)",
+		"You can go back to 18 Oct 02:09", `class="tl-back"`, `class="tl-band"`, "Retention window: 14 days",
+		"4 files · 64.0 MiB", "Point-in-time restore is possible between 18 Oct 02:09 and 20 Oct 02:25 (2 days)",
 		"3 full backups, 4.2 GiB", "WAL kept: 112.0 MiB", "retention 14 days, min 2", "next backup tomorrow 02:00",
 		`class="tl-live"`,
 	} {
@@ -67,7 +67,7 @@ func TestTimelineSectionShowsHolesAndForks(t *testing.T) {
 	for _, want := range []string{
 		`class="tl-hole"`, "Hole in the WAL: 1 file missing", "1 hole in the WAL (1 file missing)",
 		`class="tl-tli"`, `class="tl-tli cur"`, "timeline 2", "Forked from timeline 1 at 0/6000028", `class="tl-link"`,
-		"You can go back to 20 Oct 02:00",
+		"You can go back to 20 Oct 02:09",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)

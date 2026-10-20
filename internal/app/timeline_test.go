@@ -65,7 +65,7 @@ func TestTimelineContinuousChain(t *testing.T) {
 	if !tl.Available || len(tl.Backups) != 3 || tl.Totals.Backups != 3 || tl.Totals.Full != 3 || tl.Totals.BackupBytes != 3<<20 {
 		t.Fatalf("%+v", tl.Totals)
 	}
-	if !tl.Earliest.Equal(tlT0.Add(10*time.Minute)) || tl.EarliestBackup != "20261020T000000" {
+	if !tl.Earliest.Equal(tlT0.Add(11*time.Minute)) || tl.EarliestBackup != "20261020T000000" {
 		t.Errorf("earliest %v %s", tl.Earliest, tl.EarliestBackup)
 	}
 	for _, b := range tl.Backups {
@@ -95,7 +95,7 @@ func TestTimelineContinuousChain(t *testing.T) {
 	if want := time.Date(2026, 10, 21, 3, 10, 0, 0, now.Location()); !tl.NextBackup.Equal(want) {
 		t.Errorf("next backup %v want %v", tl.NextBackup, want)
 	}
-	if !tl.AxisStart.Before(tl.Earliest) || !tl.AxisEnd.After(now) {
+	if !tl.AxisStart.Before(tl.Backups[0].Begin) || !tl.AxisEnd.After(now) {
 		t.Errorf("axis %v %v", tl.AxisStart, tl.AxisEnd)
 	}
 }
@@ -112,7 +112,7 @@ func TestTimelineGapMovesTheEarliestPoint(t *testing.T) {
 	if tl.Totals.Gaps != 1 || tl.Totals.MissingWALs != 1 || tl.Totals.FailedBackups != 1 {
 		t.Fatalf("totals %+v", tl.Totals)
 	}
-	if tl.EarliestBackup != "b2" || !tl.Earliest.Equal(tlT0.Add(6*time.Hour)) {
+	if tl.EarliestBackup != "b2" || !tl.Earliest.Equal(tlT0.Add(6*time.Hour+time.Minute)) {
 		t.Errorf("earliest %s %v", tl.EarliestBackup, tl.Earliest)
 	}
 	if tl.Backups[0].Restorable || !tl.Backups[1].Restorable || !tl.Backups[2].Restorable || tl.Backups[3].Restorable {
