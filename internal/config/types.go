@@ -8,15 +8,15 @@ import "time"
 // Config is the whole pgcellar.yaml. Keep it boring: strings, lists, maps.
 // A sysadmin, an automation agent or git must be able to edit it by hand.
 type Config struct {
-	Listen   string   `yaml:"listen"`    // ":8080"
-	BaseURL  string   `yaml:"base_url"`  // "https://cellar.example.com", used in links and alerts
-	DataDir  string   `yaml:"data_dir"`  // SQLite and runtime files, e.g. /var/lib/pgcellar
-	Barman   Barman   `yaml:"barman"`
-	Servers  []Server `yaml:"servers"`   // what pgCellar adds on top of barman.d, keyed by name
-	Alerts   Alerts   `yaml:"alerts"`
-	Users    []User   `yaml:"users"`
-	APIKeys  []APIKey `yaml:"api_keys"`
-	Drills   Drills   `yaml:"drills"`
+	Listen  string   `yaml:"listen"`   // ":8080"
+	BaseURL string   `yaml:"base_url"` // "https://cellar.example.com", used in links and alerts
+	DataDir string   `yaml:"data_dir"` // SQLite and runtime files, e.g. /var/lib/pgcellar
+	Barman  Barman   `yaml:"barman"`
+	Servers []Server `yaml:"servers"` // what pgCellar adds on top of barman.d, keyed by name
+	Alerts  Alerts   `yaml:"alerts"`
+	Users   []User   `yaml:"users"`
+	APIKeys []APIKey `yaml:"api_keys"`
+	Drills  Drills   `yaml:"drills"`
 }
 
 // Barman says where Barman lives and how to call it.
@@ -32,7 +32,7 @@ type Barman struct {
 // The name must match a [section] in barman.d.
 type Server struct {
 	Name      string    `yaml:"name"`
-	Label     string    `yaml:"label"`     // free text shown in the UI
+	Label     string    `yaml:"label"` // free text shown in the UI
 	Schedule  Schedule  `yaml:"schedule"`
 	Retention Retention `yaml:"retention"`
 	Tags      []string  `yaml:"tags"`
@@ -41,8 +41,8 @@ type Server struct {
 // Schedule is human-readable and rendered into a crontab line for `barman cron`
 // plus one `barman backup` entry.
 type Schedule struct {
-	Backup string `yaml:"backup"` // "daily 02:00", "weekly sun 03:00", or a raw cron expression
-	Enabled bool  `yaml:"enabled"`
+	Backup  string `yaml:"backup"` // "daily 02:00", "weekly sun 03:00", or a raw cron expression
+	Enabled bool   `yaml:"enabled"`
 }
 
 // Retention mirrors Barman's retention_policy and minimum_redundancy.
@@ -64,12 +64,12 @@ type Alerts struct {
 }
 
 type MailAlert struct {
-	SMTPHost string   `yaml:"smtp_host"`
-	SMTPPort int      `yaml:"smtp_port"`
-	From     string   `yaml:"from"`
-	To       []string `yaml:"to"`
-	UserEnv  string   `yaml:"user_env"`     // name of the env var holding the SMTP user
-	PasswordEnv string `yaml:"password_env"` // name of the env var holding the SMTP password
+	SMTPHost    string   `yaml:"smtp_host"`
+	SMTPPort    int      `yaml:"smtp_port"`
+	From        string   `yaml:"from"`
+	To          []string `yaml:"to"`
+	UserEnv     string   `yaml:"user_env"`     // name of the env var holding the SMTP user
+	PasswordEnv string   `yaml:"password_env"` // name of the env var holding the SMTP password
 }
 
 type TelegramAlert struct {
@@ -97,8 +97,8 @@ type APIKey struct {
 
 // Drills configures the automatic restore drills (milestone 5).
 type Drills struct {
-	Enabled  bool   `yaml:"enabled"`
-	Schedule string `yaml:"schedule"` // "weekly sun 05:00"
-	Image    string `yaml:"image"`    // postgres:16 for the throwaway container
+	Enabled   bool   `yaml:"enabled"`
+	Schedule  string `yaml:"schedule"` // "weekly sun 05:00"
+	Image     string `yaml:"image"`    // postgres:16 for the throwaway container
 	ReportDir string `yaml:"report_dir"`
 }
