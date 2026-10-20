@@ -38,14 +38,21 @@ func (a *App) statusLoop(ctx context.Context) {
 // names found in barman.d are used and the error is returned too.
 func (a *App) serverNames(ctx context.Context) ([]string, error) {
 	names, err := a.Engine.ListServers(barman.WithActor(ctx, systemActor))
-	if err == nil {
+	if err == nil && len(names) > 0 {
 		return names, nil
 	}
 	files, _ := barman.LoadServers(a.barmanConfigDir())
+	var fromFiles []string
 	for _, s := range files {
-		names = append(names, s.Name)
+		fromFiles = append(fromFiles, s.Name)
 	}
-	sort.Strings(names)
+	sort.Strings(fromFiles)
+	if err == nil && len(fromFiles) > 0 {
+		err = fmt.Errorf("Barman lists no server although %d are configured in barman.d", len(fromFiles))
+	}
+	if err != nil {
+		names = fromFiles
+	}
 	return names, err
 }
 

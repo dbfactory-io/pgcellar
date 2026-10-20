@@ -22,7 +22,7 @@ func TestEngineListServers(t *testing.T) {
 	if err != nil || len(names) != 3 {
 		t.Fatalf("%v %v", names, err)
 	}
-	if got := strings.Join((*entries)[0].Args, " "); got != "--format json list-servers --minimal" {
+	if got := strings.Join((*entries)[0].Args, " "); got != "--format json list-servers" {
 		t.Errorf("args = %q", got)
 	}
 }

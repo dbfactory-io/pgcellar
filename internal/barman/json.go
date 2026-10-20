@@ -155,14 +155,24 @@ func pgVersion(v any) string {
 	return fmt.Sprintf("%d.%d.%d", n/10000, (n/100)%100, n%100)
 }
 
-// ParseListServers reads `list-servers` (with or without --minimal). Barman
-// emits {"_INFO": ["name - description", ...]}; descriptions are dropped.
+// ParseListServers reads `list-servers`. Barman 3.20 emits an object indexed
+// by server name, {"chutag": {"description": "..."}, ...}, the same with or
+// without --minimal. The older {"_INFO": ["name - description", ...]} shape is
+// still accepted. Names come back sorted.
 func ParseListServers(data []byte) ([]string, error) {
 	m, err := decodeObject(data)
 	if err != nil {
 		return nil, err
 	}
 	var names []string
+	for k, v := range m {
+		if strings.HasPrefix(k, "_") {
+			continue
+		}
+		if _, ok := v.(map[string]any); ok {
+			names = append(names, k)
+		}
+	}
 	for _, line := range messages(m, "_INFO") {
 		name := strings.TrimSpace(line)
 		if i := strings.Index(name, " - "); i >= 0 {
@@ -172,6 +182,7 @@ func ParseListServers(data []byte) ([]string, error) {
 			names = append(names, name)
 		}
 	}
+	sort.Strings(names)
 	return names, nil
 }
 

@@ -1,1 +1,1 @@
-{"_INFO": ["pg-main - Main database (streaming)", "pg-rsync - Legacy ERP over rsync", "broken - Unreachable server"]}
+{"pg-main": {"description": "Main database (streaming)"}, "pg-rsync": {"description": "Legacy ERP over rsync"}, "broken": {"description": "Unreachable server"}}

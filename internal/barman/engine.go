@@ -38,7 +38,7 @@ func (e *CLIEngine) runJSON(ctx context.Context, args ...string) ([]byte, error)
 }
 
 func (e *CLIEngine) ListServers(ctx context.Context) ([]string, error) {
-	out, err := e.runJSON(ctx, "list-servers", "--minimal")
+	out, err := e.runJSON(ctx, "list-servers")
 	if err != nil {
 		return nil, err
 	}

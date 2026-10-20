@@ -21,11 +21,11 @@ func TestParseListServers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(names) != 3 || names[0] != "pg-main" || names[2] != "broken" {
+	if len(names) != 3 || names[0] != "broken" || names[2] != "pg-rsync" {
 		t.Errorf("names = %v", names)
 	}
 	names, _ = ParseListServers(fixture(t, "list-servers-minimal.json"))
-	if len(names) != 3 || names[1] != "pg-rsync" {
+	if len(names) != 3 || names[1] != "pg-main" {
 		t.Errorf("minimal names = %v", names)
 	}
 }
