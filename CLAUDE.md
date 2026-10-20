@@ -33,6 +33,6 @@ cmd/pgcellar (main: `serve`, `check`, `version`) · internal/barman (INI config 
 1. Foundations: barman package (parse/write barman.d, run CLI, parse JSON of check/list-backups/show-backup/status), config package (yaml + git history), store, fake barman, deploy skeleton. DONE when `go test ./...` is green and `pgcellar check --config deploy/pgcellar.example.yaml` lists the servers from a fixture barman.d.
 2. Web + API: login, Servers page (list, add/edit form writing barman.d, live `barman check` with explanations), Backups page (list per server, run now), Status dashboard, JSON API v1 with api keys, `/metrics`.
 3. SSH keys: generate ed25519 pair for the barman user, show the public key, optional deploy with a one-time password, test connection.
-4. Scheduling and retention: `pgcellar.yaml` schedules rendered into `barman cron`-compatible crontab, retention policy per server written to barman.d.
+4. Scheduling and retention: DONE (2026-10-20). pgCellar runs the `schedule.backup` of each server itself (`internal/app/scheduler.go`, `scheduler:` keys enabled/catch_up/parallel); Barman applies the `retention_policy` written to barman.d from the server form.
 5. PITR wizard and restore drills (restore into a throwaway container, checks, dated PDF report).
 6. Alerts (mail, Telegram, webhook), licence key (Free/Pro/Business, Ed25519-signed, verified offline), release 0.1.
