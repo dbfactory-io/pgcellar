@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
     --format=*) format="${1#--format=}"; shift ;;
     -c|--config|--log-level) shift 2 ;;
     -q|--quiet|-d|--debug) shift ;;
-    -h|--help) echo "usage: barman [-h] [-c CONFIG] [-q] [-d] [-f {json,console}] {check,list-servers,list-backups,show-backup,status,backup,switch-wal,cron} ..."; exit 0 ;;
+    -h|--help) echo "usage: barman [-h] [-c CONFIG] [-q] [-d] [-f {json,console}] {check,diagnose,list-servers,list-backups,show-backup,status,backup,switch-wal,cron} ..."; exit 0 ;;
     -*) echo "barman: error: unrecognized arguments: $1" >&2; exit 2 ;;
     *) break ;;
   esac
@@ -82,6 +82,9 @@ case "$cmd" in
     else
       if [ "$format" = json ]; then cat "$fx/list-servers.json"; else printf 'pg-main - Main database (streaming)\npg-rsync - Legacy ERP over rsync\nbroken - Unreachable server\n'; fi
     fi
+    ;;
+  diagnose)
+    emit diagnose.json
     ;;
   check)
     need_server "${1:-}"

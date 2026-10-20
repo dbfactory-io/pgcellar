@@ -81,6 +81,9 @@ func TestEngineStatusHealthy(t *testing.T) {
 	if st.BackupCount != 3 || st.LastBackup == nil || st.LastBackup.ID != "20261020T020001" || st.LastBackup.PGVersion != "16.4" {
 		t.Errorf("status = %+v last=%+v", st, st.LastBackup)
 	}
+	if st.LastWAL != "000000010000000000000007" || st.LastWALTime.Unix() != 1792455029 {
+		t.Errorf("last WAL from diagnose: %q %v", st.LastWAL, st.LastWALTime)
+	}
 	if st.LastWALTime.IsZero() || len(st.Checks) == 0 {
 		t.Errorf("wal time / checks missing: %+v", st)
 	}

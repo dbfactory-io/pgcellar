@@ -135,8 +135,13 @@ func TestParseStatus(t *testing.T) {
 	if !st.Active || st.BackupCount != 3 || st.LastBackup != "20261020T020001" {
 		t.Errorf("status = %+v", st)
 	}
-	if st.LastWAL != "000000010000000000000007" || st.LastWALTime.Format("2006-01-02 15:04:05") != "2026-10-20 02:10:29" {
-		t.Errorf("last wal = %q %v", st.LastWAL, st.LastWALTime)
+	if st.LastWAL != "" || !st.LastWALTime.IsZero() {
+		t.Errorf("Barman 3.20 status has no last_archived_wal: %q %v", st.LastWAL, st.LastWALTime)
+	}
+	// Older Barman versions still print it.
+	old, _ := ParseStatus([]byte(`{"s": {"last_archived_wal": {"description": "x", "message": "000000010000000000000007, at Tue Oct 20 02:10:29 2026"}}}`), "s")
+	if old.LastWAL != "000000010000000000000007" || old.LastWALTime.Format("2006-01-02 15:04:05") != "2026-10-20 02:10:29" {
+		t.Errorf("legacy last wal = %q %v", old.LastWAL, old.LastWALTime)
 	}
 	r, _ := ParseStatus(fixture(t, "status-pg-rsync.json"), "pg-rsync")
 	if r.LastWAL != "" || !r.LastWALTime.IsZero() {

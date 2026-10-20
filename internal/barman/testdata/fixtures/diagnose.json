@@ -1,0 +1,1 @@
+{"_INFO": ["{\"servers\": {\"broken\": {\"wals\": {\"last_archived_wal_per_timeline\": {}}}, \"pg-main\": {\"wals\": {\"last_archived_wal_per_timeline\": {\"00000001\": {\"compression\": null, \"encryption\": null, \"name\": \"000000010000000000000007\", \"size\": 16777216, \"time\": 1792455029.3}}}}, \"pg-rsync\": {\"wals\": {\"last_archived_wal_per_timeline\": {}}}}}"]}

@@ -51,3 +51,32 @@ func TestRealServerOutputs(t *testing.T) {
 		t.Fatalf("status: %+v %v", st, err)
 	}
 }
+
+func TestRealDiagnoseWAL(t *testing.T) {
+	// `status` of 3.20.1 has no last_archived_wal, `diagnose` is the source.
+	st, _ := ParseStatus(realOut(t, "status-chutag.json"), "chutag")
+	if !st.LastWALTime.IsZero() {
+		t.Fatalf("status unexpectedly carries a WAL time: %v", st.LastWALTime)
+	}
+	name, when, err := ParseDiagnoseWAL(realOut(t, "diagnose-chutag.json"), "chutag")
+	if err != nil || name != "00000001000000000000000A" || when.Unix() != 1792494767 {
+		t.Fatalf("diagnose: %q %v %v", name, when, err)
+	}
+	if _, _, err := ParseDiagnoseWAL(realOut(t, "diagnose-chutag.json"), "nope"); err == nil {
+		t.Error("unknown server should fail")
+	}
+}
+
+func TestDiagnoseWALNewestTimeline(t *testing.T) {
+	doc := `{"servers":{"s":{"wals":{"last_archived_wal_per_timeline":{
+	  "00000001":{"name":"000000010000000000000009","time":1000000000.5},
+	  "00000002":{"name":"000000020000000000000003","time":1000000100.5}}}}}}`
+	name, when, err := ParseDiagnoseWAL([]byte(doc), "s")
+	if err != nil || name != "000000020000000000000003" || when.Unix() != 1000000100 {
+		t.Fatalf("%q %v %v", name, when, err)
+	}
+	name, when, err = ParseDiagnoseWAL([]byte(`{"servers":{"s":{"wals":{"last_archived_wal_per_timeline":{}}}}}`), "s")
+	if err != nil || name != "" || !when.IsZero() {
+		t.Fatalf("empty: %q %v %v", name, when, err)
+	}
+}

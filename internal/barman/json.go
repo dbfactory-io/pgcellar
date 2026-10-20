@@ -365,3 +365,45 @@ func ParseStatus(data []byte, server string) (*StatusInfo, error) {
 	}
 	return st, nil
 }
+
+// ParseDiagnoseWAL reads the archived-WAL part of the global `barman
+// diagnose` output. Barman 3.20 prints {"_INFO": ["<JSON document as text>"]}
+// where the document holds servers.<name>.wals.last_archived_wal_per_timeline:
+// {"<timeline>": {"name": "...", "time": <epoch>, "size": ...}}. It returns
+// the segment with the newest archive time across timelines; the name is empty
+// and the time zero when nothing was archived yet.
+func ParseDiagnoseWAL(data []byte, server string) (string, time.Time, error) {
+	m, err := decodeObject(data)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	doc := m
+	if msgs := messages(m, "_INFO"); len(msgs) > 0 {
+		inner, ierr := decodeObject([]byte(msgs[0]))
+		if ierr != nil {
+			return "", time.Time{}, ierr
+		}
+		doc = inner
+	}
+	o := sub(sub(doc, "servers"), server)
+	if o == nil {
+		if msg := strings.Join(messages(m, "_ERROR"), "; "); msg != "" {
+			return "", time.Time{}, errors.New(msg)
+		}
+		return "", time.Time{}, fmt.Errorf("server %q not found in diagnose output", server)
+	}
+	var name string
+	var when time.Time
+	for _, v := range sub(sub(o, "wals"), "last_archived_wal_per_timeline") {
+		w, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		t := parseTime(asString(w["time"]))
+		if t.IsZero() || !t.After(when) {
+			continue
+		}
+		when, name = t, asString(w["name"])
+	}
+	return name, when, nil
+}

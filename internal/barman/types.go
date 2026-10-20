@@ -67,6 +67,7 @@ type CheckResult struct {
 type ServerStatus struct {
 	Server      string
 	LastBackup  *Backup
+	LastWAL     string // name of the last archived WAL segment, "" if unknown
 	LastWALTime time.Time
 	BackupCount int
 	Checks      []CheckResult

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // CLIEngine implements Engine on top of a Runner.
@@ -81,6 +82,16 @@ func (e *CLIEngine) ShowBackup(ctx context.Context, server, backupID string) (*B
 	return ParseShowBackup(out, server)
 }
 
+// lastArchivedWAL asks `barman diagnose` (global, read-only) for the newest
+// archived WAL segment of a server. The caller treats an error as "unknown".
+func (e *CLIEngine) lastArchivedWAL(ctx context.Context, server string) (string, time.Time, error) {
+	out, err := e.runJSON(ctx, "diagnose")
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return ParseDiagnoseWAL(out, server)
+}
+
 // Status builds the digest of a server from `status`, `list-backups` and
 // `check`. A sub-command that fails does not abort the digest: it becomes a
 // problem, because "Barman could not tell" is itself something to show. Only a
@@ -96,7 +107,16 @@ func (e *CLIEngine) Status(ctx context.Context, server string) (*ServerStatus, e
 	} else if info, perr := ParseStatus(out, server); perr != nil {
 		st.Problems = append(st.Problems, fmt.Sprintf("The status of %s could not be read: %v.", server, perr))
 	} else {
-		st.LastWALTime = info.LastWALTime
+		st.LastWAL, st.LastWALTime = info.LastWAL, info.LastWALTime
+		// Barman 3.20 no longer prints last_archived_wal in `status`: ask
+		// `diagnose`, which reads the same archive catalogue.
+		if info.Active && info.LastWALTime.IsZero() {
+			if name, when, derr := e.lastArchivedWAL(ctx, server); derr == nil {
+				st.LastWAL, st.LastWALTime = name, when
+			} else if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+		}
 		if !info.Active {
 			st.Problems = append(st.Problems, fmt.Sprintf("Server %s is inactive or disabled in Barman, so nothing is backed up.", server))
 		}
