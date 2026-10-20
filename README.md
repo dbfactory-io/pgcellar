@@ -4,6 +4,8 @@ A self-hosted control room for physical PostgreSQL backups with point-in-time re
 
 Try the demo: https://demo.pgcellar.dbfactory.io
 
+Documentation: https://pgcellar.dbfactory.io/docs/ (also as a PDF, https://pgcellar.dbfactory.io/docs/pgcellar-manual.pdf). The source is in `docs/manual/`.
+
 ## Why
 
 Most backup tools with a web UI run dumps. A dump brings you back to last night, not to 14:32 before the bad query. The tools that do physical backups with PITR (Barman, pgBackRest, WAL-G) live in the terminal, with no overview, and nobody tests the restore. So you find out it does not work on the worst day.
