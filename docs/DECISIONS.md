@@ -11,3 +11,4 @@ One line per decision, newest first. Date, decision, why.
 - 2026-10-20 - SQLite driver: modernc.org/sqlite (pure Go, no CGO) so cross-compilation stays trivial.
 - 2026-10-20 - Pricing to test: Free 2 servers / Pro 490 EUR per year up to 10 servers / Business 1 490 EUR per year unlimited. Offline-verified Ed25519 licence keys.
 - 2026-10-20 - Second engine (pgBackRest, MIT) designed for through the `Engine` interface, not built in 0.1.
+- 2026-10-20 - Repository starts as private stranix79/pgcellar; it will be transferred to a dbfactory-io organisation (GitHub keeps redirects) and the module path updated before the first public release.
