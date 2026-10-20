@@ -8,6 +8,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"html"
@@ -61,6 +63,8 @@ type manual struct {
 	IntroMD  string
 	Chapters []*chapter
 	Version  string
+	StyleV   string // fingerprint of site/style.css
+	DocsV    string // fingerprint of site/docs/docs.css
 }
 
 var chapterLine = regexp.MustCompile(`^\s*(\d+)\.\s+\[([^\]]+)\]\(([^)]+\.md)\)\s*(?:[-\x{2013}\x{2014}]\s*(.*))?$`)
@@ -87,6 +91,12 @@ func run(root, version string) error {
 		version = detectVersion(root)
 	}
 	m.Version = version
+	if m.StyleV, err = fingerprint(filepath.Join(root, "site", "style.css")); err != nil {
+		return err
+	}
+	if m.DocsV, err = fingerprint(filepath.Join(outDir, "docs.css")); err != nil {
+		return err
+	}
 
 	if err := ensureImages(filepath.Join(srcDir, "images")); err != nil {
 		return err
@@ -114,6 +124,9 @@ func run(root, version string) error {
 		c.Body, c.TOC = render(c.md, modeSingle, c, m)
 	}
 	if err := writeSingle(m, filepath.Join(outDir, "_manual.html")); err != nil {
+		return err
+	}
+	if err := stampHomePages(root, m.StyleV); err != nil {
 		return err
 	}
 	if err := updateSitemap(filepath.Join(root, "site", "sitemap.xml"), m); err != nil {
@@ -330,6 +343,8 @@ type pageData struct {
 	Body        template.HTML
 	TOC         []tocItem
 	Landing     bool
+	StyleV      string
+	DocsV       string
 	Intro       template.HTML
 }
 
@@ -343,8 +358,8 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <meta name="robots" content="index,follow">
 <link rel="canonical" href="{{.Canonical}}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="/docs/docs.css">
+<link rel="stylesheet" href="/style.css?v={{.StyleV}}">
+<link rel="stylesheet" href="/docs/docs.css?v={{.DocsV}}">
 </head>
 <body class="docs">
 <header class="dtop">
@@ -399,6 +414,8 @@ func writePage(m *manual, i int, outDir string) error {
 		Current:     c,
 		Body:        template.HTML(c.Body),
 		TOC:         c.TOC,
+		StyleV:      m.StyleV,
+		DocsV:       m.DocsV,
 	}
 	if i > 0 {
 		d.Prev = m.Chapters[i-1]
@@ -420,6 +437,8 @@ func writeLanding(m *manual, outDir string) error {
 		Chapters:    m.Chapters,
 		Landing:     true,
 		Intro:       template.HTML(intro),
+		StyleV:      m.StyleV,
+		DocsV:       m.DocsV,
 	}
 	return execTo(pageTmpl, d, filepath.Join(outDir, "index.html"))
 }
@@ -582,6 +601,44 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		if err := os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fingerprint returns the first 12 hex digits of the SHA-256 of a file, the
+// same scheme the application uses for its own assets.
+func fingerprint(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:12], nil
+}
+
+var styleLink = regexp.MustCompile(`href="/style\.css(\?v=[0-9a-f]*)?"`)
+
+// stampHomePages writes the stylesheet fingerprint into the two home pages.
+// They are written by hand, so the fingerprint is set here: this keeps
+// "make docs" the only command that builds the site, and a restyle is never
+// shown with a cached sheet. Running it twice gives the same files.
+func stampHomePages(root, v string) error {
+	for _, rel := range []string{"index.html", filepath.Join("en", "index.html")} {
+		path := filepath.Join(root, "site", rel)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if n := len(styleLink.FindAll(b, -1)); n != 1 {
+			return fmt.Errorf("%s: expected exactly one href=\"/style.css\" attribute, found %d", path, n)
+		}
+		out := styleLink.ReplaceAll(b, []byte(`href="/style.css?v=`+v+`"`))
+		if bytes.Equal(out, b) {
+			continue
+		}
+		if err := os.WriteFile(path, out, 0o644); err != nil {
 			return err
 		}
 	}
