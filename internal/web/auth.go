@@ -23,6 +23,9 @@ const (
 	cookieName  = "pgcellar_session"
 	sessionTTL  = 24 * time.Hour
 	loginTokTTL = time.Hour
+	// loginTokSkew is how far in the future a login token may be dated (clock
+	// drift between a proxy, a container and the host).
+	loginTokSkew = 5 * time.Minute
 )
 
 // userCtx is the signed-in user of a request.
@@ -67,7 +70,7 @@ func (s *Server) loginTokenOK(tok string) bool {
 		return false
 	}
 	n, err := strconv.ParseInt(ts, 10, 64)
-	if err != nil || time.Since(time.Unix(n, 0)) > loginTokTTL || time.Until(time.Unix(n, 0)) > time.Minute {
+	if err != nil || time.Since(time.Unix(n, 0)) > loginTokTTL || time.Until(time.Unix(n, 0)) > loginTokSkew {
 		return false
 	}
 	return hmac.Equal([]byte(sig), []byte(s.mac("login", ts)))

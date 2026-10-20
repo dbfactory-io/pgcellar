@@ -1,7 +1,9 @@
 package web
 
 import (
+	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -260,5 +262,69 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 	if code := post("10.0.0.2:5002", "198.51.100.21"); code == http.StatusTooManyRequests {
 		t.Error("another proxied visitor is limited")
+	}
+}
+
+// The whole sign-in, as a browser or curl does it, against the demo started like
+// `serve --demo` does, with the real clock and a cookie jar.
+func TestDemoSignInEndToEnd(t *testing.T) {
+	f := newDemoFixture(t)
+	ts := httptest.NewServer(f.h)
+	defer ts.Close()
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	get := func(path string) (int, string, string) {
+		resp, err := client.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b), resp.Header.Get("Location")
+	}
+	// The login page holds two forms (the usual one and "Try the demo"), so two
+	// csrf fields: a client must send one of them, not both glued together.
+	for form := 0; form < 2; form++ {
+		code, page, _ := get("/login")
+		toks := csrfRe.FindAllStringSubmatch(page, -1)
+		if code != 200 || len(toks) != 2 {
+			t.Fatalf("login page: %d, %d tokens", code, len(toks))
+		}
+		resp, err := client.PostForm(ts.URL+"/login", url.Values{"csrf": {toks[form][1]}, "next": {"/status"}, "user": {"demo"}, "password": {"demo"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/status" {
+			t.Fatalf("form %d: sign-in answered %d", form, resp.StatusCode)
+		}
+		if code, body, _ := get("/status"); code != 200 || !strings.Contains(body, "erp-prod") {
+			t.Fatalf("form %d: /status answered %d", form, code)
+		}
+		// Sign out: the token of the page, then back to the login page.
+		_, page, _ = get("/status")
+		out := csrfRe.FindStringSubmatch(page)
+		if out == nil {
+			t.Fatal("no csrf field for the sign-out form")
+		}
+		resp, err = client.PostForm(ts.URL+"/logout", url.Values{"csrf": {out[1]}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("logout answered %d", resp.StatusCode)
+		}
+		if code, _, loc := get("/status"); code != http.StatusSeeOther || !strings.HasPrefix(loc, "/login") {
+			t.Fatalf("after logout /status answered %d %s", code, loc)
+		}
+	}
+	// Both tokens glued together (what a careless script sends) is refused.
+	_, page, _ := get("/login")
+	toks := csrfRe.FindAllStringSubmatch(page, -1)
+	resp, _ := client.PostForm(ts.URL+"/login", url.Values{"csrf": {toks[0][1] + "\n" + toks[1][1]}, "user": {"demo"}, "password": {"demo"}})
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("glued tokens: %d", resp.StatusCode)
 	}
 }
