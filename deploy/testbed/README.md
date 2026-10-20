@@ -343,3 +343,24 @@ pgCellar can write a restored PostgreSQL data directory, and optionally a `.tar.
 - nyx keeps its `host all all all trust` line for now (the application's credentials were not verified): the barman lines sit after it, the replication one is the one that matters. Replacing `trust` by `scram-sha-256` is a separate change, to be tested with the nyx application.
 - All the test bed data stays on `/mnt/usbdata/pgcellar`; only the image sits on the SD card.
 - Tear-down: `sudo docker compose down`, remove `/mnt/usbdata/pgcellar`. On hawking drop the slots (`SELECT pg_drop_replication_slot('barman_chutag')`) and the two roles; the `pg_hba.conf.bak-<date>` files hold the original state.
+
+---
+
+## WAL shipping (not done on the test bed)
+
+The test bed streams WAL (`streaming_archiver = on`, see `etc/barman.d/*.conf`). pgCellar can also receive WAL by `archive_command` (WAL method `archive_command` or `both` in the server form, which writes `archiver = on`). Nothing below has been set up or tested on the test bed; this is what it would take.
+
+What `archive_command` needs, in any setup:
+
+- PostgreSQL pushes each finished WAL file over SSH, as the `postgres` user of the database container, to `barman@<pgCellar host>`. The pgCellar host must therefore run an SSH server. The pgCellar Docker image holds `openssh-client` only (and `barman-cli`, which provides `barman-wal-archive`), so on rasp001 this means the Pi's own `sshd` (port 22 or another) with the `barman` account allowed in, or an SSH sidecar container that mounts the same `/var/lib/barman` volume. The key of the `postgres` user of each database container goes into `~barman/.ssh/authorized_keys` of that SSH server. The "SSH key" page of pgCellar shows the key of the other direction (pgCellar to PostgreSQL, used for `rsync` and the connection test) and the whole procedure.
+- On the PostgreSQL side: `archive_mode = on` (restart required) and an `archive_command`. The Barman server file needs `archiver = on`; the "Server setup" section of the server page then checks `archive_mode` and `archive_command` and prints the exact line to set.
+
+The six `postgres:*-alpine` containers of hawking do not contain `barman-cli`, so the recommended command `archive_command = 'barman-wal-archive <ssh_host> <server> %p'` cannot run there. Alternative without any package, with the same SSH key (the Pi must accept the key of the `postgres` user and the container needs `rsync` and `ssh`, which the alpine images lack too: add `apk add rsync openssh-client` to a derived image, or mount a static `rsync`):
+
+```
+archive_command = 'rsync -a %p barman@<pi>:/var/lib/barman/<server>/incoming/%f'
+```
+
+pgCellar accepts that form in its `archive_command` check (any command that writes into `incoming/`), but it has no atomic rename and no checksum: a copy cut short leaves a truncated file in `incoming/`. Prefer `barman-wal-archive` wherever a package can be installed. Also: once WAL arrives by this route, `barman switch-wal --archive <server>` then `barman check <server>` is the verification, and `both` keeps streaming as the fallback.
+
+Since the six instances are reached through the `pg-vpn` relay, which only carries PostgreSQL ports, an SSH path from the database containers to the Pi would also have to be opened (the containers sit on internal Docker networks). This is the main reason WAL shipping was left out of the test bed.
