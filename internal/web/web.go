@@ -5,6 +5,7 @@ package web
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ type Server struct {
 	app     *app.App
 	tpl     map[string]*template.Template
 	static  http.Handler
+	assets  map[string]string
 	secret  []byte
 	limiter *limiter
 	apiH    http.Handler
@@ -31,8 +33,9 @@ type Server struct {
 
 var pages = []string{"login", "status", "servers", "server_new", "server", "runs", "run", "history", "audit", "error"}
 
-func funcs() template.FuncMap {
+func funcs(assets map[string]string) template.FuncMap {
 	return template.FuncMap{
+		"asset":     func(name string) string { return "/static/" + name + "?v=" + assets[name] },
 		"t":         tr,
 		"ts":        fmtTime,
 		"when":      fmtWhen,
@@ -50,18 +53,21 @@ func funcs() template.FuncMap {
 // New builds the web server on top of an App.
 func New(a *app.App) (*Server, error) {
 	s := &Server{app: a, tpl: map[string]*template.Template{}, limiter: newLimiter()}
+	sub, err := fs.Sub(web.FS, "static")
+	if err != nil {
+		return nil, err
+	}
+	if s.assets, err = fingerprints(sub); err != nil {
+		return nil, err
+	}
 	for _, p := range pages {
-		t, err := template.New(p).Funcs(funcs()).ParseFS(web.FS, "templates/layout.html", "templates/fragments.html", "templates/"+p+".html")
+		t, err := template.New(p).Funcs(funcs(s.assets)).ParseFS(web.FS, "templates/layout.html", "templates/fragments.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", p, err)
 		}
 		s.tpl[p] = t
 	}
-	sub, err := fs.Sub(web.FS, "static")
-	if err != nil {
-		return nil, err
-	}
-	s.static = http.StripPrefix("/static/", cacheControl(http.FileServerFS(sub)))
+	s.static = http.StripPrefix("/static/", s.cacheControl(http.FileServerFS(sub)))
 	secret, ok, err := a.Store.GetSetting("csrf_secret")
 	if err != nil {
 		return nil, err
@@ -81,9 +87,35 @@ func New(a *app.App) (*Server, error) {
 	return s, nil
 }
 
-func cacheControl(h http.Handler) http.Handler {
+// fingerprints returns the first 12 hex digits of the SHA-256 of every
+// embedded static file, computed once at startup.
+func fingerprints(fsys fs.FS) (map[string]string, error) {
+	out := map[string]string{}
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(fsys, p)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(b)
+		out[p] = hex.EncodeToString(sum[:])[:12]
+		return nil
+	})
+	return out, err
+}
+
+// cacheControl makes a file immutable when the request carries its current
+// fingerprint (?v=), and otherwise forces revalidation (ETag/Last-Modified).
+func (s *Server) cacheControl(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		name := strings.TrimPrefix(r.URL.Path, "/static/")
+		if v := r.URL.Query().Get("v"); v != "" && v == s.assets[name] {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		h.ServeHTTP(w, r)
 	})
 }
