@@ -309,7 +309,7 @@ The six schedules in `pgcellar.yaml` are `daily 03:00` to `03:50`, ten minutes a
 
 ### B8. Notes
 
-- Memory: `mem_limit: 768m` on a Pi with 3.7 GiB shared with Home Assistant, Grafana and Plex. Watch them during the first runs.
+- Memory: `mem_limit: 768m` on a Pi with 3.7 GiB shared with Home Assistant, Grafana and Plex. Watch them during the first runs. On this Pi the kernel runs without the memory cgroup (`Your kernel does not support memory limit capabilities` at `compose up`), so the limit is ignored; enabling it means `cgroup_enable=memory cgroup_memory=1` in `/boot/firmware/cmdline.txt` and a reboot.
 - The container runs as `barman` (uid 997 in this image). If `docker logs pgcellar` shows `attempt to write a readonly database`, a volume was created by an older root container: `sudo chown -R 997:997 /mnt/usbdata/pgcellar/data` and restart.
 - Do not run `barman backup --wait` by hand on a quiet server: it waits for the current WAL segment, which closes only after 16 MB or a switch. Run `barman backup <server>` then `barman switch-wal --force --archive <server>` (pgCellar does exactly that).
 - nyx keeps its `host all all all trust` line for now (the application's credentials were not verified): the barman lines sit after it, the replication one is the one that matters. Replacing `trust` by `scram-sha-256` is a separate change, to be tested with the nyx application.
