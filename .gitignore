@@ -1,0 +1,6 @@
+/pgcellar
+/dist/
+/build/
+*.db
+*.db-journal
+.DS_Store
