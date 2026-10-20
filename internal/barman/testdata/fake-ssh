@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# fake-ssh: a stand-in for ssh, used by the tests. It never connects.
+# The last argument is the remote command; the host is the first argument that
+# is not an option (or the value of one). A host named "down" or "badkey"
+# fails like ssh does; any other host answers "true" with success.
+# FAKE_SSH_LOG, when set, receives the arguments of every call.
+set -u
+if [ -n "${FAKE_SSH_LOG:-}" ]; then
+  printf '%s\n' "$*" >>"$FAKE_SSH_LOG"
+fi
+host=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|-p|-i|-l) shift 2 ;;
+    -*) shift ;;
+    *) host="$1"; break ;;
+  esac
+done
+host="${host#*@}"
+case "$host" in
+  down) echo "ssh: connect to host down port 22: Connection refused" >&2; exit 255 ;;
+  badkey) echo "postgres@badkey: Permission denied (publickey)." >&2; exit 255 ;;
+esac
+exit 0
