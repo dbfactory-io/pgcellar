@@ -24,6 +24,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   docker build --build-arg PG_MAJORS="17" ...
 ARG PG_MAJORS="16 17 18"
 
+# Locales generated in the image. The data directory of a drill keeps the collation
+# and ctype locale of the source cluster (for example en_US.utf8 for a postgres:16
+# container), and PostgreSQL refuses to start on a locale the system lacks. Add the
+# locale of your clusters here (name as in /usr/share/i18n/SUPPORTED); locales-all
+# would add about 200 MB, so only these are built.
+ARG PG_LOCALES="C.UTF-8 en_US.UTF-8 en_GB.UTF-8 fr_FR.UTF-8 fr_BE.UTF-8 nl_NL.UTF-8 nl_BE.UTF-8 de_DE.UTF-8 es_ES.UTF-8 it_IT.UTF-8 pt_BR.UTF-8"
+
 # PGDG apt repository, as documented on postgresql.org/download/linux/debian
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
@@ -35,7 +42,7 @@ RUN apt-get update \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
       barman barman-cli postgresql-client-18 rsync openssh-client openssh-server \
-      ca-certificates git tzdata postgresql-common \
+      ca-certificates git tzdata postgresql-common locales \
 # Server binaries for the restore drills, nothing else: no cluster is created
 # (create_main_cluster = false), no service is started, and whatever a postinst
 # left behind is removed. Binaries end up in /usr/lib/postgresql/<major>/bin.
@@ -43,6 +50,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends $(for v in ${PG_MAJORS}; do printf 'postgresql-%s ' "$v"; done) \
  && rm -rf /etc/postgresql /var/lib/postgresql/* /var/log/postgresql \
  && for v in ${PG_MAJORS}; do test -x /usr/lib/postgresql/$v/bin/pg_ctl || { echo "missing pg_ctl for PostgreSQL $v" >&2; exit 1; }; done \
+ && for l in ${PG_LOCALES}; do echo "$l UTF-8"; done > /etc/locale.gen \
+ && locale-gen \
  && apt-get purge -y curl gnupg \
  && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*

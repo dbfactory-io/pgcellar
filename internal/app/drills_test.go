@@ -114,7 +114,7 @@ func TestDrillEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"restore_command = 'cp barman_wal/%f %p'", "listen_addresses = '127.0.0.1'", "archive_mode = off", "max_connections = 10", "shared_buffers = 64MB", "unix_socket_directories = '", "hot_standby = off"} {
+	for _, want := range []string{"restore_command = 'cp barman_wal/%f %p'", "listen_addresses = '127.0.0.1'", "archive_mode = off", "max_connections = 10", "shared_buffers = 64MB", "unix_socket_directories = '", "hot_standby = off", "lc_messages = 'C'", "lc_monetary = 'C'", "lc_numeric = 'C'", "lc_time = 'C'"} {
 		if !strings.Contains(string(conf), want) {
 			t.Errorf("postgresql.auto.conf lacks %q:\n%s", want, conf)
 		}
@@ -350,7 +350,13 @@ func TestDrillOneAtATimeAndNeverDuringABackup(t *testing.T) {
 
 	t.Setenv("FAKE_BARMAN_RECOVER_DELAY", "")
 	t.Setenv("FAKE_BARMAN_BACKUP_DELAY", "1")
-	bid, err := e.App.StartBackup(context.Background(), "gilles", "pg-main")
+	var bid int64
+	for i := 0; i < 100; i++ { // the drill frees its slot just after its run is recorded
+		if bid, err = e.App.StartBackup(context.Background(), "gilles", "pg-main"); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,5 +601,30 @@ func TestPurgeRemovesAbandonedDrillCopies(t *testing.T) {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("%s must stay: %v", name, err)
 		}
+	}
+}
+
+func TestDrillMissingLocaleIsExplained(t *testing.T) {
+	e := apptest.New(t)
+	t.Setenv("FAKE_PGCTL_LOCALE_FAIL", "1")
+	run, d := startDrill(t, e, app.DrillInput{})
+	if d.OK || d.StepFailed != "start" {
+		t.Fatalf("%+v", d)
+	}
+	want := "The cluster uses locale en_US.utf8, which this image does not have. Rebuild with PG_LOCALES including en_US.UTF-8 (see deploy/Dockerfile)."
+	if d.Details.Error != want {
+		t.Errorf("error = %q", d.Details.Error)
+	}
+	if !strings.Contains(run.Stdout, "last lines of drill.log") || !strings.Contains(run.Stdout, `invalid value for parameter "lc_messages"`) {
+		t.Errorf("the log tail must be in the run output:\n%s", run.Stdout)
+	}
+}
+
+func TestDrillWALInPgWalIsNotAWarning(t *testing.T) {
+	e := apptest.New(t)
+	t.Setenv("FAKE_BARMAN_NO_RESTORE_COMMAND", "1")
+	run, d := startDrill(t, e, app.DrillInput{})
+	if !d.OK || !strings.Contains(run.Stdout, "Barman placed the required WAL in pg_wal; no restore_command needed") || strings.Contains(run.Stdout, "warning: no restore_command") {
+		t.Errorf("%s", run.Stdout)
 	}
 }

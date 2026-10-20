@@ -459,6 +459,12 @@ func (r *drillRun) execute() (failed string) {
 		_, err := r.exec(r.ctx, r.tool("pg_ctl"), "-D", r.dest, "-o", fmt.Sprintf("-p %d", r.port), "-w", "-t", "300", "-l", filepath.Join(r.dest, "drill.log"), "start")
 		if err != nil {
 			r.det.LogTail = r.logTail()
+			if l := r.logLines(40); l != "" {
+				r.logf("  last lines of drill.log:\n          %s", strings.ReplaceAll(l, "\n", "\n          "))
+			}
+			if msg := localeProblem(r.logLines(200)); msg != "" {
+				err = errors.New(msg)
+			}
 		}
 		return fmt.Sprintf("on port %d", r.port), err
 	}) {

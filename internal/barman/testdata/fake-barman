@@ -169,7 +169,12 @@ case "$cmd" in
     # What Barman writes for a local restore without --get-wal: the WAL it needs is
     # copied into barman_wal/ of the destination and fetched from there.
     mkdir -p "$dest/barman_wal"
-    echo "restore_command = 'cp barman_wal/%f %p'" >>"$dest/postgresql.auto.conf"
+    if [ -n "${FAKE_BARMAN_NO_RESTORE_COMMAND:-}" ]; then
+      # Barman 3.20: the required WAL is copied into pg_wal, no restore_command.
+      : >"$dest/pg_wal/000000010000000000000007"
+    else
+      echo "restore_command = 'cp barman_wal/%f %p'" >>"$dest/postgresql.auto.conf"
+    fi
     if [ -n "$target_time" ]; then echo "recovery_target_time = '$target_time'" >>"$dest/postgresql.auto.conf"; fi
     head -c 4096 /dev/zero >"$dest/base/1/1259"
     : >"$dest/recovery.signal"

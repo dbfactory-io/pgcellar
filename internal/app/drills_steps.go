@@ -148,9 +148,11 @@ func (r *drillRun) configure() (string, error) {
 	if m := restoreCommandRe.FindAll(existing, -1); len(m) > 0 {
 		r.det.RestoreCmd = strings.TrimSpace(string(m[len(m)-1]))
 		r.logf("  Barman's %s is kept", r.det.RestoreCmd)
+	} else if hasWALSegments(filepath.Join(r.dest, "pg_wal")) {
+		r.logf("  Barman placed the required WAL in pg_wal; no restore_command needed")
 	} else {
-		note += "; Barman wrote no restore_command, recovery can only use the WAL inside the backup"
-		r.logf("  warning: no restore_command in postgresql.auto.conf")
+		note += "; Barman wrote no restore_command and pg_wal holds no segment, recovery can only use the WAL inside the backup"
+		r.logf("  warning: no restore_command in postgresql.auto.conf and no WAL segment in pg_wal")
 	}
 	hba := filepath.Join(r.dest, "pg_hba_drill.conf")
 	if err := os.WriteFile(hba, []byte("# pgCellar restore drill: the Unix socket of this directory only\nlocal all all trust\nhost all all 0.0.0.0/0 reject\nhost all all ::/0 reject\n"), 0o640); err != nil {
@@ -177,6 +179,9 @@ func (r *drillRun) configure() (string, error) {
 	b.WriteString("autovacuum = off\n")
 	b.WriteString("logging_collector = off\n")
 	b.WriteString("ssl = off\n")
+	// Session locale parameters: the messages of the copy do not depend on
+	// which locales this image has (the cluster's own collation does, see start).
+	b.WriteString("lc_messages = 'C'\nlc_monetary = 'C'\nlc_numeric = 'C'\nlc_time = 'C'\n")
 	b.WriteString("jit = off\n") // no JIT compile for a few queries
 	// An extension library missing from this image must not stop the copy.
 	b.WriteString("shared_preload_libraries = ''\n")
@@ -191,16 +196,59 @@ func (r *drillRun) configure() (string, error) {
 	return fmt.Sprintf("port %d, socket %s; %s", port, filepath.Base(r.sock), note), nil
 }
 
-func (r *drillRun) logTail() string {
+func (r *drillRun) logTail() string { return r.logLines(25) }
+
+func (r *drillRun) logLines(n int) string {
 	raw, err := os.ReadFile(filepath.Join(r.dest, "drill.log"))
 	if err != nil {
 		return ""
 	}
 	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
-	if len(lines) > 25 {
-		lines = lines[len(lines)-25:]
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// hasWALSegments reports whether dir holds a WAL segment file (24 hex digits).
+func hasWALSegments(dir string) bool {
+	es, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range es {
+		if walNameRe.MatchString(e.Name()) {
+			return true
+		}
+	}
+	return false
+}
+
+var (
+	walNameRe    = regexp.MustCompile(`^[0-9A-F]{24}$`)
+	localeErrRes = []*regexp.Regexp{
+		regexp.MustCompile(`LC_(?:COLLATE|CTYPE) "([^"]+)"`),
+		regexp.MustCompile(`invalid value for parameter "lc_[a-z]+": "([^"]+)"`),
+	}
+)
+
+// localeProblem turns a start failure caused by a locale this image lacks into
+// a sentence that says what to do. "" when the log says nothing of the kind.
+func localeProblem(log string) string {
+	for _, re := range localeErrRes {
+		if m := re.FindStringSubmatch(log); m != nil {
+			name := m[1]
+			want := name
+			if i := strings.LastIndex(want, ".utf8"); i > 0 && i == len(want)-5 {
+				want = want[:i] + ".UTF-8"
+			}
+			return fmt.Sprintf("The cluster uses locale %s, which this image does not have. Rebuild with PG_LOCALES including %s (see deploy/Dockerfile).", name, want)
+		}
+	}
+	if strings.Contains(strings.ToLower(log), "locale") {
+		return "The cluster needs a locale this image does not have (see the PostgreSQL log below). Rebuild with PG_LOCALES including it (see deploy/Dockerfile)."
+	}
+	return ""
 }
 
 var connUserRe = regexp.MustCompile(`(?:^|\s)user\s*=\s*('(?:[^'\\]|\\.)*'|\S+)`)
