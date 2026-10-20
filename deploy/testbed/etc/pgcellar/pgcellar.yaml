@@ -84,7 +84,7 @@ servers:
 
 alerts:
   max_backup_age: 26h
-  max_wal_age: 1h
+  max_wal_age: 25h                    # quiet databases close a WAL segment only at 16 MB or at the nightly backup
   telegram:
     token_env: TELEGRAM_BOT_TOKEN
     chat_id: "CHANGE_ME"               # numeric chat id of the alert chat

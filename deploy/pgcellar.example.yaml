@@ -42,7 +42,7 @@ servers:
 
 alerts:
   max_backup_age: 26h                  # alert if the last good backup is older than this
-  max_wal_age: 1h                      # alert if the last archived WAL is older than this
+  max_wal_age: 24h                     # alert if the last archived WAL is older than this; a quiet database closes a segment only at 16 MB, at a backup, or every archive_timeout on the PostgreSQL side
   mail:
     smtp_host: smtp.example.com
     smtp_port: 587
