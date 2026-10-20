@@ -31,3 +31,9 @@ Functional Source License 1.1 with Apache-2.0 future licence: source available, 
 
 ## Name
 pgCellar. Not "Barman" anything: Barman is EnterpriseDB's trademark; "built on Barman" is descriptive and fine.
+
+## Scaling
+
+One pgCellar instance per Barman host. No page and no GET of the API ever runs Barman: everything is served from the status cache (refreshed every `status_interval`, saved in SQLite so a restart starts with full pages marked stale) and from the files of `barman.d` and `pgcellar.yaml`. Only explicit actions (check now, backup now, switch WAL, all POST) call Barman. The cost of a refresh is about 3 Barman processes per server and per interval (`status`, `list-backups`, `check`, plus `show-backup` for a new backup only), 2 to 4 s each on a small machine.
+
+Next steps for hundreds of servers: read `base/<id>/backup.info` and the WAL catalogue (`xlog.db`) instead of `list-backups` and `status` (Barman's own files, instantaneous); a `check_interval` separate from and longer than `status_interval`; spread the servers over the interval instead of one burst; configurable parallelism (4 today). A multi-host view comes after that.
