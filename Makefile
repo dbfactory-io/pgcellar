@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 LDFLAGS := -X main.Version=$(VERSION)
 
-.PHONY: build test lint run demo docker release-dry version-check clean docs docs-pdf
+.PHONY: build test lint run demo docker release-dry version-check clean docs docs-pdf og
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o pgcellar ./cmd/pgcellar
@@ -62,6 +62,20 @@ docs-pdf: docs
 		"file://$(CURDIR)/site/docs/_manual.html" >/dev/null 2>&1 \
 	&& echo "wrote site/docs/pgcellar-manual.pdf" \
 	|| { echo "docs-pdf: Chrome failed to print the PDF"; exit 1; }
+
+# Social card (1200x630) rendered by headless Chrome from tools/og/og.html.
+# Without Chrome or Chromium the target says so and stops without failing the build.
+og:
+	@chrome=""; \
+	for c in "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" google-chrome google-chrome-stable chromium chromium-browser; do \
+		if [ -x "$$c" ] || command -v "$$c" >/dev/null 2>&1; then chrome="$$c"; break; fi; \
+	done; \
+	if [ -z "$$chrome" ]; then echo "og: Chrome or Chromium not found, site/og.png not produced"; exit 0; fi; \
+	"$$chrome" --headless=new --disable-gpu --hide-scrollbars --window-size=1200,630 \
+		--screenshot="$(CURDIR)/site/og.png" \
+		"file://$(CURDIR)/tools/og/og.html" >/dev/null 2>&1 \
+	&& echo "wrote site/og.png" \
+	|| { echo "og: Chrome failed to render the card"; exit 1; }
 
 clean:
 	rm -f pgcellar
