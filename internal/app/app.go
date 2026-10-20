@@ -40,6 +40,16 @@ func RoleAtLeast(role, min string) bool {
 type App struct {
 	Version string
 	Dev     bool
+	// Demo is the public demonstration instance (pgcellar serve --demo): the
+	// history is fictional and rebuilt from the clock, nothing can be changed,
+	// no alert is ever sent. See internal/demo.
+	Demo bool
+	// FSStat replaces the file system measurement (statfs) of the storage
+	// figures. The demo shows a 4 TiB volume whatever the container has.
+	FSStat func(path string) (total, free, used int64, dev uint64, err error)
+	// DisplayHome, when set, is shown in place of barman_home in the storage
+	// figures (the demo keeps its files in a temporary directory).
+	DisplayHome string
 	// CronInterval is how often `barman cron` runs (barman.cron_interval in
 	// pgcellar.yaml, unless the caller overrides it). Zero disables it.
 	CronInterval time.Duration
@@ -116,7 +126,13 @@ type App struct {
 // Load reads and validates the configuration, opens the database and builds
 // the Barman engine. In dev mode it works on a temporary copy of everything
 // and uses the fake Barman, see dev.go.
-func Load(configPath string, dev bool) (*App, error) {
+func Load(configPath string, dev bool) (*App, error) { return load(configPath, dev, false) }
+
+// LoadDemo is Load for the public demo: the configuration may hold no
+// administrator, only one read-only user.
+func LoadDemo(configPath string) (*App, error) { return load(configPath, false, true) }
+
+func load(configPath string, dev, demo bool) (*App, error) {
 	abs, err := filepath.Abs(configPath)
 	if err != nil {
 		return nil, err
@@ -127,6 +143,7 @@ func Load(configPath string, dev bool) (*App, error) {
 	}
 	a := &App{
 		Dev:            dev,
+		Demo:           demo,
 		StatusInterval: time.Minute,
 		SetupInterval:  config.DefaultSetupInterval,
 		Logger:         log.New(os.Stderr, "pgcellar: ", log.LstdFlags),
@@ -140,7 +157,7 @@ func Load(configPath string, dev bool) (*App, error) {
 			return nil, fmt.Errorf("dev mode: %w", err)
 		}
 	}
-	if problems := config.Validate(cfg); len(problems) > 0 {
+	if problems := config.ValidateWith(cfg, demo); len(problems) > 0 {
 		a.cleanup()
 		return nil, fmt.Errorf("invalid configuration %s:\n  - %s", configPath, strings.Join(problems, "\n  - "))
 	}
@@ -309,7 +326,7 @@ func (a *App) Start(ctx context.Context) {
 		defer a.wg.Done()
 		a.statusLoop(ctx)
 	}()
-	if !a.Dev {
+	if !a.Dev && !a.Demo {
 		a.AlertsSince = a.now()
 		a.wg.Add(1)
 		go func() {
@@ -437,7 +454,7 @@ func (a *App) Config() *config.Config {
 		return a.cfg
 	}
 	fresh, err := config.Load(a.ConfigPath)
-	if err != nil || len(config.Validate(fresh)) > 0 {
+	if err != nil || len(config.ValidateWith(fresh, a.Demo)) > 0 {
 		a.Logf("pgcellar.yaml changed on disk but is not valid, keeping the previous configuration")
 		a.cfgModTime = fi.ModTime()
 		return a.cfg
@@ -478,7 +495,7 @@ func (a *App) mutateConfig(fn func(cfg *config.Config) error) error {
 	if err := fn(cfg); err != nil {
 		return err
 	}
-	if problems := config.Validate(cfg); len(problems) > 0 {
+	if problems := config.ValidateWith(cfg, a.Demo); len(problems) > 0 {
 		return &ProblemsError{Problems: problems}
 	}
 	if err := config.Save(a.ConfigPath, cfg); err != nil {

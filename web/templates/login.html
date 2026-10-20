@@ -22,5 +22,15 @@
     <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn" type="submit">{{t "btn.login"}}</button>
   </form>
+  {{if .Demo}}
+  <form class="demo-try" method="post" action="/login">
+    <input type="hidden" name="csrf" value="{{.Data.Token}}">
+    <input type="hidden" name="next" value="{{.Data.Next}}">
+    <input type="hidden" name="user" value="demo">
+    <input type="hidden" name="password" value="demo">
+    <button class="btn alt" type="submit" id="try-demo">{{t "demo.button"}}</button>
+    <p class="hint">{{t "demo.hint"}}</p>
+  </form>
+  {{end}}
 </section>
 {{end}}

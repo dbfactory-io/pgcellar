@@ -28,6 +28,7 @@ type Server struct {
 	assets  map[string]string
 	secret  []byte
 	limiter *limiter
+	rate    *rateLimiter
 	apiH    http.Handler
 }
 
@@ -58,7 +59,7 @@ func funcs(assets map[string]string) template.FuncMap {
 
 // New builds the web server on top of an App.
 func New(a *app.App) (*Server, error) {
-	s := &Server{app: a, tpl: map[string]*template.Template{}, limiter: newLimiter()}
+	s := &Server{app: a, tpl: map[string]*template.Template{}, limiter: newLimiter(), rate: newRateLimiter(loginRate)}
 	sub, err := fs.Sub(web.FS, "static")
 	if err != nil {
 		return nil, err
@@ -172,14 +173,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, r, nil, http.StatusNotFound, "This page does not exist.")
 	})
-	return secure(mux)
+	return s.secure(s.demoGate(mux))
 }
 
 // secure adds the response headers every page needs and recovers from panics
 // so that a bug never shows a stack trace.
-func secure(h http.Handler) http.Handler {
+func (s *Server) secure(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := w.Header()
+		if s.app.Demo {
+			hd.Set("X-Robots-Tag", "noindex, nofollow")
+		}
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("X-Frame-Options", "DENY")
 		hd.Set("Referrer-Policy", "same-origin")
@@ -209,6 +213,7 @@ type page struct {
 	CanOperate     bool
 	CanAdmin       bool
 	Dev            bool
+	Demo           bool
 	Version        string
 	LicenseFooter  string
 	Msg, Warn, Err string
@@ -216,12 +221,12 @@ type page struct {
 }
 
 func (s *Server) newPage(r *http.Request, u *userCtx, title, active string, data any) page {
-	p := page{Title: title, Active: active, Dev: s.app.Dev, Version: s.app.Version, Data: data}
+	p := page{Title: title, Active: active, Dev: s.app.Dev, Demo: s.app.Demo, Version: s.app.Version, Data: data}
 	if u != nil {
 		p.LicenseFooter = s.app.LicenseInfo().Footer
 		p.User, p.Role, p.CSRF = u.Name, u.Role, u.CSRF
-		p.CanOperate = app.RoleAtLeast(u.Role, app.RoleOperator)
-		p.CanAdmin = app.RoleAtLeast(u.Role, app.RoleAdmin)
+		p.CanOperate = s.canOperate(u)
+		p.CanAdmin = s.canAdmin(u)
 	}
 	if r != nil {
 		switch r.URL.Query().Get("ok") {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // HistoryEntry is one commit of the configuration directory.
@@ -86,6 +87,12 @@ var safeIdent = regexp.MustCompile(`[<>\n\r]`)
 // Commit records all changes in dir. It returns the new short hash, or ""
 // when there was nothing to commit.
 func Commit(dir, message, authorName, authorEmail string) (string, error) {
+	return CommitAt(dir, message, authorName, authorEmail, time.Time{})
+}
+
+// CommitAt is Commit with a chosen commit date (the zero time means now). The
+// public demo uses it to give its fictional history plausible dates.
+func CommitAt(dir, message, authorName, authorEmail string, at time.Time) (string, error) {
 	if err := EnsureRepo(dir); err != nil {
 		return "", err
 	}
@@ -110,6 +117,10 @@ func Commit(dir, message, authorName, authorEmail string) (string, error) {
 	env := []string{
 		"GIT_AUTHOR_NAME=" + authorName, "GIT_AUTHOR_EMAIL=" + authorEmail,
 		"GIT_COMMITTER_NAME=" + authorName, "GIT_COMMITTER_EMAIL=" + authorEmail,
+	}
+	if !at.IsZero() {
+		d := at.Format(time.RFC3339)
+		env = append(env, "GIT_AUTHOR_DATE="+d, "GIT_COMMITTER_DATE="+d)
 	}
 	if message == "" {
 		message = "update configuration"

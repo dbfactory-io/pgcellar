@@ -277,3 +277,58 @@ func TestDrills(t *testing.T) {
 		t.Errorf("update unknown: %v", err)
 	}
 }
+
+func TestReplaceSnapshot(t *testing.T) {
+	s := newStore(t)
+	if _, err := s.StartRun("old", KindBackup, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddAudit("x", "old", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateSession(Session{ID: "keep", User: "demo", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	code := 0
+	sn := Snapshot{
+		Runs:       []Run{{ID: 7, Server: "a", Kind: KindBackup, StartedAt: at, FinishedAt: &at, ExitCode: &code, Actor: "scheduler"}, {ID: 8, Server: "a", Kind: KindCheck, StartedAt: at.Add(time.Hour)}},
+		Audit:      []AuditEntry{{ID: 1, At: at, Actor: "maria", Action: "login"}},
+		Drills:     []Drill{{ID: 3, Server: "a", StartedAt: at, FinishedAt: at, OK: true, RunID: 7}},
+		Recoveries: []Recovery{{ID: 2, Server: "a", BackupID: "b", Path: "/x", CreatedAt: at, RunID: 7}},
+		Alerts:     []AlertSent{{ID: 1, At: at, Channel: "telegram", Kind: "level", OK: true}},
+	}
+	for i := 0; i < 2; i++ { // replacing twice gives the same content
+		if err := s.ReplaceSnapshot(sn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runs, _ := s.ListRuns("", 10)
+	if len(runs) != 2 || runs[1].ID != 7 || runs[0].FinishedAt != nil || runs[1].ExitCode == nil {
+		t.Errorf("runs %+v", runs)
+	}
+	if a, _ := s.ListAudit(10); len(a) != 1 || a[0].Actor != "maria" {
+		t.Errorf("audit %+v", a)
+	}
+	if d, err := s.GetDrill(3); err != nil || !d.OK || d.RunID != 7 {
+		t.Errorf("drill %+v %v", d, err)
+	}
+	if r, _ := s.ListRecoveries("a"); len(r) != 1 || r[0].ID != 2 {
+		t.Errorf("recoveries %+v", r)
+	}
+	if a, _ := s.ListAlerts(10); len(a) != 1 || !a[0].OK {
+		t.Errorf("alerts %+v", a)
+	}
+	if _, err := s.GetSession("keep"); err != nil {
+		t.Errorf("a session was lost: %v", err)
+	}
+	for i := 1; i <= 5; i++ {
+		_ = s.AddAudit("x", "more", "", "")
+	}
+	if err := s.TrimAudit(2); err != nil {
+		t.Fatal(err)
+	}
+	if a, _ := s.ListAudit(10); len(a) != 2 {
+		t.Errorf("after TrimAudit: %d lines", len(a))
+	}
+}

@@ -117,6 +117,12 @@ func (s *Server) guard(min string, h guarded) http.HandlerFunc {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
+		// The public demo shows every page read-only to its viewer: the pages of
+		// the administrators hold fictional data only. What changes anything is
+		// refused by demoGate before it gets here.
+		if s.app.Demo && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			min = app.RoleViewer
+		}
 		if !app.RoleAtLeast(u.Role, min) {
 			s.errorPage(w, r, u, http.StatusForbidden, "Your role ("+u.Role+") does not allow this. Ask an administrator.")
 			return
@@ -136,7 +142,10 @@ func (s *Server) guard(min string, h guarded) http.HandlerFunc {
 	}
 }
 
-type loginData struct{ Token, Next string }
+type loginData struct {
+	Token, Next string
+	Demo        bool
+}
 
 func safeNext(n string) string {
 	if strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") && !strings.Contains(n, "\\") {
@@ -150,7 +159,7 @@ func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, safeNext(r.URL.Query().Get("next")), http.StatusSeeOther)
 		return
 	}
-	s.render(w, http.StatusOK, "login", s.newPage(r, nil, "Sign in", "", loginData{s.loginToken(), safeNext(r.URL.Query().Get("next"))}))
+	s.render(w, http.StatusOK, "login", s.newPage(r, nil, "Sign in", "", loginData{s.loginToken(), safeNext(r.URL.Query().Get("next")), s.app.Demo}))
 }
 
 func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
@@ -158,19 +167,21 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, r, nil, http.StatusBadRequest, "The form could not be read.")
 		return
 	}
+	ip := clientIP(r)
 	next := safeNext(r.PostForm.Get("next"))
 	retry := func(code int, msg string) {
-		p := s.newPage(r, nil, "Sign in", "", loginData{s.loginToken(), next})
+		p := s.newPage(r, nil, "Sign in", "", loginData{s.loginToken(), next, s.app.Demo})
 		p.Err = msg
 		s.render(w, code, "login", p)
+	}
+	if !s.rate.allow(ip) {
+		w.Header().Set("Retry-After", "60")
+		retry(http.StatusTooManyRequests, "Too many sign-in attempts. Wait a minute and try again.")
+		return
 	}
 	if !s.loginTokenOK(r.PostForm.Get("csrf")) {
 		retry(http.StatusForbidden, "The login form expired. Please try again.")
 		return
-	}
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
 	}
 	if !s.limiter.allow(ip) {
 		retry(http.StatusTooManyRequests, "Too many failed attempts. Wait a few minutes and try again.")
@@ -192,7 +203,9 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	ok := config.CheckPassword(hash, pass)
 	if found == nil || !ok {
 		s.limiter.fail(ip)
-		_ = s.app.Store.AddAudit(name, "login.failed", "", "from "+ip)
+		if !s.app.Demo {
+			_ = s.app.Store.AddAudit(name, "login.failed", "", "from "+ip)
+		}
 		retry(http.StatusUnauthorized, "Wrong user name or password.")
 		return
 	}
@@ -213,14 +226,18 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		Name: cookieName, Value: tok, Path: "/", HttpOnly: true, Secure: isHTTPS(r),
 		SameSite: http.SameSiteLaxMode, Expires: now.Add(sessionTTL),
 	})
-	_ = s.app.Store.AddAudit(found.Name, "login", "", "from "+ip)
+	if !s.app.Demo {
+		_ = s.app.Store.AddAudit(found.Name, "login", "", "from "+ip)
+	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request, u *userCtx) {
 	_ = s.app.Store.DeleteSession(u.sessionID)
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: isHTTPS(r), SameSite: http.SameSiteLaxMode, MaxAge: -1})
-	_ = s.app.Store.AddAudit(u.Name, "logout", "", "")
+	if !s.app.Demo {
+		_ = s.app.Store.AddAudit(u.Name, "logout", "", "")
+	}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
@@ -258,4 +275,63 @@ func (l *limiter) fail(ip string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.failures[ip] = append(l.recent(ip), time.Now())
+}
+
+// loginRate is the most sign-in attempts one address may make in a minute,
+// successful or not.
+const loginRate = 10
+
+// rateLimiter counts the attempts of every address over the last minute.
+type rateLimiter struct {
+	mu   sync.Mutex
+	hits map[string][]time.Time
+	max  int
+}
+
+func newRateLimiter(max int) *rateLimiter {
+	return &rateLimiter{hits: map[string][]time.Time{}, max: max}
+}
+
+// allow records one attempt and reports whether it is within the limit.
+func (l *rateLimiter) allow(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	cut := now.Add(-time.Minute)
+	if len(l.hits) > 10000 { // forget idle addresses
+		for k, v := range l.hits {
+			if len(v) == 0 || v[len(v)-1].Before(cut) {
+				delete(l.hits, k)
+			}
+		}
+	}
+	var keep []time.Time
+	for _, t := range l.hits[ip] {
+		if t.After(cut) {
+			keep = append(keep, t)
+		}
+	}
+	if len(keep) >= l.max {
+		l.hits[ip] = keep
+		return false
+	}
+	l.hits[ip] = append(keep, now)
+	return true
+}
+
+// clientIP is the address a request comes from. Behind a reverse proxy on a
+// loopback or private address (nginx on the same host or Docker network), the
+// proxy's X-Real-IP header is believed; from anywhere else it is ignored, so a
+// client cannot choose its own address.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ip.IsPrivate()) {
+		if real := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); real != nil {
+			return real.String()
+		}
+	}
+	return host
 }

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# fake-pg_basebackup: answers --version only, for the server-setup tests.
+echo "pg_basebackup (PostgreSQL) 18.6 (Debian 18.6-1.pgdg12+2)"

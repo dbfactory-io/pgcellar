@@ -158,9 +158,9 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 	}
 	data := serverPageData{
 		Detail:     *d,
-		CanOperate: app.RoleAtLeast(u.Role, app.RoleOperator),
-		CanAdmin:   app.RoleAtLeast(u.Role, app.RoleAdmin),
-		Form:       formData{In: d.ServerInput, Action: "/servers/" + name, CSRF: u.CSRF, ReadOnly: !app.RoleAtLeast(u.Role, app.RoleAdmin)},
+		CanOperate: s.canOperate(u),
+		CanAdmin:   s.canAdmin(u),
+		Form:       formData{In: d.ServerInput, Action: "/servers/" + name, CSRF: u.CSRF, ReadOnly: !s.canAdmin(u)},
 	}
 	if override != nil {
 		data.Form = *override
@@ -211,7 +211,7 @@ type backupListData struct {
 }
 
 func (s *Server) backupList(r *http.Request, u *userCtx, name string) backupListData {
-	d := backupListData{Server: name, CanAdmin: app.RoleAtLeast(u.Role, app.RoleAdmin)}
+	d := backupListData{Server: name, CanAdmin: s.canAdmin(u)}
 	switch backups, err := s.app.Backups(r.Context(), u.Name, name); {
 	case errors.Is(err, app.ErrRefreshPending):
 		d.Err = "First refresh pending: the backup list appears after pgCellar has read Barman once."
@@ -299,8 +299,8 @@ type runData struct {
 func (s *Server) newRunData(run *app.RunView, u *userCtx) runData {
 	d := runData{Run: *run}
 	if u != nil {
-		d.CanOperate = app.RoleAtLeast(u.Role, app.RoleOperator)
-		d.CanAdmin = app.RoleAtLeast(u.Role, app.RoleAdmin)
+		d.CanOperate = s.canOperate(u)
+		d.CanAdmin = s.canAdmin(u)
 	}
 	if run.Kind == "recover" && run.Status != app.RunRunning {
 		if rec, ok := s.app.RecoveryOfRun(run.ID); ok {
@@ -543,7 +543,7 @@ type recoveryListData struct {
 }
 
 func (s *Server) recoveryList(u *userCtx, name string) recoveryListData {
-	d := recoveryListData{Server: name, CanOperate: app.RoleAtLeast(u.Role, app.RoleOperator), CanAdmin: app.RoleAtLeast(u.Role, app.RoleAdmin)}
+	d := recoveryListData{Server: name, CanOperate: s.canOperate(u), CanAdmin: s.canAdmin(u)}
 	d.Recoveries, _ = s.app.ListRecoveries(name)
 	return d
 }
@@ -746,7 +746,7 @@ type drillListData struct {
 }
 
 func (s *Server) drillList(u *userCtx, name string) drillListData {
-	d := drillListData{Server: name, CanOperate: app.RoleAtLeast(u.Role, app.RoleOperator)}
+	d := drillListData{Server: name, CanOperate: s.canOperate(u)}
 	d.Status = s.app.DrillStatusOf(name, s.app.Now())
 	d.Drills, _ = s.app.ListDrills(name, 10)
 	return d

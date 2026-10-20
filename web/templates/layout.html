@@ -11,9 +11,11 @@
 <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
 <link rel="stylesheet" href="{{asset "app.css"}}">
 <script src="{{asset "htmx.min.js"}}" defer></script>
+{{if .Demo}}<script src="{{asset "demo.js"}}" defer></script>{{end}}
 </head>
-<body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
+<body{{if .Demo}} data-demo-msg="{{t "demo.disabled"}}"{{end}} hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="elephant" viewBox="0 0 64 64"><g fill="currentColor"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" style="stroke:var(--bg)" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" style="stroke:var(--bg)" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" style="fill:var(--bg)"/><path d="M50 18c5 3 7 9 5 15" fill="none" style="stroke:var(--bg)" stroke-width="2.2" stroke-linecap="round"/></g></symbol><symbol id="elephant-sorry" viewBox="0 0 64 64"><g fill="currentColor"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" style="stroke:var(--bg)" stroke-width="2.5"/><path d="M26 42C17 50 12 55 10 61" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M28 30q3 3 7 0" fill="none" style="stroke:var(--bg)" stroke-width="2.2" stroke-linecap="round"/><path d="M50 18c5 3 7 9 5 15" fill="none" style="stroke:var(--bg)" stroke-width="2.2" stroke-linecap="round"/></g></symbol></svg>
+{{if .Demo}}<div class="demobar" role="note">{{t "demo.banner"}} <a href="https://dbfactory.io/pgcellar" rel="noopener">{{t "demo.banner_link"}}</a></div>{{end}}
 <header class="top">
   <div class="wrap bar">
     <a class="logo" href="/status"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#elephant"/></svg><b>pg<span>Cellar</span></b></a>

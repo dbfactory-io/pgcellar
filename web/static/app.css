@@ -257,3 +257,10 @@ svg.tl{display:block;width:100%;min-width:28rem;height:auto;font-family:var(--sa
 .stline{margin:.5rem 0 0;font-weight:600}
 .stline.warn{color:var(--warn)}
 .stline.fail{color:var(--bad)}
+
+/* Public demo: permanent banner, locked buttons */
+.demobar{background:var(--acc);color:var(--acc-ink);text-align:center;font-size:.9rem;font-weight:600;padding:.45rem 1rem}
+.demobar a{color:inherit;text-decoration:underline}
+.demo-locked,.demo-locked[disabled]{opacity:.5;cursor:not-allowed}
+.demo-try{margin-top:1rem;text-align:center}
+.demo-try .hint{margin:.4rem 0 0;font-size:.85rem;color:var(--muted,inherit);opacity:.8}

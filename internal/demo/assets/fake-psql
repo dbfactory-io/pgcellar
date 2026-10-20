@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# fake-psql: a stand-in for psql, used by the public demo (pgcellar serve --demo).
+# It answers the server-setup query of pgCellar from fixtures/psql-<host>.tsv,
+# where <host> is the first label of host= in the connection string
+# (pg-main.example.com -> psql-pg-main.tsv). A host without a fixture refuses
+# the connection, like an unreachable server.
+#
+# FAKE_PSQL_FIXTURES replaces the fixtures directory (tests that change an answer).
+# If FAKE_PSQL_LOG is set, the arguments of every call are appended to it.
+
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fx="${FAKE_PSQL_FIXTURES:-$here/fixtures}"
+
+if [ -n "${FAKE_PSQL_LOG:-}" ]; then
+  printf '%s\n' "$*" >>"$FAKE_PSQL_LOG"
+fi
+
+conninfo=""
+sql=""
+sockdir=""
+dbname=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -c) sql="${2:-}"; shift 2 ;;
+    -h) sockdir="${2:-}"; shift 2 ;;
+    -d) dbname="${2:-}"; shift 2 ;;
+    -p|-U) shift 2 ;;
+    -F|-v) shift 2 ;;
+    -X|-At|-A|-t) shift ;;
+    -*) echo "psql: error: unsupported option $1" >&2; exit 2 ;;
+    *) conninfo="$1"; shift ;;
+  esac
+done
+
+# Restore drill: psql -h <socket dir> -p <port> -U <role> -d <db> -c <sql>, answered
+# from fixtures/psql-drill-*.tsv. FAKE_DRILL_PSQL_FAIL=1 refuses the connection,
+# FAKE_DRILL_STUCK=1 stays in recovery for ever, FAKE_DRILL_CHECKSUMS=off turns
+# data_checksums off, FAKE_DRILL_COUNT_FAIL=1 makes the table counts fail.
+if [ -n "$sockdir" ]; then
+  if [ -n "${FAKE_DRILL_PSQL_FAIL:-}" ]; then
+    echo "psql: error: connection to server on socket \"$sockdir/.s.PGSQL.54400\" failed: No such file or directory" >&2
+    exit 2
+  fi
+  case "$sql" in
+    *pg_is_in_recovery*) if [ -n "${FAKE_DRILL_STUCK:-}" ]; then echo t; else echo f; fi ;;
+    "select version()") cat "$fx/psql-drill-version.tsv" ;;
+    *pg_last_wal_replay_lsn*) cat "$fx/psql-drill-lsn.tsv" ;;
+    *data_checksums*) echo "${FAKE_DRILL_CHECKSUMS:-on}" ;;
+    *pg_database_size*) cat "$fx/psql-drill-databases.tsv" ;;
+    *"select count(*) from pg_stat_user_tables"*) cat "$fx/psql-drill-tables-${dbname:-postgres}.tsv" ;;
+    *"format("*) cat "$fx/psql-drill-tablelist-${dbname:-postgres}.tsv" ;;
+    "select count(*) from "*)
+      if [ -n "${FAKE_DRILL_COUNT_FAIL:-}" ]; then echo 'ERROR:  could not read block 3 in file "base/16384/16401"' >&2; exit 1; fi
+      echo 1000 ;;
+    *) echo "psql: error: fake-psql does not know this drill query: $sql" >&2; exit 2 ;;
+  esac
+  exit 0
+fi
+
+host="$(printf '%s' "$conninfo" | sed -n 's/.*host=\([^ .]*\).*/\1/p')"
+if [ -z "$host" ] || [ -z "$sql" ]; then
+  echo "psql: error: missing connection string or -c" >&2
+  exit 2
+fi
+case "$sql" in
+  *pg_settings*) ;;
+  *) echo "psql: error: fake-psql only knows the setup query" >&2; exit 2 ;;
+esac
+if [ -f "$fx/psql-$host.tsv" ]; then
+  cat "$fx/psql-$host.tsv"
+  exit 0
+fi
+echo "psql: error: connection to server at \"$host.example.com\" (192.0.2.10), port 5432 failed: Connection refused" >&2
+exit 2

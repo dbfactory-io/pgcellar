@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# fake-pg_ctl: a stand-in for pg_ctl, used by the public demo (pgcellar serve --demo).
+# Supports: -D dir [-o opts] [-w] [-t secs] [-l logfile] [-m mode] start|stop|status.
+# start refuses a directory without PG_VERSION and leaves postmaster.pid behind;
+# FAKE_PGCTL_FAIL=1 makes start fail like a server that cannot find its WAL.
+# FAKE_PGCTL_LOCALE_FAIL=1: start fails like a cluster whose locale the system lacks.
+# FAKE_PGCTL_LOG: every call is appended to this file.
+set -u
+[ -n "${FAKE_PGCTL_LOG:-}" ] && printf '%s\n' "$*" >>"$FAKE_PGCTL_LOG"
+dir=""; logfile=""; action=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -D) dir="${2:-}"; shift 2 ;;
+    -o|-t|-m|-s) shift 2 ;;
+    -l) logfile="${2:-}"; shift 2 ;;
+    -w|-W) shift ;;
+    start|stop|status|restart|reload|promote) action="$1"; shift ;;
+    *) echo "pg_ctl: unrecognized option $1" >&2; exit 1 ;;
+  esac
+done
+[ -n "$dir" ] && [ -n "$action" ] || { echo "pg_ctl: missing -D or action" >&2; exit 1; }
+[ -f "$dir/PG_VERSION" ] || { echo "pg_ctl: directory \"$dir\" is not a database cluster directory" >&2; exit 1; }
+case "$action" in
+  start)
+    if [ -n "${FAKE_PGCTL_LOCALE_FAIL:-}" ]; then
+      [ -n "$logfile" ] && printf 'LOG:  invalid value for parameter "lc_messages": "en_US.utf8"\nLOG:  invalid value for parameter "lc_monetary": "en_US.utf8"\n' >"$logfile"
+      echo "pg_ctl: could not start server" >&2
+      exit 1
+    fi
+    if [ -n "${FAKE_PGCTL_FAIL:-}" ]; then
+      [ -n "$logfile" ] && echo "FATAL:  could not locate a valid checkpoint record" >"$logfile"
+      echo "pg_ctl: could not start server" >&2
+      echo "Examine the log output." >&2
+      exit 1
+    fi
+    [ -n "$logfile" ] && echo "LOG:  database system is ready to accept connections" >"$logfile"
+    echo 4242 >"$dir/postmaster.pid"
+    echo "waiting for server to start.... done"
+    echo "server started"
+    ;;
+  stop)
+    rm -f "$dir/postmaster.pid"
+    echo "waiting for server to shut down.... done"
+    echo "server stopped"
+    ;;
+  status)
+    if [ -f "$dir/postmaster.pid" ]; then echo "pg_ctl: server is running (PID: 4242)"; else echo "pg_ctl: no server running"; exit 3; fi
+    ;;
+  *) echo "fake-pg_ctl: $action not simulated" >&2; exit 1 ;;
+esac

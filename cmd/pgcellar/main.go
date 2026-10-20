@@ -31,6 +31,7 @@ import (
 	"github.com/stranix79/pgcellar/internal/app"
 	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/stranix79/pgcellar/internal/demo"
 	"github.com/stranix79/pgcellar/internal/web"
 )
 
@@ -71,6 +72,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, `usage:
   pgcellar serve --config FILE [--listen ADDR] [--dev] [--cron-interval 30s]
+  pgcellar serve --demo [--listen ADDR]   public read-only demonstration with fictional data (no config file; base URL in PGCELLAR_BASE_URL)
   pgcellar check --config FILE [--barman-dir DIR]
   pgcellar apikey create --config FILE --name NAME --role viewer|operator|admin
   pgcellar apikey list --config FILE
@@ -88,11 +90,16 @@ func serve(args []string, stdout, stderr io.Writer) int {
 	cfgPath := fs.String("config", "/etc/pgcellar/pgcellar.yaml", "path of pgcellar.yaml")
 	listen := fs.String("listen", "", "address to listen on (overrides listen: in pgcellar.yaml)")
 	dev := fs.Bool("dev", false, "development mode: fake Barman, temporary data, user admin/admin")
+	demoMode := fs.Bool("demo", false, "public demonstration: fictional servers and data, read-only, user demo/demo, no configuration file")
 	cronEvery := fs.String("cron-interval", "", "how often to run 'barman cron', for example 30s; 0 disables it (default: barman.cron_interval in pgcellar.yaml)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
+	if *demoMode && *dev {
+		_, _ = fmt.Fprintln(stderr, "pgcellar: --demo and --dev cannot be used together")
+		return 2
+	}
 	var cronOverride time.Duration
 	if *cronEvery != "" {
 		d, err := time.ParseDuration(*cronEvery)
@@ -106,7 +113,17 @@ func serve(args []string, stdout, stderr io.Writer) int {
 		cronOverride = d
 	}
 
-	a, err := app.Load(*cfgPath, *dev)
+	var a *app.App
+	var dm *demo.Demo
+	var err error
+	if *demoMode {
+		dm, err = demo.Open(demo.Options{})
+		if dm != nil {
+			a = dm.App
+		}
+	} else {
+		a, err = app.Load(*cfgPath, *dev)
+	}
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "pgcellar:", err)
 		return 1
@@ -142,8 +159,14 @@ func serve(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	a.Start(ctx)
+	if dm != nil {
+		go dm.Run(ctx)
+	}
 
 	_, _ = fmt.Fprintf(stdout, "pgcellar %s listening on %s\n", Version, displayURL(ln.Addr().String()))
+	if dm != nil {
+		_, _ = fmt.Fprintf(stdout, "demo mode: fictional data, read-only, sign in as %s / %s\n", demo.User, demo.Password)
+	}
 	if *dev {
 		_, _ = fmt.Fprintf(stdout, "dev mode: fake Barman, data in %s, sign in as admin / admin\n", a.TempDir)
 	}

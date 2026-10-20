@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -156,6 +157,16 @@ func FormatSize(n int64) string {
 
 // fsStat is syscall.Statfs; tests replace it.
 var fsStat = statFS
+
+// stat measures a path: the demo's figures when FSStat is set, statfs
+// otherwise.
+func (a *App) stat(path string) (fsRaw, error) {
+	if a.FSStat != nil {
+		total, free, used, dev, err := a.FSStat(path)
+		return fsRaw{total: total, free: free, used: used, dev: dev}, err
+	}
+	return fsStat(path)
+}
 
 type fsRaw struct {
 	total, free, used int64
@@ -327,7 +338,7 @@ func (a *App) measureStorage(name string) *StorageInfo {
 		problems = append(problems, "the file system of "+filepath.Join(home, name)+" cannot be read")
 	}
 	if rd := cfg.Recoveries.Dir; rd != "" {
-		if r, err := fsStat(rd); err == nil {
+		if r, err := a.stat(rd); err == nil {
 			if main == nil || r.dev != dev {
 				s.RecoveriesFS = usageOf(rd, r)
 			}
@@ -355,17 +366,20 @@ func (a *App) measureStorage(name string) *StorageInfo {
 // its own.
 func (a *App) statDir(home, name string) (*FSUsage, uint64) {
 	dir := filepath.Join(home, name)
-	r, err := fsStat(dir)
+	r, err := a.stat(dir)
 	if err != nil {
-		r2, err2 := fsStat(home)
+		r2, err2 := a.stat(home)
 		if err2 != nil {
 			return nil, 0
 		}
 		return usageOf(home, r2), r2.dev
 	}
 	shown := home
-	if h, err := fsStat(home); err != nil || h.dev != r.dev {
+	if h, err := a.stat(home); err != nil || h.dev != r.dev {
 		shown = dir
+	}
+	if a.DisplayHome != "" {
+		shown = a.DisplayHome + strings.TrimPrefix(shown, home)
 	}
 	return usageOf(shown, r), r.dev
 }

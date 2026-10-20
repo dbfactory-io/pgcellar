@@ -149,7 +149,11 @@ var serverNameRe = regexp.MustCompile(`^[a-z0-9_-]+$`)
 var validRoles = map[string]bool{"admin": true, "operator": true, "viewer": true}
 
 // Validate returns one clear sentence per problem; empty means valid.
-func Validate(cfg *Config) []string {
+func Validate(cfg *Config) []string { return ValidateWith(cfg, false) }
+
+// ValidateWith is Validate; allowNoAdmin accepts a configuration without any
+// administrator, which only the public demo (a single read-only user) uses.
+func ValidateWith(cfg *Config, allowNoAdmin bool) []string {
 	var p []string
 	add := func(format string, a ...any) { p = append(p, fmt.Sprintf(format, a...)) }
 
@@ -243,7 +247,7 @@ func Validate(cfg *Config) []string {
 			add("user %q has no password_hash", u.Name)
 		}
 	}
-	if admins == 0 {
+	if admins == 0 && !allowNoAdmin {
 		add("there must be at least one user with the admin role")
 	}
 

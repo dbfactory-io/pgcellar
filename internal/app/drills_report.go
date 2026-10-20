@@ -105,13 +105,12 @@ func (r *drillRun) record(runID int64) store.Drill {
 // reportDir is where the PDFs of a server go.
 func reportDir(root, server string) string { return filepath.Join(root, server, "reports") }
 
-func (a *App) writeDrillReport(r *drillRun, rec store.Drill) (string, string, error) {
-	if !barman.ValidName(r.server) {
-		return "", "", errors.New("invalid server name")
-	}
-	d := r.det
-	doc := report.New("Restore drill report - " + r.server)
-	doc.FooterL = fmt.Sprintf("pgCellar restore drill report - %s - %s", r.server, r.startAt.Format("2006-01-02 15:04"))
+// DrillReportPDF renders the PDF report of a drill (and its fingerprint) from
+// the stored record and its details. The public demo uses it for its fictional
+// drills.
+func DrillReportPDF(server, backupID string, startAt time.Time, rec store.Drill, d DrillDetails) ([]byte, string, error) {
+	doc := report.New("Restore drill report - " + server)
+	doc.FooterL = fmt.Sprintf("pgCellar restore drill report - %s - %s", server, startAt.Format("2006-01-02 15:04"))
 	doc.Header("pgCellar", "Restore drill report", elephant)
 	if rec.OK {
 		doc.Banner(true, "RESTORE VERIFIED")
@@ -122,10 +121,10 @@ func (a *App) writeDrillReport(r *drillRun, rec store.Drill) (string, string, er
 	doc.Space(6)
 	doc.Heading("The drill")
 	rows := [][2]string{
-		{"Server", r.server},
-		{"Source backup", r.in.BackupID},
+		{"Server", server},
+		{"Source backup", backupID},
 		{"Recovery target", targetText(d)},
-		{"Date", r.startAt.Format("Monday 2 January 2006, 15:04 MST")},
+		{"Date", startAt.Format("Monday 2 January 2006, 15:04 MST")},
 		{"Duration", fmtMillis(d.DurationMs)},
 		{"PostgreSQL version", firstNonEmpty(d.PGVersion, d.PGMajor, "-")},
 		{"WAL position reached", firstNonEmpty(d.LSN, "-")},
@@ -185,9 +184,19 @@ func (a *App) writeDrillReport(r *drillRun, rec store.Drill) (string, string, er
 	doc.Paragraph("This report records one restore of a real backup into a throwaway PostgreSQL server of the same major version. The copy was started on a private port, reachable from this host only, and removed or kept as the configuration says. It shows that the backup can be restored and that the result starts; it does not compare the data with the source.", 8)
 	pdf, fp := doc.Bytes()
 	if _, err := report.Check(pdf); err != nil {
-		return "", "", fmt.Errorf("the generated PDF is damaged: %w", err)
+		return nil, "", fmt.Errorf("the generated PDF is damaged: %w", err)
 	}
+	return pdf, fp, nil
+}
 
+func (a *App) writeDrillReport(r *drillRun, rec store.Drill) (string, string, error) {
+	if !barman.ValidName(r.server) {
+		return "", "", errors.New("invalid server name")
+	}
+	pdf, fp, err := DrillReportPDF(r.server, r.in.BackupID, r.startAt, rec, r.det)
+	if err != nil {
+		return "", "", err
+	}
 	dir := reportDir(r.cfg.Recoveries.Dir, r.server)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", "", err
