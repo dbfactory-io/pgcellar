@@ -4,6 +4,7 @@
 //
 //	pgcellar serve --config /etc/pgcellar/pgcellar.yaml   run the web UI and API
 //	pgcellar check --config ...                            validate the configuration and list the servers
+//	pgcellar apikey create|list                            manage API keys (the key is printed once)
 //	pgcellar version
 //
 // The real work lives in internal/. This file only parses the command line.
@@ -49,6 +50,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return serve(args[1:], stdout, stderr)
 	case "check":
 		return check(args[1:], stdout, stderr)
+	case "apikey":
+		return apikey(args[1:], stdout, stderr)
 	case "help", "--help", "-h":
 		usage(stdout)
 		return 0
@@ -61,6 +64,8 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, `usage:
   pgcellar serve --config FILE [--listen ADDR] [--dev] [--cron-interval 30s]
   pgcellar check --config FILE [--barman-dir DIR]
+  pgcellar apikey create --config FILE --name NAME --role viewer|operator|admin
+  pgcellar apikey list --config FILE
   pgcellar version`)
 }
 

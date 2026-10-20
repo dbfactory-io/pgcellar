@@ -23,6 +23,7 @@ var messages = map[string]string{
 	"servers.title":  "Servers",
 	"servers.new":    "Add a server",
 	"runs.title":     "Runs",
+	"runs.empty":     "No run yet. Only backups started from pgCellar (this page, or POST /api/v1/servers/<name>/backup) are listed here; backups taken with the barman command appear in each server's page.",
 	"history.title":  "Configuration history",
 	"audit.title":    "Audit log",
 }
