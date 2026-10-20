@@ -120,3 +120,31 @@
 <div class="flash {{.Class}}" role="status">{{.Text}}</div>
 {{if .Output}}<pre class="out">{{.Output}}</pre>{{end}}
 {{end}}
+
+{{define "backup_list"}}
+{{if .Flash}}<div class="flash {{if .FlashBad}}bad{{else}}ok{{end}}" role="status">{{.Flash}}</div>{{end}}
+{{if .Err}}<div class="flash bad">{{.Err}}</div>
+{{else if .Backups}}
+<ul class="rows">
+{{range .Backups}}
+{{if and $.Confirm (eq $.Confirm .ID)}}
+<li class="row bad">
+  <div class="grow"><strong>{{t "backup.delete_ask_a"}} <code>{{.ID}}</code> ({{size .SizeBytes}}){{t "backup.delete_ask_b"}}</strong> {{t "backup.delete_warn"}}</div>
+  <div class="btns">
+    <button class="btn" hx-post="/servers/{{$.Server}}/backups/{{.ID}}/delete" hx-target="#backup-list" hx-swap="innerHTML" hx-disabled-elt="this">{{t "btn.delete"}}</button>
+    <button class="btn alt" hx-get="/servers/{{$.Server}}/backups/list" hx-target="#backup-list" hx-swap="innerHTML">{{t "btn.keep"}}</button>
+  </div>
+</li>
+{{else}}
+<li class="row{{if eq .Status "FAILED"}} bad{{end}}">
+  <div class="grow"><code>{{.ID}}</code></div>
+  <div>{{if eq .Status "DONE"}}<span class="pill ok">{{.Status}}</span>{{else if eq .Status "FAILED"}}<span class="pill bad">{{.Status}}</span>{{else}}<span class="pill warn">{{.Status}}</span>{{end}}</div>
+  <div class="meta">{{span .BeginTime .EndTime}}</div>
+  <div class="meta num">{{size .SizeBytes}} + {{size .WALSizeBytes}} WAL</div>
+  {{if and $.CanAdmin (ne .Status "STARTED")}}<div><button class="btn alt" hx-get="/servers/{{$.Server}}/backups/list?confirm={{.ID}}" hx-target="#backup-list" hx-swap="innerHTML">{{t "btn.delete_ask"}}</button></div>{{end}}
+</li>
+{{end}}
+{{end}}
+</ul>
+{{else}}<div class="empty"><strong>{{t "empty.cellar"}}</strong><p>{{t "empty.cellar_hint"}}</p></div>{{end}}
+{{end}}

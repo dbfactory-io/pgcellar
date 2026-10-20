@@ -40,19 +40,7 @@
 
 <section>
   <h2>{{t "section.backups"}}</h2>
-  {{if .BackupsErr}}<div class="flash bad">{{.BackupsErr}}</div>
-  {{else if .Backups}}
-  <ul class="rows">
-  {{range .Backups}}
-  <li class="row{{if eq .Status "FAILED"}} bad{{end}}">
-    <div class="grow"><code>{{.ID}}</code></div>
-    <div>{{if eq .Status "DONE"}}<span class="pill ok">{{.Status}}</span>{{else if eq .Status "FAILED"}}<span class="pill bad">{{.Status}}</span>{{else}}<span class="pill warn">{{.Status}}</span>{{end}}</div>
-    <div class="meta">{{span .BeginTime .EndTime}}</div>
-    <div class="meta num">{{size .SizeBytes}} + {{size .WALSizeBytes}} WAL</div>
-  </li>
-  {{end}}
-  </ul>
-  {{else}}<div class="empty"><strong>{{t "empty.cellar"}}</strong><p>{{t "empty.cellar_hint"}}</p></div>{{end}}
+  <div id="backup-list" aria-live="polite">{{template "backup_list" .BackupList}}</div>
 </section>
 
 <section>

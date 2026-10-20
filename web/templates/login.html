@@ -1,6 +1,18 @@
 {{define "content"}}
 <section class="login">
+  <div class="art"><svg viewBox="0 0 64 64" role="img" aria-label="pgCellar elephant"><use href="#elephant"/></svg></div>
+  <pre class="ascii" aria-hidden="true"> \_/
+  |        _,-~~~~-._
+  |      ,'   ___    `.
+  |     /    / o\     \
+  `-.   |    \__/  _,. |
+    |   |        ,'   )|
+    |    \      (  .-' /
+    `-.__ `-.__.'-'`-.'
+       |  | |  | |  |
+       `--' `--' `--'</pre>
   <div class="brand">pg<span>Cellar</span></div>
+  <p class="motto">{{t "motto"}}</p>
   <h1>{{t "login.title"}}</h1>
   {{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{end}}
   <form method="post" action="/login">
@@ -10,6 +22,5 @@
     <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn" type="submit">{{t "btn.login"}}</button>
   </form>
-  <p class="motto">{{t "motto"}}</p>
 </section>
 {{end}}

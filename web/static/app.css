@@ -38,7 +38,11 @@ section{margin-bottom:2.2rem}
 .top{border-bottom:1px solid var(--line)}
 .bar{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem 1.5rem;padding-block:.9rem}
 .logo{color:var(--tx);font-weight:800;text-decoration:none;font-size:1.3rem;letter-spacing:-.03em}
+.logo{display:inline-flex;align-items:center;gap:.45rem}
 .logo span{color:var(--acc)}
+.logo svg{width:28px;height:28px;color:var(--acc);transform-origin:50% 100%}
+@media (prefers-reduced-motion:no-preference){.logo:hover svg{animation:sway .9s ease-in-out 1}}
+@keyframes sway{30%{transform:rotate(-6deg)}70%{transform:rotate(4deg)}}
 .bar nav{display:flex;flex-wrap:wrap;gap:.3rem;flex:1}
 .bar nav a{color:var(--mut);text-decoration:none;padding:.45rem .9rem;border-radius:999px;font-weight:600;min-height:44px;display:inline-flex;align-items:center}
 .bar nav a:hover{color:var(--tx);background:var(--soft)}
@@ -112,6 +116,8 @@ button.link{background:none;border:0;color:var(--acc);cursor:pointer;font:inheri
 .softnote{background:var(--soft);border-radius:var(--r);padding:.8rem 1.1rem;margin:0 0 1rem;color:var(--tx)}
 .softnote ul{margin:0;padding-left:1.1rem}
 .empty{text-align:center;color:var(--mut);padding:2.2rem 1rem;border:2px dashed var(--line);border-radius:var(--r)}
+.empty::before{content:"";display:block;width:80px;height:80px;margin:0 auto .9rem;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='%23C9BEB2'%3E%3Cpath d='M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z'/%3E%3Cpath d='M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z'/%3E%3Ccircle cx='35' cy='33' r='16' stroke='%23FBF8F3' stroke-width='2.5'/%3E%3Cpath d='M27 42C14 49 6 45 7 31' fill='none' stroke='%23C9BEB2' stroke-width='8' stroke-linecap='round'/%3E%3Cpath d='M1 3h12c0 8-3 12-6 12S1 11 1 3z'/%3E%3Cpath d='M7 14v12' stroke='%23C9BEB2' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M3 6h8' stroke='%23FBF8F3' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='29' r='2.4' fill='%23FBF8F3'/%3E%3Cpath d='M50 18c5 3 7 9 5 15' fill='none' stroke='%23FBF8F3' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat}
+@media (prefers-color-scheme:dark){.empty::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='%23463D37'%3E%3Cpath d='M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z'/%3E%3Cpath d='M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z'/%3E%3Ccircle cx='35' cy='33' r='16' stroke='%231C1917' stroke-width='2.5'/%3E%3Cpath d='M27 42C14 49 6 45 7 31' fill='none' stroke='%23463D37' stroke-width='8' stroke-linecap='round'/%3E%3Cpath d='M1 3h12c0 8-3 12-6 12S1 11 1 3z'/%3E%3Cpath d='M7 14v12' stroke='%23463D37' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M3 6h8' stroke='%231C1917' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='29' r='2.4' fill='%231C1917'/%3E%3Cpath d='M50 18c5 3 7 9 5 15' fill='none' stroke='%231C1917' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")}}
 .empty strong{display:block;color:var(--tx);font-size:1.25rem;margin-bottom:.3rem}
 .empty p{margin-inline:auto}
 .fix{margin-top:.3rem;font-size:.95rem}
@@ -144,13 +150,18 @@ input[type=checkbox]{width:1.25rem;height:1.25rem;accent-color:var(--acc)}
 
 /* login and errors */
 .login{max-width:24rem;margin:3rem auto 2rem;text-align:center}
+.login .art{margin:0 auto 1rem;color:var(--acc)}
+.login .art svg{display:block;width:150px;height:150px;margin:0 auto}
+.login .ascii{display:none;margin:0 auto 1rem;overflow:hidden;max-width:100%;font:12px/1.15 var(--mono);color:var(--acc);text-align:left;white-space:pre;width:max-content}
+@media (prefers-color-scheme:dark){.login .art svg{display:none}.login .ascii{display:block}}
 .login .brand{font-size:2.6rem;font-weight:800;letter-spacing:-.04em;margin-bottom:.2rem}
 .login .brand span{color:var(--acc)}
 .login h1{font-size:1.1rem;font-weight:600;color:var(--mut);margin-bottom:1.6rem}
 .login form{text-align:left}
 .login .btn{width:100%;margin-top:.3rem}
-.login .motto{text-align:center;margin:1.6rem auto 0;color:var(--mut)}
+.login .motto{text-align:center;margin:0 auto 1.6rem;color:var(--mut)}
 .errorpage{text-align:center;padding:3rem 0}
+.errorpage svg{display:block;width:120px;height:120px;margin:0 auto 1rem;color:var(--mut)}
 .errorpage h1{font-size:3.5rem;color:var(--acc)}
 .errorpage p{margin-inline:auto}
 
