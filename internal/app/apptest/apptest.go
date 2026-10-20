@@ -141,6 +141,8 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 		t.Fatal(err)
 	}
 	cfg.Alerts.MaxBackupAge = 26 * time.Hour
+	// The tests must not depend on how full the disk of the machine is.
+	cfg.Alerts.MinFreePercent = 1
 	cfg.Alerts.MaxWALAge = time.Hour
 	cfg.Servers = []config.Server{{Name: "pg-main", Label: "Main", Schedule: config.Schedule{Backup: "daily 02:00", Enabled: config.Ptr(true)}}}
 	keys := map[string]string{}
