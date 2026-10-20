@@ -144,3 +144,45 @@ func summarize(states []app.ServerState, stale bool) summary {
 	}
 	return sm
 }
+
+// fmtSpan shows a backup's time: start and duration when it lasted under a
+// minute, start and end otherwise.
+func fmtSpan(begin, end time.Time) template.HTML {
+	if begin.IsZero() || end.IsZero() || end.Before(begin) {
+		return fmtWhen(begin)
+	}
+	d := end.Sub(begin)
+	if d < time.Minute {
+		return fmtWhen(begin) + template.HTML(fmt.Sprintf(" &middot; %d s", int(d.Seconds())))
+	}
+	if sameDay(begin, end) {
+		return fmtWhen(begin) + " &rarr; " + template.HTML(end.Local().Format("15:04"))
+	}
+	return fmtWhen(begin) + " &rarr; " + fmtWhen(end)
+}
+
+func sameDay(a, b time.Time) bool {
+	a, b = a.Local(), b.Local()
+	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
+}
+
+// fmtWhenStr is fmtWhen for a date kept as an RFC 3339 string (git history);
+// a string that does not parse is shown as it is.
+func fmtWhenStr(s string) template.HTML {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return template.HTML(template.HTMLEscapeString(s))
+	}
+	return fmtWhen(t)
+}
+
+// okCount is the number of passing checks.
+func okCount(cs []app.CheckView) int {
+	n := 0
+	for _, c := range cs {
+		if c.OK {
+			n++
+		}
+	}
+	return n
+}

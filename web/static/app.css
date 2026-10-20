@@ -156,3 +156,12 @@ input[type=checkbox]{width:1.25rem;height:1.25rem;accent-color:var(--acc)}
 
 @media (max-width:560px){body{font-size:16px}main{padding-block:1.2rem 3rem}.bar nav{order:3;flex-basis:100%}.who{margin-left:auto}.srv>a{padding:.9rem 1rem}.card{padding:1rem}fieldset{padding:1rem}.btns .btn{flex:1 1 auto}}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+.actionbar{margin:0 0 2.2rem}
+.help{color:var(--mut);font-size:.88rem;margin-top:.2rem;max-width:34rem}
+.wrapany,.row code,.row .grow{overflow-wrap:anywhere;word-break:break-word}
+dl.facts>div{min-width:0}
+details.oks{margin-top:.2rem}
+details.oks summary{cursor:pointer;font-weight:700;padding:.6rem .2rem;min-height:44px;display:flex;align-items:center;gap:.4rem}
+details.oks[open] summary{margin-bottom:.4rem}
+.srv .lines div,.srv .probs li,.row .msg,.flash,dl.facts dd{overflow-wrap:anywhere}

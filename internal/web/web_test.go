@@ -465,7 +465,7 @@ func TestPagesNeverRunBarman(t *testing.T) {
 			t.Errorf("status page lacks %q", want)
 		}
 	}
-	for _, want := range []string{"Last filled WAL file (a WAL file is 16 MB; a quiet server fills one slowly, the nightly backup closes one)", "Cached status from"} {
+	for _, want := range []string{"A WAL file is 16 MB; a quiet server fills one slowly", "Cached status from <time", "checks OK"} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Errorf("server page lacks %q", want)
 		}

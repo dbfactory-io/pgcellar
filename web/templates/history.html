@@ -4,7 +4,7 @@
 {{if .Data.Entries}}
 <ul class="rows">
 {{range .Data.Entries}}
-<li class="row"><div class="grow"><strong>{{.Message}}</strong><div class="meta">{{.Author}}{{if eq .Repo "barman"}} &middot; barman.d{{end}}</div></div><div class="meta">{{.Date}}</div><div><a href="/history?repo={{.Repo}}&amp;diff={{.Hash}}"><code>{{.Hash}}</code></a></div></li>
+<li class="row"><div class="grow"><strong>{{.Message}}</strong><div class="meta">{{.Author}}{{if eq .Repo "barman"}} &middot; barman.d{{end}}</div></div><div class="meta">{{whenstr .Date}}</div><div><a href="/history?repo={{.Repo}}&amp;diff={{.Hash}}"><code>{{.Hash}}</code></a></div></li>
 {{end}}
 </ul>
 {{else}}<div class="empty"><strong>No change recorded yet.</strong><p>The first edit made through pgCellar will appear here.</p></div>{{end}}

@@ -7,7 +7,7 @@
   </div>
 </div>
 {{if .CanOperate}}
-<div class="btns" style="margin-bottom:1.2rem">
+<div class="btns actionbar">
   <button class="btn alt" hx-get="/servers/{{.Detail.Name}}/check" hx-target="#check-result" hx-swap="innerHTML" hx-indicator="#check-busy" hx-disabled-elt="this">{{t "btn.run_check"}}</button>
   <span id="check-busy" class="busy" role="status">{{t "busy.checking"}}</span>
   <button class="btn" hx-post="/servers/{{.Detail.Name}}/backup" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#backup-busy" hx-disabled-elt="this" hx-confirm="Start a backup of {{.Detail.Name}} now?">{{t "btn.backup_now"}}</button>
@@ -27,13 +27,13 @@
     <dl class="facts">
       <div><dt>Last backup</dt><dd>{{if .Detail.State.LastBackupID}}{{.Detail.State.LastBackupID}}, {{ageSec .Detail.State.LastBackupAgeSeconds}} ago{{else}}{{t "status.no_backup"}}{{end}}</dd></div>
       <div><dt>{{t "wal.streaming"}}</dt><dd>{{if .Detail.State.StreamingLive}}<span class="pill ok">{{t "wal.live"}}</span>{{if not .Detail.State.LastDataReceived.IsZero}} &middot; {{t "wal.data"}} {{ageSec .Detail.State.LastDataReceivedAgeSeconds}} ago{{end}}{{else if .Detail.State.StreamingMonitored}}<span class="pill bad">{{t "wal.stopped"}}</span>{{else}}{{t "wal.not_used"}}{{end}}</dd></div>
-      <div><dt>{{t "wal.filled_full"}}</dt><dd>{{if .Detail.State.LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .Detail.State.LastFilledWALAgeSeconds}} ago{{if .Detail.State.LastFilledWAL}} ({{.Detail.State.LastFilledWAL}}){{end}}{{end}}</dd></div>
+      <div><dt>{{t "wal.filled_full"}}</dt><dd>{{if .Detail.State.LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .Detail.State.LastFilledWALAgeSeconds}} ago{{if .Detail.State.LastFilledWAL}} <code class="wrapany">{{.Detail.State.LastFilledWAL}}</code>{{end}}{{end}}<div class="help">{{t "wal.filled_help"}}</div></dd></div>
       <div><dt>Method</dt><dd>{{if .Detail.HasFile}}{{.Detail.BackupMethod}}{{else}}-{{end}}</dd></div>
       <div><dt>Schedule</dt><dd>{{if .Detail.Schedule.Enabled}}{{.Detail.ScheduleHuman}}{{else}}<span aria-hidden="true">💤</span> off{{end}}</dd></div>
       <div><dt>Retention</dt><dd>{{retention .Detail.Retention}}</dd></div>
     </dl>
     {{if .Detail.State.Notes}}<div class="softnote" style="margin-top:1rem"><ul>{{range .Detail.State.Notes}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
-    <p class="muted" style="margin:1rem 0 0">{{if .Detail.State.Stale}}As of {{ts .Detail.State.UpdatedAt}}, refreshing.{{else}}Cached status from {{ts .Detail.State.UpdatedAt}}.{{end}}</p>
+    <p class="muted" style="margin:1rem 0 0">{{if .Detail.State.Stale}}As of {{when .Detail.State.UpdatedAt}}, refreshing.{{else}}Cached status from {{when .Detail.State.UpdatedAt}}.{{end}}</p>
   {{else}}<p class="muted" style="margin:0">First refresh pending: pgCellar has not read Barman for this server yet.</p>{{end}}
   </div>
 </section>
@@ -47,7 +47,7 @@
   <li class="row{{if eq .Status "FAILED"}} bad{{end}}">
     <div class="grow"><code>{{.ID}}</code></div>
     <div>{{if eq .Status "DONE"}}<span class="pill ok">{{.Status}}</span>{{else if eq .Status "FAILED"}}<span class="pill bad">{{.Status}}</span>{{else}}<span class="pill warn">{{.Status}}</span>{{end}}</div>
-    <div class="meta">{{when .BeginTime}} &rarr; {{when .EndTime}}</div>
+    <div class="meta">{{span .BeginTime .EndTime}}</div>
     <div class="meta num">{{size .SizeBytes}} + {{size .WALSizeBytes}} WAL</div>
   </li>
   {{end}}
@@ -57,8 +57,18 @@
 
 <section>
   <h2>{{t "section.checks"}}</h2>
-  <p class="muted">{{t "checks.hint"}}</p>
   <div id="check-result" class="htmx-target" aria-live="polite"></div>
+  {{with .Detail.State}}{{if .Checks}}
+  {{range .Checks}}{{if not .OK}}
+  <ul class="rows" style="margin-bottom:.7rem"><li class="row bad">
+    <div class="grow"><strong><span aria-hidden="true">❌</span> {{.Display}}</strong></div><div><span class="pill bad">FAILED</span></div>
+    <div class="msg">{{.What}}{{if .Fix}}<div class="fix"><strong>How to fix:</strong> {{.Fix}}</div>{{end}}</div></li></ul>
+  {{end}}{{end}}
+  <details class="oks"><summary><span aria-hidden="true">✅</span> {{okcount .Checks}} {{t "checks.ok_summary"}}</summary>
+  <ul class="rows">{{range .Checks}}{{if .OK}}<li class="row"><div class="grow"><strong>{{.Display}}</strong></div><div><span class="pill ok">OK</span></div><div class="msg meta">{{.What}}</div></li>{{end}}{{end}}</ul>
+  </details>
+  {{else}}<p class="muted">{{t "checks.none"}}</p>{{end}}{{end}}
+  <p class="muted" style="margin-top:.8rem">{{t "checks.hint"}}</p>
 </section>
 
 <section>

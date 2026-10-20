@@ -30,7 +30,7 @@
     {{else}}<span class="pill bad">failed</span> with exit code {{if .Run.ExitCode}}{{.Run.ExitCode}}{{end}} after {{runtime .Run}}. {{t "run.failed_hint"}}{{end}}
   </p>
   {{if .Run.Stdout}}<pre class="out">{{.Run.Stdout}}</pre>{{end}}
-  {{if .Run.Stderr}}<pre class="out err">{{.Run.Stderr}}</pre>{{end}}
+  {{if .Run.Stderr}}{{if eq .Run.Status "failed"}}<pre class="out err">{{.Run.Stderr}}</pre>{{else}}<div class="softnote"><strong>{{t "run.also_said"}}</strong><pre class="out">{{.Run.Stderr}}</pre></div>{{end}}{{end}}
 </div>
 {{end}}
 
