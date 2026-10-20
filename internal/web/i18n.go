@@ -73,6 +73,14 @@ var messages = map[string]string{
 	"section.config":        "Configuration",
 	"section.runs":          "Recent runs",
 	"checks.hint":           "The list comes from the last refresh. Use \"Run check now\" for a live check.",
+
+	// Backup deletion.
+	"btn.delete":          "Delete",
+	"btn.delete_ask":      "Delete…",
+	"btn.keep":            "Keep it",
+	"backup.delete_ask_a": "Delete backup",
+	"backup.delete_ask_b": "?",
+	"backup.delete_warn":  "This cannot be undone.",
 }
 
 // tr returns the text for a key.

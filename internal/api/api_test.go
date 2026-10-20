@@ -247,3 +247,33 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteBackup(t *testing.T) {
+	f := newFixture(t)
+	path := "/servers/pg-main/backups/20261018T020001"
+	if code, _ := f.call(t, "DELETE", path, f.env.Keys["operator"], ""); code != 403 {
+		t.Errorf("operator delete: %d", code)
+	}
+	if code, _ := f.call(t, "DELETE", path, "", ""); code != 401 {
+		t.Errorf("anonymous delete: %d", code)
+	}
+	req := httptest.NewRequest("DELETE", "/api/v1"+path, nil)
+	req.Header.Set("Authorization", "Bearer "+f.env.Keys["admin"])
+	rec := httptest.NewRecorder()
+	f.h.ServeHTTP(rec, req)
+	if rec.Code != 204 || rec.Body.Len() != 0 {
+		t.Errorf("admin delete: %d %q", rec.Code, rec.Body.String())
+	}
+	if code, out := f.call(t, "DELETE", "/servers/pg-rsync/backups/20261019T230001", f.env.Keys["admin"], ""); code != 409 || !strings.Contains(out["error"].(string), "Minimum redundancy") {
+		t.Errorf("minimum redundancy: %d %v", code, out)
+	}
+	if code, _ := f.call(t, "DELETE", "/servers/pg-main/backups/19990101T000000", f.env.Keys["admin"], ""); code != 404 {
+		t.Errorf("unknown backup: %d", code)
+	}
+	if code, _ := f.call(t, "DELETE", "/servers/nope/backups/20261018T020001", f.env.Keys["admin"], ""); code != 404 {
+		t.Errorf("unknown server: %d", code)
+	}
+	if code, _ := f.call(t, "DELETE", "/servers/pg-main/backups/latest", f.env.Keys["admin"], ""); code != 422 {
+		t.Errorf("malformed id: %d", code)
+	}
+}

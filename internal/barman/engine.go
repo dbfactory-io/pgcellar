@@ -3,6 +3,7 @@ package barman
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -238,4 +239,59 @@ func (e *CLIEngine) SwitchWAL(ctx context.Context, server string) error {
 
 func (e *CLIEngine) Cron(ctx context.Context) error {
 	return e.runPlain(ctx, "cron")
+}
+
+// BackupIDPattern is the shape of a Barman backup id (a timestamp).
+var BackupIDPattern = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}$`)
+
+// runText runs a command whose output is shown to the user. On failure the
+// error carries Barman's own message (stderr, else stdout) and nothing else.
+func (e *CLIEngine) runText(ctx context.Context, args ...string) (string, error) {
+	out, errOut, err := e.Runner.Run(ctx, args...)
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if ctx.Err() != nil {
+			return text, ctx.Err()
+		}
+		msg := strings.TrimSpace(string(errOut))
+		if msg == "" {
+			msg = text
+		}
+		if msg != "" {
+			return text, &BarmanError{Msg: msg, Err: err}
+		}
+	}
+	return text, err
+}
+
+// BarmanError is a failed Barman command whose message is Barman's own.
+type BarmanError struct {
+	Msg string
+	Err error
+}
+
+func (e *BarmanError) Error() string { return e.Msg }
+func (e *BarmanError) Unwrap() error { return e.Err }
+
+// DeleteBackup runs `barman delete <server> <backup_id>`.
+func (e *CLIEngine) DeleteBackup(ctx context.Context, server, backupID string) (string, error) {
+	if !BackupIDPattern.MatchString(backupID) {
+		return "", fmt.Errorf("%q is not a backup id", backupID)
+	}
+	return e.runText(ctx, "delete", server, backupID)
+}
+
+// Recover runs `barman recover [--target-time T] <server> <backup_id> <dest>`.
+// The recovery is local (no --remote-ssh-command): dest is a directory of the
+// host where Barman runs.
+func (e *CLIEngine) Recover(ctx context.Context, server, backupID, dest string, opts RecoverOptions) (string, error) {
+	if !BackupIDPattern.MatchString(backupID) {
+		return "", fmt.Errorf("%q is not a backup id", backupID)
+	}
+	args := []string{"recover"}
+	if opts.TargetTime != "" {
+		args = append(args, "--target-time", opts.TargetTime)
+	}
+	args = append(args, server, backupID, dest)
+	return e.runText(ctx, args...)
 }

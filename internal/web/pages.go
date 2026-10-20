@@ -128,9 +128,8 @@ func (s *Server) serverCreate(w http.ResponseWriter, r *http.Request, u *userCtx
 type serverPageData struct {
 	Detail     app.ServerDetail
 	Form       formData
-	Backups    []app.BackupView
+	BackupList backupListData
 	Updated    time.Time // when the cache entry of the server was built
-	BackupsErr string
 	Runs       []app.RunView
 	CanOperate bool
 	CanAdmin   bool
@@ -158,14 +157,7 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 	if override != nil {
 		data.Form = *override
 	}
-	switch backups, err := s.app.Backups(r.Context(), u.Name, name); {
-	case errors.Is(err, app.ErrRefreshPending):
-		data.BackupsErr = "First refresh pending: the backup list appears after pgCellar has read Barman once."
-	case err != nil:
-		data.BackupsErr = "The backup list is not available: " + err.Error()
-	default:
-		data.Backups = backups
-	}
+	data.BackupList = s.backupList(r, u, name)
 	data.Runs, _ = s.app.Runs(name, 10)
 	s.render(w, status, "server", s.newPage(r, u, name, "servers", data))
 }
@@ -188,6 +180,79 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request, u *userCtx
 		problems = pe.Problems
 	}
 	s.renderServer(w, r, u, http.StatusUnprocessableEntity, &formData{In: in, Problems: problems, Action: "/servers/" + name, CSRF: u.CSRF})
+}
+
+// backupListData feeds the "backup_list" fragment: the backups of a server,
+// with at most one row asking for a confirmation, and the outcome of the last
+// delete.
+type backupListData struct {
+	Server   string
+	Backups  []app.BackupView
+	Err      string
+	CanAdmin bool
+	Confirm  string // id of the backup whose deletion is being confirmed
+	Flash    string
+	FlashBad bool
+}
+
+func (s *Server) backupList(r *http.Request, u *userCtx, name string) backupListData {
+	d := backupListData{Server: name, CanAdmin: app.RoleAtLeast(u.Role, app.RoleAdmin)}
+	switch backups, err := s.app.Backups(r.Context(), u.Name, name); {
+	case errors.Is(err, app.ErrRefreshPending):
+		d.Err = "First refresh pending: the backup list appears after pgCellar has read Barman once."
+	case err != nil:
+		d.Err = "The backup list is not available: " + err.Error()
+	default:
+		d.Backups = backups
+	}
+	return d
+}
+
+func (s *Server) backupListFragment(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	name := r.PathValue("name")
+	d := s.backupList(r, u, name)
+	if id := r.URL.Query().Get("confirm"); id != "" && d.CanAdmin {
+		for _, b := range d.Backups {
+			if b.ID == id {
+				d.Confirm = id
+			}
+		}
+	}
+	s.fragment(w, http.StatusOK, "backup_list", d)
+}
+
+func (s *Server) serverBackupDelete(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	name, id := r.PathValue("name"), r.PathValue("id")
+	err := s.app.DeleteBackup(r.Context(), u.Name, name, id)
+	if !isHX(r) {
+		if err != nil {
+			s.fail(w, r, u, err)
+			return
+		}
+		http.Redirect(w, r, "/servers/"+name, http.StatusSeeOther)
+		return
+	}
+	d := s.backupList(r, u, name)
+	switch {
+	case err == nil:
+		d.Flash = "Backup " + id + " deleted."
+	case errors.Is(err, app.ErrNotFound):
+		d.Flash, d.FlashBad = "Backup "+id+" does not exist (any more).", true
+	default:
+		var ce *app.ConflictError
+		var pe *app.ProblemsError
+		switch {
+		case errors.As(err, &ce):
+			d.Flash = "Barman did not delete backup " + id + ": " + ce.Msg
+		case errors.As(err, &pe):
+			d.Flash = strings.Join(pe.Problems, " ")
+		default:
+			s.app.Logf("delete backup %s/%s: %v", name, id, err)
+			d.Flash = "The delete failed: " + err.Error()
+		}
+		d.FlashBad = true
+	}
+	s.fragment(w, http.StatusOK, "backup_list", d)
 }
 
 type checkData struct {

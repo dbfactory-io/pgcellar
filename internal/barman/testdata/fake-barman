@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
     --format=*) format="${1#--format=}"; shift ;;
     -c|--config|--log-level) shift 2 ;;
     -q|--quiet|-d|--debug) shift ;;
-    -h|--help) echo "usage: barman [-h] [-c CONFIG] [-q] [-d] [-f {json,console}] {check,diagnose,list-servers,list-backups,show-backup,status,backup,switch-wal,cron} ..."; exit 0 ;;
+    -h|--help) echo "usage: barman [-h] [-c CONFIG] [-q] [-d] [-f {json,console}] {check,diagnose,list-servers,list-backups,show-backup,status,backup,switch-wal,cron,delete,recover} ..."; exit 0 ;;
     -*) echo "barman: error: unrecognized arguments: $1" >&2; exit 2 ;;
     *) break ;;
   esac
@@ -64,9 +64,12 @@ emit() {
 }
 
 minimal=0
+target_time=
 args=()
-for a in "$@"; do
+while [ $# -gt 0 ]; do
+  a="$1"; shift
   case "$a" in
+    --target-time) target_time="${1:-}"; shift ;;
     --minimal) minimal=1 ;;
     --force|--archive|--wait|--no-wait) ;;
     -*) echo "barman: error: unrecognized arguments: $a" >&2; exit 2 ;;
@@ -74,6 +77,9 @@ for a in "$@"; do
   esac
 done
 set -- "${args[@]+"${args[@]}"}"
+
+# backup_known SERVER ID: the id is one of the show-backup fixtures.
+backup_known() { [ -f "$fx/show-backup-$1-$2.json" ]; }
 
 case "$cmd" in
   list-servers)
@@ -121,6 +127,37 @@ case "$cmd" in
     [ "$1" = broken ] && fail "Cannot connect to PostgreSQL for server 'broken'"
     [ "$format" = json ] && printf '{"_INFO": ["The WAL file 000000010000000000000008 has been closed on server %s"]}' "$1"
     exit 0
+    ;;
+  delete)
+    need_server "${1:-}"
+    id="${2:-}"
+    [ -n "$id" ] || { echo "barman: error: the following arguments are required: backup_id" >&2; exit 2; }
+    backup_known "$1" "$id" || fail "Unknown backup '$id' for server '$1'"
+    # pg-rsync keeps its only backup: Barman refuses to go below the minimum.
+    [ "$1" = pg-rsync ] && fail "Minimum redundancy requirements: actual number of backups (1) is lower than the configured minimum redundancy (2). Skipping delete of backup $id for server $1"
+    echo "Deleting backup $id for server $1"
+    echo "Delete associated WAL segments: none"
+    echo "Deleted backup $id (start time: Tue Oct 20 02:00:01 2026, elapsed time: 1 second)"
+    ;;
+  recover)
+    need_server "${1:-}"
+    id="${2:-}"; dest="${3:-}"
+    [ -n "$id" ] && [ -n "$dest" ] || { echo "barman: error: the following arguments are required: backup_id, destination_directory" >&2; exit 2; }
+    [ "$1" = broken ] && fail "Cannot connect to PostgreSQL for server 'broken'"
+    backup_known "$1" "$id" || fail "Unknown backup '$id' for server '$1'"
+    if [ -n "$target_time" ]; then
+      echo "Target time: $target_time"
+    fi
+    # A tiny stand-in for a restored data directory.
+    mkdir -p "$dest/base/1" "$dest/pg_wal" || fail "Cannot create $dest"
+    echo "16" >"$dest/PG_VERSION"
+    echo "# restored from $1/$id" >"$dest/postgresql.auto.conf"
+    if [ -n "$target_time" ]; then echo "recovery_target_time = '$target_time'" >>"$dest/postgresql.auto.conf"; fi
+    head -c 4096 /dev/zero >"$dest/base/1/1259"
+    : >"$dest/recovery.signal"
+    echo "Starting local restore for server $1 using backup $id"
+    echo "Destination directory: $dest"
+    echo "Your PostgreSQL server has been successfully prepared for recovery!"
     ;;
   cron)
     # FAKE_BARMAN_CRON_DELAY (seconds): a slow cron, logged as "cron-done" when it ends.

@@ -533,6 +533,51 @@ func (a *App) SwitchWAL(ctx context.Context, actor, name string) (string, error)
 	return out, nil
 }
 
+// DeleteBackup removes one complete backup with `barman delete`. Barman
+// refuses by itself to go below minimum_redundancy; its message is returned as
+// a ConflictError. The cache of the server is refreshed afterwards.
+func (a *App) DeleteBackup(ctx context.Context, actor, server, backupID string) error {
+	if !barman.BackupIDPattern.MatchString(backupID) {
+		return &ProblemsError{Problems: []string{fmt.Sprintf("%q is not a backup id (expected something like 20261020T124328).", backupID)}}
+	}
+	if err := a.knownServer(ctx, server); err != nil {
+		return err
+	}
+	if st, ok := a.State(server); ok {
+		found := false
+		for _, b := range st.Backups {
+			if b.ID == backupID {
+				found = true
+			}
+		}
+		if !found {
+			return ErrNotFound
+		}
+	}
+	// A delete can take minutes on a large backup: it must not stop because
+	// the browser went away.
+	dctx, cancel := context.WithTimeout(barman.WithActor(context.WithoutCancel(ctx), actor), time.Hour)
+	defer cancel()
+	_, err := a.Engine.DeleteBackup(dctx, server, backupID)
+	details := "exit=0"
+	if err != nil {
+		details = "failed: " + err.Error()
+	}
+	_ = a.Store.AddAudit(actor, "backup.delete", server+"/"+backupID, details)
+	a.refreshServer(dctx, server)
+	if err != nil {
+		var be *barman.BarmanError
+		if errors.As(err, &be) {
+			if strings.Contains(be.Msg, "Unknown backup") {
+				return ErrNotFound
+			}
+			return &ConflictError{Msg: be.Msg}
+		}
+		return err
+	}
+	return nil
+}
+
 // ---- runs, history, audit ----
 
 func toRunView(r store.Run, withOutput bool) RunView {

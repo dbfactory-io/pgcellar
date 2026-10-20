@@ -471,3 +471,53 @@ func TestPagesNeverRunBarman(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteBackupConfirmationInPage(t *testing.T) {
+	f := newFixture(t)
+	admin, acsrf := f.login(t, "admin")
+	operator, ocsrf := f.login(t, "operator")
+
+	// Only administrators see the button.
+	if body := f.get("/servers/pg-main", admin).Body.String(); !strings.Contains(body, "Delete…") || !strings.Contains(body, `id="backup-list"`) {
+		t.Error("admin must see the Delete… button")
+	}
+	if body := f.get("/servers/pg-main", operator).Body.String(); strings.Contains(body, "Delete…") {
+		t.Error("operator must not see the Delete… button")
+	}
+
+	// The confirmation is a fragment in the page, never a browser dialog.
+	rec := f.get("/servers/pg-main/backups/list?confirm=20261018T020001", admin, "HX-Request", "true")
+	body := rec.Body.String()
+	for _, want := range []string{"Delete backup", "20261018T020001", "(1.4 GiB)", "This cannot be undone.", ">Delete</button>", ">Keep it</button>", "/servers/pg-main/backups/20261018T020001/delete"} {
+		if rec.Code != 200 || !strings.Contains(body, want) {
+			t.Errorf("confirmation lacks %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "hx-confirm") {
+		t.Error("no browser confirm()")
+	}
+	// An operator asking for a confirmation just gets the plain list.
+	if b := f.get("/servers/pg-main/backups/list?confirm=20261018T020001", operator, "HX-Request", "true").Body.String(); strings.Contains(b, "cannot be undone") {
+		t.Error("operator got a confirmation")
+	}
+
+	// Roles on the delete itself.
+	if rec := f.post("/servers/pg-main/backups/20261018T020001/delete", operator, url.Values{}, "HX-Request", "true", "X-CSRF-Token", ocsrf); rec.Code != http.StatusForbidden {
+		t.Errorf("operator delete: %d", rec.Code)
+	}
+	if rec := f.post("/servers/pg-main/backups/20261018T020001/delete", admin, url.Values{}, "HX-Request", "true"); rec.Code != http.StatusForbidden {
+		t.Errorf("delete without CSRF: %d", rec.Code)
+	}
+	rec = f.post("/servers/pg-main/backups/20261018T020001/delete", admin, url.Values{}, "HX-Request", "true", "X-CSRF-Token", acsrf)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Backup 20261018T020001 deleted.") || strings.Contains(rec.Body.String(), "<html") {
+		t.Errorf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(apptest.Calls(t, f.env), "delete pg-main 20261018T020001") {
+		t.Error("barman delete not called")
+	}
+	// Barman's refusal is shown in place, with its message.
+	rec = f.post("/servers/pg-rsync/backups/20261019T230001/delete", admin, url.Values{}, "HX-Request", "true", "X-CSRF-Token", acsrf)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Minimum redundancy requirements") || !strings.Contains(rec.Body.String(), "flash bad") {
+		t.Errorf("refusal: %d %s", rec.Code, rec.Body.String())
+	}
+}

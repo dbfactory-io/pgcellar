@@ -48,6 +48,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST "+v+"/servers/{name}/backup", a.auth(app.RoleOperator, a.backup))
 	mux.HandleFunc("POST "+v+"/servers/{name}/switch-wal", a.auth(app.RoleOperator, a.switchWAL))
 	mux.HandleFunc("GET "+v+"/servers/{name}/backups", a.auth(app.RoleViewer, a.backups))
+	mux.HandleFunc("DELETE "+v+"/servers/{name}/backups/{id}", a.auth(app.RoleAdmin, a.deleteBackup))
 	mux.HandleFunc("GET "+v+"/status", a.auth(app.RoleViewer, a.status))
 	mux.HandleFunc("GET "+v+"/runs", a.auth(app.RoleViewer, a.runs))
 	mux.HandleFunc("GET "+v+"/runs/{id}", a.auth(app.RoleViewer, a.run))
@@ -306,4 +307,12 @@ func (a *API) audit(w http.ResponseWriter, r *http.Request, p principal) {
 		return
 	}
 	writeData(w, http.StatusOK, list)
+}
+
+func (a *API) deleteBackup(w http.ResponseWriter, r *http.Request, p principal) {
+	if err := a.app.DeleteBackup(r.Context(), p.actor(), r.PathValue("name"), r.PathValue("id")); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -168,4 +168,17 @@ type Engine interface {
 	Backup(ctx context.Context, server string) error    // runs `barman backup <server>`
 	SwitchWAL(ctx context.Context, server string) error // `barman switch-wal --force --archive <server>`
 	Cron(ctx context.Context) error                     // `barman cron`
+	// DeleteBackup runs `barman delete <server> <backup_id>` and returns what
+	// Barman printed. Barman itself refuses to go below minimum_redundancy.
+	DeleteBackup(ctx context.Context, server, backupID string) (string, error)
+	// Recover runs `barman recover` on this host into dest, see RecoverOptions.
+	Recover(ctx context.Context, server, backupID, dest string, opts RecoverOptions) (string, error)
+}
+
+// RecoverOptions are the optional parts of `barman recover`.
+type RecoverOptions struct {
+	// TargetTime is the point in time to recover to, passed as
+	// --target-time. Empty means "as far as the archived WAL goes" (no
+	// target at all), which is also what Barman does by default.
+	TargetTime string
 }

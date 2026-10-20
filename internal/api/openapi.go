@@ -82,6 +82,9 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			"/servers/{name}/backups": m{
 				"get": op("List the backups of a server, newest first. Cached, refreshed every status_interval; POST /check for a live check. 503 with Retry-After while the first refresh is pending.", "viewer", m{"parameters": server, "responses": m{"200": resp("Backups", dataOf(m{"type": "array", "items": ref("Backup")})), "404": errResp, "503": errResp}}),
 			},
+			"/servers/{name}/backups/{id}": m{
+				"delete": op("Delete one complete backup (barman delete). Barman refuses to go below minimum_redundancy: its message comes back in a 409. Audited as backup.delete.", "admin", m{"parameters": []m{nameParam(), {"name": "id", "in": "path", "required": true, "schema": m{"type": "string", "pattern": "^[0-9]{8}T[0-9]{6}$"}}}, "responses": m{"204": resp("Deleted", nil), "404": errResp, "409": errResp, "502": errResp}}),
+			},
 			"/status": m{
 				"get": op("Cached status of every server (refreshed every status interval)", "viewer", m{"responses": m{"200": resp("Status", dataOf(m{"type": "object", "properties": m{"servers": m{"type": "array", "items": ref("ServerState")}, "updated_at": m{"type": "string", "format": "date-time"}}}))}}),
 			},

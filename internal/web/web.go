@@ -143,6 +143,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /servers/{name}/check", s.guard(app.RoleOperator, s.serverCheck))
 	mux.HandleFunc("POST /servers/{name}/backup", s.guard(app.RoleOperator, s.serverBackup))
 	mux.HandleFunc("POST /servers/{name}/switch-wal", s.guard(app.RoleOperator, s.serverSwitchWAL))
+	mux.HandleFunc("GET /servers/{name}/backups/list", s.guard(app.RoleViewer, s.backupListFragment))
+	mux.HandleFunc("POST /servers/{name}/backups/{id}/delete", s.guard(app.RoleAdmin, s.serverBackupDelete))
 	mux.HandleFunc("GET /runs", s.guard(app.RoleViewer, s.runsPage))
 	mux.HandleFunc("GET /runs/{id}", s.guard(app.RoleViewer, s.runPage))
 	mux.HandleFunc("GET /runs/{id}/fragment", s.guard(app.RoleViewer, s.runFragment))
