@@ -72,6 +72,7 @@ type App struct {
 	cacheOrder  []string
 	cacheTime   time.Time
 	cacheErr    string
+	cacheStale  bool // loaded from the database, no refresh has completed since
 	refreshOnce sync.Mutex
 
 	firstCron chan struct{} // closed once the first `barman cron` has run (or is not wanted)
@@ -162,6 +163,7 @@ func Load(configPath string, dev bool) (*App, error) {
 		}
 	}
 	a.closeStaleRuns()
+	a.loadStatusCache()
 	return a, nil
 }
 

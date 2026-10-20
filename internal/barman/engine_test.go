@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestEngine(t *testing.T) (*CLIEngine, *[]AuditEntry) {
@@ -88,6 +89,39 @@ func TestEngineStatusHealthy(t *testing.T) {
 	}
 	if st.LastWALTime.IsZero() || len(st.Checks) == 0 {
 		t.Errorf("wal time / checks missing: %+v", st)
+	}
+	if len(st.Backups) != 3 || st.Backups[0].ID != "20261018T020001" {
+		t.Errorf("the parsed list-backups must be kept, oldest first: %+v", st.Backups)
+	}
+	if !st.StreamingLive || !HasStreamingCheck(st.Checks) {
+		t.Errorf("receive_wal_running is OK, streaming should be live")
+	}
+	if !st.LastDataReceived.IsZero() {
+		t.Errorf("no streaming directory: %v", st.LastDataReceived)
+	}
+}
+
+func TestReadLastReceived(t *testing.T) {
+	home := t.TempDir()
+	if !ReadLastReceived(home, "s").IsZero() {
+		t.Fatal("absent directory must give the zero time")
+	}
+	dir := filepath.Join(home, "s", "streaming")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	old, recent := time.Unix(1700000000, 0), time.Unix(1700003600, 0)
+	for name, at := range map[string]time.Time{"a": old, "b.partial": recent} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("x"), 0o640); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := ReadLastReceived(home, "s"); !got.Equal(recent) {
+		t.Fatalf("got %v want %v", got, recent)
 	}
 }
 

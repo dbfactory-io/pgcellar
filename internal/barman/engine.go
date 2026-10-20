@@ -135,6 +135,7 @@ func (e *CLIEngine) Status(ctx context.Context, server string) (*ServerStatus, e
 		st.Problems = append(st.Problems, fmt.Sprintf("Barman could not list the backups of %s: %v.", server, err))
 	} else {
 		st.BackupCount = len(backups)
+		st.Backups = backups
 		var last *Backup
 		var lastBad *Backup
 		for i := range backups {
@@ -176,6 +177,9 @@ func (e *CLIEngine) Status(ctx context.Context, server string) (*ServerStatus, e
 		}
 	}
 
+	st.BaseProblems = append([]string(nil), st.Problems...)
+	st.LastDataReceived = ReadLastReceived(e.barmanHome(), server)
+
 	checks, err := e.Check(ctx, server)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -184,13 +188,8 @@ func (e *CLIEngine) Status(ctx context.Context, server string) (*ServerStatus, e
 		st.Problems = append(st.Problems, fmt.Sprintf("Barman could not run its checks on %s: %v.", server, err))
 	} else {
 		st.Checks = checks
-		for _, c := range checks {
-			if c.OK {
-				continue
-			}
-			what, fix := Explain(c)
-			st.Problems = append(st.Problems, fmt.Sprintf("%s failed. %s %s", DisplayName(c.Name), what, fix))
-		}
+		st.StreamingLive = StreamingLiveFrom(checks)
+		st.Problems = append(st.Problems, CheckProblems(checks)...)
 	}
 
 	st.Healthy = len(st.Problems) == 0

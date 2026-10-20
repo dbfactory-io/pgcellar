@@ -386,6 +386,9 @@ func TestMetricsAndHealth(t *testing.T) {
 		"# TYPE pgcellar_last_backup_age_seconds gauge",
 		`pgcellar_last_backup_age_seconds{server="pg-main"} 1170`,
 		`pgcellar_last_wal_age_seconds{server="pg-main"} `,
+		`pgcellar_last_wal_received_age_seconds{server="pg-main"} 300`,
+		`pgcellar_wal_streaming_live{server="pg-main"} 1`,
+		`pgcellar_wal_streaming_live{server="broken"} 0`,
 		`pgcellar_backups_total{server="pg-main"} 3`,
 		`pgcellar_check_ok{server="pg-main"} 1`,
 		`pgcellar_check_ok{server="broken"} 0`,
@@ -431,5 +434,41 @@ func TestSessionExpires(t *testing.T) {
 	}
 	if rec := f.get("/status", c); rec.Code != http.StatusSeeOther {
 		t.Errorf("deleted session: %d", rec.Code)
+	}
+}
+
+// The pages read the cache: opening the list, a server page and the status
+// page runs no Barman command, and the WAL wording is the agreed one.
+func TestPagesNeverRunBarman(t *testing.T) {
+	f := newFixture(t)
+	admin, _ := f.login(t, "admin")
+	count := func() int {
+		b, _ := os.ReadFile(f.env.CallLog)
+		return strings.Count(string(b), "\n")
+	}
+	before := count()
+	start := time.Now()
+	list := f.get("/servers", admin)
+	listTook := time.Since(start)
+	page := f.get("/servers/pg-main", admin)
+	status := f.get("/status", admin)
+	if list.Code != 200 || page.Code != 200 || status.Code != 200 {
+		t.Fatalf("codes %d %d %d", list.Code, page.Code, status.Code)
+	}
+	if after := count(); after != before {
+		t.Fatalf("pages ran Barman: %d -> %d", before, after)
+	}
+	if listTook > 500*time.Millisecond {
+		t.Errorf("/servers took %v", listTook)
+	}
+	for _, want := range []string{"Streaming:", "live", "last data 5 min ago", "Last filled WAL file: 19 min ago"} {
+		if !strings.Contains(status.Body.String(), want) {
+			t.Errorf("status page lacks %q", want)
+		}
+	}
+	for _, want := range []string{"Last filled WAL file (a WAL file is 16 MB; a quiet server fills one slowly, the nightly backup closes one)", "Cached status from"} {
+		if !strings.Contains(page.Body.String(), want) {
+			t.Errorf("server page lacks %q", want)
+		}
 	}
 }

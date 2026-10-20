@@ -41,14 +41,14 @@
 {{if .States}}
 <div class="tablewrap">
 <table class="status">
-<thead><tr><th>Server</th><th>State</th><th>Last backup</th><th>Last WAL</th><th>Backups</th><th>Check</th></tr></thead>
+<thead><tr><th>Server</th><th>State</th><th>Last backup</th><th>{{t "status.wal"}}</th><th>Backups</th><th>Check</th></tr></thead>
 <tbody>
 {{range .States}}
 <tr class="lv-{{.Level}}">
   <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
   <td>{{template "level" .Level}}</td>
   <td>{{if .LastBackupID}}{{.LastBackupID}}<br><small>{{ageSec .LastBackupAgeSeconds}} ago &middot; {{size .LastBackupSize}}</small>{{else}}<small>none yet</small>{{end}}</td>
-  <td>{{if .LastWAL.IsZero}}<small>unknown</small>{{else}}{{ageSec .LastWALAgeSeconds}} ago{{end}}</td>
+  <td>{{t "wal.streaming"}}: {{if .StreamingLive}}<span class="pill ok">{{t "wal.live"}}</span>{{if not .LastDataReceived.IsZero}} &middot; {{t "wal.data"}} {{ageSec .LastDataReceivedAgeSeconds}} ago{{end}}{{else if .StreamingMonitored}}<span class="pill bad">{{t "wal.stopped"}}</span>{{else}}<small>{{t "wal.not_used"}}</small>{{end}}<br><small>{{t "wal.filled"}}: {{if .LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .LastFilledWALAgeSeconds}} ago{{end}}</small></td>
   <td>{{.BackupCount}}</td>
   <td>{{if .CheckOK}}<span class="pill ok">OK</span>{{else if .Checks}}<span class="pill bad">FAILED</span>{{else}}<span class="pill warn">unknown</span>{{end}}</td>
 </tr>
@@ -57,7 +57,7 @@
 {{end}}
 </tbody></table>
 </div>
-<p class="muted">Cached status, refreshed every {{.Every}}{{if not .Updated.IsZero}}; last refresh {{ago .Updated}} ago{{if .Dev}} (clock frozen for fixtures){{end}}{{end}}.</p>
+<p class="muted">Cached status, refreshed every {{.Every}}{{if .Stale}}; as of {{ts .Updated}}, refreshing{{else if not .Updated.IsZero}}; last refresh {{ago .Updated}} ago{{if .Dev}} (clock frozen for fixtures){{end}}{{end}}.</p>
 {{else}}
 <p class="empty">No server yet, or the first status check is still running. <a href="/servers">Servers</a></p>
 {{end}}

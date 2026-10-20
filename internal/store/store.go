@@ -124,6 +124,11 @@ var migrations = []string{
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL
 	);`,
+	`CREATE TABLE status_cache (
+		server TEXT PRIMARY KEY,
+		json TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);`,
 }
 
 // Migrate applies pending migrations; calling it again is harmless.
@@ -360,4 +365,57 @@ func (s *Store) GetSetting(key string) (string, bool, error) {
 func (s *Store) SetSetting(key, value string) error {
 	_, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
+}
+
+// StatusRow is the last known state of one server, as JSON.
+type StatusRow struct {
+	Server    string
+	JSON      string
+	UpdatedAt time.Time
+}
+
+// SaveStatuses replaces the whole status cache: the given rows are written
+// and every other server is forgotten.
+func (s *Store) SaveStatuses(rows []StatusRow) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`DELETE FROM status_cache`); err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if _, err := tx.Exec(`INSERT INTO status_cache (server, json, updated_at) VALUES (?, ?, ?)`, r.Server, r.JSON, ts(r.UpdatedAt)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// SaveStatus creates or replaces the cached state of one server.
+func (s *Store) SaveStatus(r StatusRow) error {
+	_, err := s.db.Exec(`INSERT INTO status_cache (server, json, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(server) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`, r.Server, r.JSON, ts(r.UpdatedAt))
+	return err
+}
+
+// LoadStatuses returns every cached state, ordered by server name.
+func (s *Store) LoadStatuses() ([]StatusRow, error) {
+	rows, err := s.db.Query(`SELECT server, json, updated_at FROM status_cache ORDER BY server`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []StatusRow
+	for rows.Next() {
+		var r StatusRow
+		var at string
+		if err := rows.Scan(&r.Server, &r.JSON, &at); err != nil {
+			return nil, err
+		}
+		r.UpdatedAt = parseTS(at)
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

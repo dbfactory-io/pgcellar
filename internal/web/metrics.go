@@ -41,11 +41,23 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		}
 		return fmt.Sprint(*st.LastBackupAgeSeconds), true
 	})
-	family("pgcellar_last_wal_age_seconds", "Seconds since the last archived WAL file.", func(st app.ServerState) (string, bool) {
-		if st.LastWALAgeSeconds == nil {
+	family("pgcellar_last_wal_received_age_seconds", "Seconds since data last reached Barman (newest file in the streaming directory).", func(st app.ServerState) (string, bool) {
+		if st.LastDataReceivedAgeSeconds == nil {
 			return "", false
 		}
-		return fmt.Sprint(*st.LastWALAgeSeconds), true
+		return fmt.Sprint(*st.LastDataReceivedAgeSeconds), true
+	})
+	family("pgcellar_wal_streaming_live", "1 when the Barman WAL receiver is running, else 0.", func(st app.ServerState) (string, bool) {
+		if st.StreamingLive {
+			return "1", true
+		}
+		return "0", true
+	})
+	family("pgcellar_last_wal_age_seconds", "Seconds since the last filled WAL file.", func(st app.ServerState) (string, bool) {
+		if st.LastFilledWALAgeSeconds == nil {
+			return "", false
+		}
+		return fmt.Sprint(*st.LastFilledWALAgeSeconds), true
 	})
 	family("pgcellar_backups_total", "Number of backups Barman holds for the server.", func(st app.ServerState) (string, bool) {
 		return fmt.Sprint(st.BackupCount), true

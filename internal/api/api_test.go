@@ -86,6 +86,9 @@ func TestServersAndStatus(t *testing.T) {
 	if code != 200 || d["backup_method"] != "postgres" || d["name"] != "pg-main" || d["in_barman"] != true {
 		t.Fatalf("server: %d %v", code, out)
 	}
+	if st, _ := d["state"].(map[string]any); st == nil || st["streaming_live"] != true || st["last_data_received"] == nil || st["last_filled_wal_time"] == nil || st["last_wal"] == nil || st["stale"] != false {
+		t.Errorf("state fields: %v", d["state"])
+	}
 	if ret := d["retention"].(map[string]any); ret["recovery_window_days"] != float64(14) || ret["minimum_redundancy"] != float64(2) {
 		t.Errorf("retention: %v", ret)
 	}

@@ -81,6 +81,9 @@ func (a *API) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, app.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not found")
+	case errors.Is(err, app.ErrRefreshPending):
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, "first refresh pending: the status cache has no data for this server yet")
 	case errors.Is(err, app.ErrNoFile):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.As(err, &conflict):

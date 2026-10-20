@@ -3,6 +3,7 @@ package app
 import (
 	"time"
 
+	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
 )
 
@@ -50,20 +51,40 @@ type CheckView struct {
 
 // ServerState is the cached digest of a server (refreshed every status interval).
 type ServerState struct {
-	Name                 string      `json:"name"`
-	Level                string      `json:"level"`
-	LastBackupID         string      `json:"last_backup_id,omitempty"`
-	LastBackupEnd        time.Time   `json:"last_backup_end,omitzero"`
-	LastBackupSize       int64       `json:"last_backup_size,omitempty"`
-	LastBackupAgeSeconds *int64      `json:"last_backup_age_seconds,omitempty"`
-	LastWAL              time.Time   `json:"last_wal,omitzero"`
-	LastWALAgeSeconds    *int64      `json:"last_wal_age_seconds,omitempty"`
-	BackupCount          int         `json:"backup_count"`
-	Checks               []CheckView `json:"checks"`
-	CheckOK              bool        `json:"check_ok"`
-	Problems             []string    `json:"problems"`
-	Error                string      `json:"error,omitempty"`
-	UpdatedAt            time.Time   `json:"updated_at"`
+	Name                 string    `json:"name"`
+	Level                string    `json:"level"`
+	LastBackupID         string    `json:"last_backup_id,omitempty"`
+	LastBackupEnd        time.Time `json:"last_backup_end,omitzero"`
+	LastBackupSize       int64     `json:"last_backup_size,omitempty"`
+	LastBackupAgeSeconds *int64    `json:"last_backup_age_seconds,omitempty"`
+	// LastFilledWAL is the last WAL file Barman received complete (a WAL file
+	// is 16 MB; a quiet server fills one slowly). Name and time come from the
+	// WAL catalogue file.
+	LastFilledWAL              string    `json:"last_filled_wal,omitempty"`
+	LastFilledWALTime          time.Time `json:"last_filled_wal_time,omitzero"`
+	LastFilledWALAgeSeconds    *int64    `json:"last_filled_wal_age_seconds,omitempty"`
+	LastWAL                    time.Time `json:"last_wal,omitzero"`              // deprecated alias of last_filled_wal_time
+	LastWALAgeSeconds          *int64    `json:"last_wal_age_seconds,omitempty"` // deprecated alias of last_filled_wal_age_seconds
+	StreamingMonitored         bool      `json:"streaming_monitored"`            // Barman checks a WAL receiver for this server
+	StreamingLive              bool      `json:"streaming_live"`                 // the WAL receiver runs (check receive_wal_running)
+	LastDataReceived           time.Time `json:"last_data_received,omitzero"`    // when data last reached Barman (streaming directory)
+	LastDataReceivedAgeSeconds *int64    `json:"last_data_received_age_seconds,omitempty"`
+	// Notes are remarks that are not alerts.
+	Notes       []string    `json:"notes"`
+	BackupCount int         `json:"backup_count"`
+	Checks      []CheckView `json:"checks"`
+	CheckOK     bool        `json:"check_ok"`
+	Problems    []string    `json:"problems"`
+	Error       string      `json:"error,omitempty"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	// Stale is true for a state reloaded from the database after a restart,
+	// until the first refresh has completed.
+	Stale bool `json:"stale"`
+
+	// Backups is the list from the last refresh, newest first. Served by the
+	// backups endpoint and the server page, never by running Barman.
+	Backups []BackupView `json:"-"`
+	raw     *barman.ServerStatus
 }
 
 // BackupView is one backup of a server.

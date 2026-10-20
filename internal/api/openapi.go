@@ -63,11 +63,11 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 		"servers": []m{{"url": "/api/v1"}},
 		"paths": m{
 			"/servers": m{
-				"get":  op("List servers", "viewer", m{"responses": m{"200": resp("Servers", dataOf(m{"type": "array", "items": ref("ServerDetail")}))}}),
+				"get":  op("List servers. Cached, refreshed every status_interval; POST /check for a live check. Never runs Barman.", "viewer", m{"responses": m{"200": resp("Servers", dataOf(m{"type": "array", "items": ref("ServerDetail")}))}}),
 				"post": op("Add a server (writes barman.d and pgcellar.yaml, commits)", "admin", m{"requestBody": body("ServerInput"), "responses": m{"201": resp("Created", nil), "409": errResp, "422": errResp}}),
 			},
 			"/servers/{name}": m{
-				"get": op("Show a server", "viewer", m{"parameters": server, "responses": m{"200": resp("Server", dataOf(ref("ServerDetail"))), "404": errResp}}),
+				"get": op("Show a server. Cached, refreshed every status_interval; POST /check for a live check. Never runs Barman.", "viewer", m{"parameters": server, "responses": m{"200": resp("Server", dataOf(ref("ServerDetail"))), "404": errResp}}),
 				"put": op("Change a server; fields left out keep their value (writes the files and commits)", "admin", m{"parameters": server, "requestBody": body("ServerInput"), "responses": m{"200": resp("Saved", nil), "404": errResp, "409": errResp, "422": errResp}}),
 			},
 			"/servers/{name}/check": m{
@@ -80,7 +80,7 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 				"post": op("Close and archive the current WAL segment", "operator", m{"parameters": server, "responses": m{"200": resp("Done", nil), "404": errResp, "502": errResp}}),
 			},
 			"/servers/{name}/backups": m{
-				"get": op("List the backups of a server, newest first", "viewer", m{"parameters": server, "responses": m{"200": resp("Backups", dataOf(m{"type": "array", "items": ref("Backup")})), "404": errResp, "502": errResp}}),
+				"get": op("List the backups of a server, newest first. Cached, refreshed every status_interval; POST /check for a live check. 503 with Retry-After while the first refresh is pending.", "viewer", m{"parameters": server, "responses": m{"200": resp("Backups", dataOf(m{"type": "array", "items": ref("Backup")})), "404": errResp, "503": errResp}}),
 			},
 			"/status": m{
 				"get": op("Cached status of every server (refreshed every status interval)", "viewer", m{"responses": m{"200": resp("Status", dataOf(m{"type": "object", "properties": m{"servers": m{"type": "array", "items": ref("ServerState")}, "updated_at": m{"type": "string", "format": "date-time"}}}))}}),
@@ -119,7 +119,11 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 				"ServerState": m{"type": "object", "properties": m{
 					"name": m{"type": "string"}, "level": m{"type": "string", "enum": []string{"ok", "warn", "fail"}},
 					"last_backup_id": m{"type": "string"}, "last_backup_end": m{"type": "string", "format": "date-time"}, "last_backup_size": m{"type": "integer"},
-					"last_backup_age_seconds": m{"type": "integer"}, "last_wal": m{"type": "string", "format": "date-time"}, "last_wal_age_seconds": m{"type": "integer"},
+					"last_backup_age_seconds": m{"type": "integer"}, "last_filled_wal": m{"type": "string", "description": "Name of the last filled WAL file (16 MB; a quiet server fills one slowly)"}, "last_filled_wal_time": m{"type": "string", "format": "date-time"}, "last_filled_wal_age_seconds": m{"type": "integer"},
+					"last_wal": m{"type": "string", "format": "date-time", "deprecated": true, "description": "Alias of last_filled_wal_time"}, "last_wal_age_seconds": m{"type": "integer", "deprecated": true, "description": "Alias of last_filled_wal_age_seconds"},
+					"streaming_monitored": m{"type": "boolean"}, "stale": m{"type": "boolean", "description": "Reloaded from the database after a restart; the first refresh has not completed yet"},
+					"streaming_live": m{"type": "boolean", "description": "The Barman WAL receiver runs"}, "last_data_received": m{"type": "string", "format": "date-time"}, "last_data_received_age_seconds": m{"type": "integer"},
+					"notes":        m{"type": "array", "items": m{"type": "string"}},
 					"backup_count": m{"type": "integer"}, "checks": m{"type": "array", "items": ref("Check")}, "check_ok": m{"type": "boolean"},
 					"problems": m{"type": "array", "items": m{"type": "string"}}, "error": m{"type": "string"}, "updated_at": m{"type": "string", "format": "date-time"},
 				}},

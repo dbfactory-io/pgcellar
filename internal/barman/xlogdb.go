@@ -88,3 +88,30 @@ func unwrapPathError(err error) error {
 	}
 	return err
 }
+
+// ReadLastReceived returns the modification time of the newest regular file in
+// <home>/<server>/streaming, where the WAL receiver writes the segment in
+// progress (name.partial). It is the time data last reached Barman, which a
+// quiet database moves far more often than it closes a segment. Only file
+// metadata is read. The zero time means the directory is absent or unreadable
+// or empty.
+func ReadLastReceived(home, server string) time.Time {
+	entries, err := os.ReadDir(filepath.Join(home, server, "streaming"))
+	if err != nil {
+		return time.Time{}
+	}
+	var newest time.Time
+	for _, e := range entries {
+		if !e.Type().IsRegular() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(newest) {
+			newest = info.ModTime()
+		}
+	}
+	return newest
+}

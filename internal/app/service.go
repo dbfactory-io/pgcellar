@@ -100,54 +100,80 @@ func (a *App) detail(name string, file *barman.Server, cs *config.Server, inBarm
 	return d
 }
 
-// ListServers merges the servers of barman.d, those Barman reports and those
-// pgcellar.yaml mentions.
+// serverNameSet is every server pgCellar knows without asking Barman: the
+// files of barman.d, pgcellar.yaml and the status cache.
+func (a *App) serverNameSet(files []barman.Server, cfg *config.Config) map[string]bool {
+	set := map[string]bool{}
+	for _, f := range files {
+		set[f.Name] = true
+	}
+	for _, s := range cfg.Servers {
+		set[s.Name] = true
+	}
+	a.cacheMu.RLock()
+	for n := range a.cache {
+		set[n] = true
+	}
+	a.cacheMu.RUnlock()
+	return set
+}
+
+// inBarman tells whether Barman listed the server at the last refresh. Before
+// the first refresh nothing is known, so a server with a file is assumed to be
+// listed.
+func (a *App) inBarman(name string, hasFile bool) bool {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
+	if a.cacheTime.IsZero() {
+		return hasFile
+	}
+	for _, n := range a.cacheOrder {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// ListServers merges the servers of barman.d, pgcellar.yaml and the status
+// cache. It never runs Barman.
 func (a *App) ListServers(ctx context.Context) ([]ServerDetail, error) {
 	files, err := barman.LoadServers(a.barmanConfigDir())
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the Barman configuration directory: %w", err)
 	}
 	cfg := a.Config()
-	inBarman := map[string]bool{}
-	if names, err := a.Engine.ListServers(barman.WithActor(ctx, systemActor)); err == nil {
-		for _, n := range names {
-			inBarman[n] = true
-		}
-	}
-	set := map[string]bool{}
-	for _, f := range files {
-		set[f.Name] = true
-	}
-	for n := range inBarman {
-		set[n] = true
-	}
-	for _, s := range cfg.Servers {
-		set[s.Name] = true
-	}
+	set := a.serverNameSet(files, cfg)
 	names := make([]string, 0, len(set))
 	for n := range set {
 		names = append(names, n)
 	}
 	sort.Strings(names)
+	byName := make(map[string]*barman.Server, len(files))
+	for i := range files {
+		byName[files[i].Name] = &files[i]
+	}
 	out := make([]ServerDetail, 0, len(names))
 	for _, n := range names {
-		out = append(out, a.detail(n, findFile(files, n), findCfg(cfg, n), inBarman[n]))
+		f := byName[n]
+		out = append(out, a.detail(n, f, findCfg(cfg, n), a.inBarman(n, f != nil)))
 	}
 	return out, nil
 }
 
-// GetServer returns one server, or ErrNotFound.
+// GetServer returns one server, or ErrNotFound. It never runs Barman.
 func (a *App) GetServer(ctx context.Context, name string) (*ServerDetail, error) {
-	list, err := a.ListServers(ctx)
+	files, err := barman.LoadServers(a.barmanConfigDir())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot read the Barman configuration directory: %w", err)
 	}
-	for i := range list {
-		if list[i].Name == name {
-			return &list[i], nil
-		}
+	cfg := a.Config()
+	f := findFile(files, name)
+	if f == nil && !a.serverNameSet(nil, cfg)[name] {
+		return nil, ErrNotFound
 	}
-	return nil, ErrNotFound
+	d := a.detail(name, f, findCfg(cfg, name), a.inBarman(name, f != nil))
+	return &d, nil
 }
 
 func normalize(in *ServerInput) {
@@ -385,24 +411,32 @@ func (a *App) Check(ctx context.Context, actor, name string) ([]CheckView, error
 	if err != nil {
 		return nil, err
 	}
+	a.applyCheck(name, res)
 	return checkViews(res), nil
 }
 
-// Backups lists the backups of a server, newest first.
+// ErrRefreshPending means the status cache has no entry for the server yet
+// (pgCellar just started); the first refresh will fill it.
+var ErrRefreshPending = errors.New("first refresh pending")
+
+// Backups lists the backups of a server, newest first, from the status cache.
+// It never runs Barman. The list is as old as the last refresh.
 func (a *App) Backups(ctx context.Context, actor, name string) ([]BackupView, error) {
-	if err := a.knownServer(ctx, name); err != nil {
-		return nil, err
+	if !barman.ValidName(name) {
+		return nil, ErrNotFound
 	}
-	list, err := a.Engine.ListBackups(barman.WithActor(ctx, actor), name)
-	if err != nil {
-		return nil, err
+	st, ok := a.State(name)
+	if !ok {
+		files, err := barman.LoadServers(a.barmanConfigDir())
+		if err == nil && findFile(files, name) != nil || findCfg(a.Config(), name) != nil {
+			return nil, ErrRefreshPending
+		}
+		return nil, ErrNotFound
 	}
-	out := make([]BackupView, 0, len(list))
-	for i := len(list) - 1; i >= 0; i-- {
-		b := list[i]
-		out = append(out, BackupView{ID: b.ID, Status: b.Status, BeginTime: b.BeginTime, EndTime: b.EndTime, SizeBytes: b.Size, WALSizeBytes: b.WALSize, PGVersion: b.PGVersion})
+	if st.Backups == nil {
+		return []BackupView{}, nil
 	}
-	return out, nil
+	return st.Backups, nil
 }
 
 // captureRunner keeps what Barman printed, for the run record.

@@ -6,6 +6,7 @@ package barman
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -70,9 +71,67 @@ type ServerStatus struct {
 	LastWAL     string // name of the last archived WAL segment, "" if unknown
 	LastWALTime time.Time
 	BackupCount int
-	Checks      []CheckResult
-	Healthy     bool
-	Problems    []string // human sentences, already explained
+	// Backups is the list `list-backups` returned, oldest first. Kept so that
+	// pages can show it from the cache without running Barman again.
+	Backups []Backup
+	Checks  []CheckResult
+	// StreamingLive is true when the receive_wal_running check passes: the
+	// WAL receiver is connected and writing.
+	StreamingLive bool
+	// LastDataReceived is the modification time of the newest file in
+	// <barman_home>/<server>/streaming (the .partial segment being written),
+	// zero when the directory is absent or unreadable. It moves while
+	// LastWALTime (last closed segment) stays still on a quiet database.
+	LastDataReceived time.Time
+	Healthy          bool
+	Problems         []string // human sentences, already explained
+	// BaseProblems is Problems without the lines that come from Checks, so
+	// that a fresh check can be applied without running everything again.
+	BaseProblems []string
+}
+
+// CheckProblems turns the failed lines of a check into explained sentences.
+func CheckProblems(checks []CheckResult) []string {
+	var out []string
+	for _, c := range checks {
+		if c.OK {
+			continue
+		}
+		what, fix := Explain(c)
+		out = append(out, fmt.Sprintf("%s failed. %s %s", DisplayName(c.Name), what, fix))
+	}
+	return out
+}
+
+// StreamingLiveFrom reports whether the receive_wal_running check passes.
+func StreamingLiveFrom(checks []CheckResult) bool {
+	for _, c := range checks {
+		if c.Name == "receive_wal_running" {
+			return c.OK
+		}
+	}
+	return false
+}
+
+// HasStreamingCheck reports whether Barman checks a WAL receiver at all
+// (servers that archive through archive_command have no such check).
+func HasStreamingCheck(checks []CheckResult) bool {
+	for _, c := range checks {
+		if c.Name == "receive_wal_running" {
+			return true
+		}
+	}
+	return false
+}
+
+// WithChecks returns a copy of the digest with fresh check results.
+func (s *ServerStatus) WithChecks(checks []CheckResult) *ServerStatus {
+	c := *s
+	c.Checks = checks
+	c.StreamingLive = StreamingLiveFrom(checks)
+	c.Problems = append(append([]string(nil), s.BaseProblems...), CheckProblems(checks)...)
+	c.Healthy = len(c.Problems) == 0
+	return &c
 }
 
 // Runner executes Barman commands. There is exactly one implementation that

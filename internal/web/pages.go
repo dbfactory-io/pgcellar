@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,11 +20,12 @@ type statusData struct {
 	Err     string
 	Dev     bool   // the app clock is frozen for the fixtures
 	Every   string // refresh interval, for people
+	Stale   bool   // states come from before the restart; the first refresh is running
 }
 
 func (s *Server) statusData() statusData {
 	states, at, errMsg := s.app.States()
-	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval)}
+	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: s.app.CacheStale()}
 }
 
 func (s *Server) statusPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
@@ -127,6 +127,7 @@ type serverPageData struct {
 	Detail     app.ServerDetail
 	Form       formData
 	Backups    []app.BackupView
+	Updated    time.Time // when the cache entry of the server was built
 	BackupsErr string
 	Runs       []app.RunView
 	CanOperate bool
@@ -155,17 +156,13 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 	if override != nil {
 		data.Form = *override
 	}
-	if d.InBarman || d.HasFile {
-		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
-		backups, err := s.app.Backups(ctx, u.Name, name)
-		cancel()
-		if err != nil {
-			data.BackupsErr = "Barman could not list the backups: " + err.Error()
-		} else {
-			data.Backups = backups
-		}
-	} else {
-		data.BackupsErr = "Barman does not know this server, so it has no backups to list."
+	switch backups, err := s.app.Backups(r.Context(), u.Name, name); {
+	case errors.Is(err, app.ErrRefreshPending):
+		data.BackupsErr = "First refresh pending: the backup list appears after pgCellar has read Barman once."
+	case err != nil:
+		data.BackupsErr = "The backup list is not available: " + err.Error()
+	default:
+		data.Backups = backups
 	}
 	data.Runs, _ = s.app.Runs(name, 10)
 	s.render(w, status, "server", s.newPage(r, u, name, "servers", data))

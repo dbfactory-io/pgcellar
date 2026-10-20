@@ -18,10 +18,14 @@
   {{if .Detail.State}}
     <p>{{template "level" .Detail.State.Level}}
     {{if .Detail.State.LastBackupID}} &middot; last backup {{.Detail.State.LastBackupID}}, {{ageSec .Detail.State.LastBackupAgeSeconds}} ago{{end}}
-    {{if not .Detail.State.LastWAL.IsZero}} &middot; last WAL {{ageSec .Detail.State.LastWALAgeSeconds}} ago{{end}}</p>
+    </p>
+    <p>{{t "wal.streaming"}}: {{if .Detail.State.StreamingLive}}<span class="pill ok">{{t "wal.live"}}</span>{{if not .Detail.State.LastDataReceived.IsZero}} &middot; {{t "wal.data"}} {{ageSec .Detail.State.LastDataReceivedAgeSeconds}} ago{{end}}{{else if .Detail.State.StreamingMonitored}}<span class="pill bad">{{t "wal.stopped"}}</span>{{else}}{{t "wal.not_used"}}{{end}}
+    <br>{{t "wal.filled_full"}}: {{if .Detail.State.LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .Detail.State.LastFilledWALAgeSeconds}} ago{{if .Detail.State.LastFilledWAL}} ({{.Detail.State.LastFilledWAL}}){{end}}{{end}}</p>
+    {{if .Detail.State.Notes}}<ul class="notes">{{range .Detail.State.Notes}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    <p class="muted">{{if .Detail.State.Stale}}As of {{ts .Detail.State.UpdatedAt}}, refreshing.{{else}}Cached status from {{ts .Detail.State.UpdatedAt}}.{{end}} Use "Run check now" for a live check.</p>
     {{if .Detail.State.Problems}}<ul class="problems">{{range .Detail.State.Problems}}<li>{{.}}</li>{{end}}</ul>{{end}}
     {{if .Detail.State.Error}}<div class="flash bad">{{.Detail.State.Error}}</div>{{end}}
-  {{else}}<p class="muted">No status yet.</p>{{end}}
+  {{else}}<p class="muted">First refresh pending: pgCellar has not read Barman for this server yet.</p>{{end}}
   <div id="check-result" class="htmx-target" aria-live="polite"></div>
 </section>
 

@@ -23,6 +23,7 @@ type Env struct {
 	Dir       string            // holds pgcellar.yaml
 	BarmanDir string            // the barman.d copy
 	CallLog   string            // FAKE_BARMAN_LOG
+	Home      string            // barman_home of the test barman.conf
 	Keys      map[string]string // role -> clear API key
 }
 
@@ -96,6 +97,20 @@ func New(t *testing.T) *Env {
 		if err := os.WriteFile(filepath.Join(wals, srv+"-xlog.db"), []byte(line), 0o640); err != nil {
 			t.Fatal(err)
 		}
+		if srv == "pg-main" { // the receiver wrote into its segment at 02:25
+			streaming := filepath.Join(home, srv, "streaming")
+			if err := os.MkdirAll(streaming, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			part := filepath.Join(streaming, "000000010000000000000008.partial")
+			if err := os.WriteFile(part, []byte("x"), 0o640); err != nil {
+				t.Fatal(err)
+			}
+			at := time.Date(2026, 10, 20, 2, 25, 0, 0, time.Local)
+			if err := os.Chtimes(part, at, at); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if err := os.WriteFile(cfg.Barman.ConfigFile, []byte("[barman]\nbarman_home = "+home+"\n"), 0o640); err != nil {
 		t.Fatal(err)
@@ -124,7 +139,7 @@ func New(t *testing.T) *Env {
 	a.Now = func() time.Time { return fixed }
 	t.Cleanup(func() { _ = a.Close() })
 	a.RefreshStatuses(context.Background())
-	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, Keys: keys}
+	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, Home: home, Keys: keys}
 }
 
 // WaitRun waits until a run has finished and returns it.

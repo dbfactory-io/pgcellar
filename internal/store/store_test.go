@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -160,5 +161,26 @@ func TestGetRunAndPruneAudit(t *testing.T) {
 	}
 	if n, err := s.PruneAudit(time.Now().Add(time.Hour)); err != nil || n != 1 {
 		t.Errorf("old entry kept: n=%d err=%v", n, err)
+	}
+}
+
+func TestStatusCache(t *testing.T) {
+	s := newStore(t)
+	at := time.Date(2026, 10, 20, 2, 30, 0, 0, time.UTC)
+	if err := s.SaveStatuses([]StatusRow{{"a", `{"name":"a"}`, at}, {"b", `{"name":"b"}`, at}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveStatus(StatusRow{"a", `{"name":"a","level":"ok"}`, at.Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.LoadStatuses()
+	if err != nil || len(rows) != 2 || rows[0].Server != "a" || !strings.Contains(rows[0].JSON, "level") || !rows[0].UpdatedAt.Equal(at.Add(time.Minute)) {
+		t.Fatalf("%v %v", rows, err)
+	}
+	if err := s.SaveStatuses([]StatusRow{{"b", `{}`, at}}); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := s.LoadStatuses(); len(rows) != 1 || rows[0].Server != "b" {
+		t.Fatalf("a replaced cache keeps only the new servers: %v", rows)
 	}
 }
