@@ -202,7 +202,16 @@ func (a *App) computeState(ctx context.Context, name string) *ServerState {
 		st.Level = LevelFail
 		return st
 	}
-	return a.stateFrom(name, bs)
+	st := a.stateFrom(name, bs)
+	a.applySetup(ctx, st, a.cachedState(name), false)
+	return st
+}
+
+// cachedState returns the cache entry of a server, or nil.
+func (a *App) cachedState(name string) *ServerState {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
+	return a.cache[name]
 }
 
 // stateFrom turns a Barman digest into the cached state, with the alert rules.
@@ -295,7 +304,7 @@ func backupViews(list []barman.Backup) []BackupView {
 
 // applyCheck puts the result of an on-demand check into the cache of one
 // server, so that the pages show it without waiting for the next refresh.
-func (a *App) applyCheck(name string, checks []barman.CheckResult) {
+func (a *App) applyCheck(ctx context.Context, name string, checks []barman.CheckResult) {
 	a.cacheMu.Lock()
 	old, ok := a.cache[name]
 	a.cacheMu.Unlock()
@@ -303,6 +312,7 @@ func (a *App) applyCheck(name string, checks []barman.CheckResult) {
 		return
 	}
 	st := a.stateFrom(name, old.raw.WithChecks(checks))
+	a.applySetup(ctx, st, old, true)
 	a.cacheMu.Lock()
 	defer a.cacheMu.Unlock()
 	if cur, ok := a.cache[name]; ok && cur == old {

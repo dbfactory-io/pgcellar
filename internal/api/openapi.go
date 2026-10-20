@@ -74,6 +74,9 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 				"get": op("Show a server. Cached, refreshed every status_interval; POST /check for a live check. Never runs Barman.", "viewer", m{"parameters": server, "responses": m{"200": resp("Server", dataOf(ref("ServerDetail"))), "404": errResp}}),
 				"put": op("Change a server; fields left out keep their value (writes the files and commits)", "admin", m{"parameters": server, "requestBody": body("ServerInput"), "responses": m{"200": resp("Saved", nil), "404": errResp, "409": errResp, "422": errResp}}),
 			},
+			"/servers/{name}/setup": m{
+				"get": op("Server setup: what pgCellar read in the PostgreSQL settings of the server and what to change there (fix is the exact SQL or line; restart tells whether a restart is needed, else a reload is enough). Cached, read again every setup_interval and by POST /check; never runs a command. level is unknown until the first read. Warnings do not change the health level of the server, errors do.", "viewer", m{"parameters": server, "responses": m{"200": resp("Setup", dataOf(ref("Setup"))), "404": errResp}}),
+			},
 			"/servers/{name}/check": m{
 				"post": op("Run barman check now and explain each line", "operator", m{"parameters": server, "responses": m{"200": resp("Checks", dataOf(m{"type": "object", "properties": m{"ok": m{"type": "boolean"}, "checks": m{"type": "array", "items": ref("Check")}}})), "404": errResp, "502": errResp}}),
 			},
@@ -143,7 +146,20 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"streaming_live": m{"type": "boolean", "description": "The Barman WAL receiver runs"}, "last_data_received": m{"type": "string", "format": "date-time"}, "last_data_received_age_seconds": m{"type": "integer"},
 					"notes":        m{"type": "array", "items": m{"type": "string"}},
 					"backup_count": m{"type": "integer"}, "checks": m{"type": "array", "items": ref("Check")}, "check_ok": m{"type": "boolean"},
-					"problems": m{"type": "array", "items": m{"type": "string"}}, "error": m{"type": "string"}, "updated_at": m{"type": "string", "format": "date-time"},
+					"problems": m{"type": "array", "items": m{"type": "string"}}, "error": m{"type": "string"},
+					"setup": m{"type": "array", "items": ref("SetupCheck")}, "setup_level": m{"type": "string", "enum": []string{"ok", "warning", "error"}}, "setup_issues": m{"type": "integer"}, "setup_at": m{"type": "string", "format": "date-time"},
+					"updated_at": m{"type": "string", "format": "date-time"},
+				}},
+				"Setup": m{"type": "object", "properties": m{
+					"server": m{"type": "string"}, "level": m{"type": "string", "enum": []string{"ok", "warning", "error", "unknown"}},
+					"at":     m{"type": "string", "format": "date-time", "description": "When the PostgreSQL settings were read"},
+					"checks": m{"type": "array", "items": ref("SetupCheck")},
+				}},
+				"SetupCheck": m{"type": "object", "properties": m{
+					"key": m{"type": "string"}, "name": m{"type": "string"}, "level": m{"type": "string", "enum": []string{"ok", "info", "warning", "error"}},
+					"value": m{"type": "string"}, "expected": m{"type": "string"}, "why": m{"type": "string"},
+					"fix":     m{"type": "string", "description": "What to run or write on the PostgreSQL server"},
+					"restart": m{"type": "boolean", "description": "The fix needs a restart of PostgreSQL; otherwise a reload is enough"},
 				}},
 				"Check": m{"type": "object", "properties": m{"name": m{"type": "string"}, "display": m{"type": "string"}, "ok": m{"type": "boolean"}, "what": m{"type": "string"}, "fix": m{"type": "string"}}},
 				"Backup": m{"type": "object", "properties": m{

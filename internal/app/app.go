@@ -43,6 +43,12 @@ type App struct {
 	CronInterval time.Duration
 	// StatusInterval is how often the status cache is refreshed.
 	StatusInterval time.Duration
+	// SetupInterval is how often the PostgreSQL settings are read again.
+	SetupInterval time.Duration
+	// Tools runs psql and pg_basebackup for the Server setup section, through
+	// the same audited path as Barman. SetupTools names the programs.
+	Tools      barman.BinaryRunner
+	SetupTools barman.SetupTools
 
 	ConfigPath string // absolute path of pgcellar.yaml
 	ConfigDir  string // its directory, a git repository
@@ -96,6 +102,7 @@ func Load(configPath string, dev bool) (*App, error) {
 	a := &App{
 		Dev:            dev,
 		StatusInterval: time.Minute,
+		SetupInterval:  config.DefaultSetupInterval,
 		Logger:         log.New(os.Stderr, "pgcellar: ", log.LstdFlags),
 		Now:            time.Now,
 		running:        map[string]int64{},
@@ -117,6 +124,9 @@ func Load(configPath string, dev bool) (*App, error) {
 	a.CronInterval = cfg.Barman.CronInterval
 	if cfg.StatusInterval > 0 {
 		a.StatusInterval = cfg.StatusInterval
+	}
+	if cfg.SetupInterval > 0 {
+		a.SetupInterval = cfg.SetupInterval
 	}
 	a.noteModTime()
 
@@ -142,6 +152,7 @@ func Load(configPath string, dev bool) (*App, error) {
 		Audit:  a.audit,
 	}
 	a.Runner = runner
+	a.Tools = runner
 	eng := barman.NewEngine(runner)
 	if g, gerr := barman.LoadGlobal(cfg.Barman.ConfigFile); gerr == nil {
 		eng.BarmanHome = g.BarmanHome
@@ -186,8 +197,8 @@ func (a *App) audit(e barman.AuditEntry) {
 	if actor == systemActor && !a.backgroundFailureDue(e) {
 		return
 	}
-	target := ""
-	if n := len(e.Args); n > 0 && !strings.HasPrefix(e.Args[n-1], "-") && e.Args[n-1] != "cron" {
+	target := e.Target
+	if n := len(e.Args); target == "" && n > 0 && filepath.Base(e.Binary) != "psql" && !strings.HasPrefix(e.Args[n-1], "-") && e.Args[n-1] != "cron" {
 		target = e.Args[n-1]
 	}
 	details := fmt.Sprintf("exit=%d duration=%s", e.ExitCode, e.Duration.Round(time.Millisecond))

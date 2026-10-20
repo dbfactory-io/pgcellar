@@ -143,6 +143,12 @@ type Runner interface {
 	Run(ctx context.Context, args ...string) (stdout, stderr []byte, err error)
 }
 
+// BinaryRunner runs a program other than Barman through the same audited path
+// as Runner (CLIRunner implements both).
+type BinaryRunner interface {
+	RunBinary(ctx context.Context, binary string, args ...string) (stdout, stderr []byte, err error)
+}
+
 // Audit receives one entry per executed command.
 type Audit func(entry AuditEntry)
 
@@ -154,6 +160,8 @@ type AuditEntry struct {
 	ExitCode int
 	Duration time.Duration
 	Actor    string // user or api key name, set by the caller
+	Binary   string // the program that was run: barman, psql, pg_basebackup
+	Target   string // server the command is about, when the caller said so (WithTarget)
 }
 
 // Engine is the small surface the rest of pgCellar uses. A second engine

@@ -11,10 +11,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Defaults returns a Config with the documented default values.
 // MinStatusInterval is the shortest allowed status_interval: every refresh
 // starts several Python processes per server.
 const MinStatusInterval = 30 * time.Second
+
+// DefaultSetupInterval is setup_interval when it is not set; MinSetupInterval
+// is the shortest allowed value.
+const (
+	DefaultSetupInterval = 30 * time.Minute
+	MinSetupInterval     = time.Minute
+)
 
 // DefaultRecoveriesDir is where restores go when recoveries.dir is not set.
 const DefaultRecoveriesDir = "/var/lib/pgcellar/recoveries"
@@ -31,6 +37,7 @@ func Defaults() *Config {
 			CronInterval: time.Minute,
 		},
 		StatusInterval:     time.Minute,
+		SetupInterval:      DefaultSetupInterval,
 		AuditRetentionDays: 90,
 		Recoveries: Recoveries{
 			Dir:              DefaultRecoveriesDir,
@@ -122,6 +129,9 @@ func Validate(cfg *Config) []string {
 	}
 	if cfg.StatusInterval != 0 && cfg.StatusInterval < MinStatusInterval {
 		add("status_interval must be at least %s (for example \"1m\" or \"5m\"); leave it out for the default", MinStatusInterval)
+	}
+	if cfg.SetupInterval != 0 && cfg.SetupInterval < MinSetupInterval {
+		add("setup_interval must be at least %s (for example \"30m\"); leave it out for the default", MinSetupInterval)
 	}
 	if cfg.AuditRetentionDays < 0 {
 		add("audit_retention_days cannot be negative (0 keeps everything)")

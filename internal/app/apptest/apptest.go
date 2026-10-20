@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
 )
 
@@ -23,6 +24,7 @@ type Env struct {
 	Dir       string            // holds pgcellar.yaml
 	BarmanDir string            // the barman.d copy
 	CallLog   string            // FAKE_BARMAN_LOG
+	PsqlLog   string            // FAKE_PSQL_LOG
 	Home      string            // barman_home of the test barman.conf
 	Keys      map[string]string // role -> clear API key
 }
@@ -58,6 +60,8 @@ func New(t *testing.T) *Env {
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "barman-calls.log")
 	t.Setenv("FAKE_BARMAN_LOG", logFile)
+	psqlLog := filepath.Join(t.TempDir(), "psql-calls.log")
+	t.Setenv("FAKE_PSQL_LOG", psqlLog)
 
 	barmanDir := filepath.Join(dir, "barman.d")
 	if err := os.MkdirAll(barmanDir, 0o750); err != nil {
@@ -136,11 +140,12 @@ func New(t *testing.T) *Env {
 		t.Fatal(err)
 	}
 	a.Version = "test"
+	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 	fixed := time.Date(2026, 10, 20, 2, 30, 0, 0, time.Local)
 	a.Now = func() time.Time { return fixed }
 	t.Cleanup(func() { _ = a.Close() })
 	a.RefreshStatuses(context.Background())
-	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, Home: home, Keys: keys}
+	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, Keys: keys}
 }
 
 // WaitRun waits until a run has finished and returns it.

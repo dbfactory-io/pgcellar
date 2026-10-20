@@ -228,6 +228,7 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 		"/servers":                     {"get", "post"},
 		"/servers/{name}":              {"get", "put"},
 		"/servers/{name}/check":        {"post"},
+		"/servers/{name}/setup":        {"get"},
 		"/servers/{name}/backup":       {"post"},
 		"/servers/{name}/backups":      {"get"},
 		"/servers/{name}/backups/{id}": {"delete"},

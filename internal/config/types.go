@@ -22,6 +22,9 @@ type Config struct {
 	// StatusInterval is how often the cached status of every server is
 	// refreshed. Each refresh runs several Barman commands per server.
 	StatusInterval time.Duration `yaml:"status_interval" json:"status_interval"`
+	// SetupInterval is how often the PostgreSQL settings of every server are
+	// read again for the "Server setup" section (one psql query per server).
+	SetupInterval time.Duration `yaml:"setup_interval" json:"setup_interval"`
 	// AuditRetentionDays: audit lines older than this are purged daily. 0 = keep forever.
 	AuditRetentionDays int `yaml:"audit_retention_days" json:"audit_retention_days"`
 }

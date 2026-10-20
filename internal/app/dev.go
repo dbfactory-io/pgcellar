@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
 )
 
@@ -27,6 +28,7 @@ func (a *App) setupDev(src string, cfg *config.Config) (string, error) {
 	if err := ensureFakeBarman(); err != nil {
 		return "", err
 	}
+	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 	// The fixtures are dated 2026-10-20 around 02:10: freeze the clock used
 	// for ages and thresholds so the demo shows a healthy pg-main.
 	frozen := time.Date(2026, 10, 20, 2, 30, 0, 0, time.Local)

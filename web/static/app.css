@@ -188,3 +188,12 @@ dl.paths{margin:0 0 1rem}
 dl.paths dt{color:var(--mut);font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 dl.paths dd{margin:.1rem 0 .9rem;min-width:0;overflow-wrap:anywhere}
 @media (max-width:500px){.row.cols{grid-template-columns:minmax(0,1fr)}.row.cols .act{justify-content:flex-start}.row.cols .act:empty{display:none}}
+
+/* server setup */
+.row.warnrow{border-color:var(--warn);background:var(--warn-soft)}
+.row.inforow{box-shadow:none}
+.row.inforow .grow strong,.row.inforow .msg{color:var(--mut)}
+.setuppill{display:inline-block;margin:0 1.3rem .8rem;text-decoration:none}
+.setuppill:hover{text-decoration:underline}
+pre.fixbox{margin:.5rem 0 .2rem;background:var(--code);border:1px solid var(--line);color:var(--tx);padding:.6rem .85rem;border-radius:10px;overflow-x:auto;white-space:pre-wrap;word-break:break-word;font-size:.85rem;line-height:1.45;user-select:all}
+.fixnote{color:var(--mut);font-size:.88rem}

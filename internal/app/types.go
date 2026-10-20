@@ -76,7 +76,16 @@ type ServerState struct {
 	CheckOK     bool        `json:"check_ok"`
 	Problems    []string    `json:"problems"`
 	Error       string      `json:"error,omitempty"`
-	UpdatedAt   time.Time   `json:"updated_at"`
+	// Setup is what pgCellar read in the PostgreSQL settings of the server
+	// (the "Server setup" section). It is read again only every
+	// setup_interval, or on "Run check now"; SetupAt says when. SetupLevel is
+	// ok | warning | error, empty when it was never evaluated. SetupIssues
+	// counts the warnings and errors.
+	Setup       []barman.SetupCheck `json:"setup"`
+	SetupLevel  string              `json:"setup_level"`
+	SetupIssues int                 `json:"setup_issues"`
+	SetupAt     time.Time           `json:"setup_at,omitzero"`
+	UpdatedAt   time.Time           `json:"updated_at"`
 	// Stale is true for a state reloaded from the database after a restart,
 	// until the first refresh has completed.
 	Stale bool `json:"stale"`

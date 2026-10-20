@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/stranix79/pgcellar/internal/barman"
 	"github.com/stranix79/pgcellar/internal/config"
 )
 
@@ -181,6 +182,17 @@ func okCount(cs []app.CheckView) int {
 	n := 0
 	for _, c := range cs {
 		if c.OK {
+			n++
+		}
+	}
+	return n
+}
+
+// setupOK counts the setup lines that are fine.
+func setupOK(list []barman.SetupCheck) int {
+	n := 0
+	for _, c := range list {
+		if c.Level == barman.SetupOK {
 			n++
 		}
 	}

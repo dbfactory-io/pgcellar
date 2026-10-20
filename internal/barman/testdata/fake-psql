@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# fake-psql: a stand-in for psql, used by the tests and by `pgcellar serve --dev`.
+# It answers the server-setup query of pgCellar from fixtures/psql-<host>.tsv,
+# where <host> is the first label of host= in the connection string
+# (pg-main.example.com -> psql-pg-main.tsv). A host without a fixture refuses
+# the connection, like an unreachable server.
+#
+# FAKE_PSQL_FIXTURES replaces the fixtures directory (tests that change an answer).
+# If FAKE_PSQL_LOG is set, the arguments of every call are appended to it.
+
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fx="${FAKE_PSQL_FIXTURES:-$here/fixtures}"
+
+if [ -n "${FAKE_PSQL_LOG:-}" ]; then
+  printf '%s\n' "$*" >>"$FAKE_PSQL_LOG"
+fi
+
+conninfo=""
+sql=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -c) sql="${2:-}"; shift 2 ;;
+    -F|-v) shift 2 ;;
+    -X|-At|-A|-t) shift ;;
+    -*) echo "psql: error: unsupported option $1" >&2; exit 2 ;;
+    *) conninfo="$1"; shift ;;
+  esac
+done
+
+host="$(printf '%s' "$conninfo" | sed -n 's/.*host=\([^ .]*\).*/\1/p')"
+if [ -z "$host" ] || [ -z "$sql" ]; then
+  echo "psql: error: missing connection string or -c" >&2
+  exit 2
+fi
+case "$sql" in
+  *pg_settings*) ;;
+  *) echo "psql: error: fake-psql only knows the setup query" >&2; exit 2 ;;
+esac
+if [ -f "$fx/psql-$host.tsv" ]; then
+  cat "$fx/psql-$host.tsv"
+  exit 0
+fi
+echo "psql: error: connection to server at \"$host.example.com\" (192.0.2.10), port 5432 failed: Connection refused" >&2
+exit 2

@@ -74,6 +74,20 @@ var messages = map[string]string{
 	"section.runs":          "Recent runs",
 	"checks.hint":           "The list comes from the last refresh. Use \"Run check now\" for a live check.",
 
+	// Server setup.
+	"section.setup":     "Server setup",
+	"setup.intro":       "What pgCellar found on the PostgreSQL server, and what to change there. Nothing here is changed by pgCellar.",
+	"setup.pill_ok":     "setup OK",
+	"setup.pill_review": "to review",
+	"setup.pill_error":  "setup error",
+	"setup.expected":    "Expected",
+	"setup.reload":      "reload is enough",
+	"setup.restart":     "restart required",
+	"setup.fine":        "settings fine",
+	"setup.read":        "Read",
+	"setup.hint":        "The settings are read every setup_interval, and again by \"Run check now\".",
+	"setup.none":        "Not read yet: the settings are read after the first refresh.",
+
 	// Backup deletion.
 	"btn.delete":          "Delete",
 	"btn.delete_ask":      "Delete…",

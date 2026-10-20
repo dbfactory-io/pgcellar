@@ -39,6 +39,22 @@
   </div>
 </section>
 
+<section id="setup">
+  <h2>{{t "section.setup"}}</h2>
+  <p class="muted">{{t "setup.intro"}}</p>
+  {{with .Detail.State}}{{if .Setup}}
+  <ul class="rows" style="margin-bottom:.7rem">
+  {{range .Setup}}{{if eq .Level "error"}}{{template "setup_row" .}}{{end}}{{end}}
+  {{range .Setup}}{{if eq .Level "warning"}}{{template "setup_row" .}}{{end}}{{end}}
+  {{range .Setup}}{{if eq .Level "info"}}{{template "setup_row" .}}{{end}}{{end}}
+  </ul>
+  {{if setupok .Setup}}<details class="oks"><summary><span aria-hidden="true">✅</span> {{setupok .Setup}} {{t "setup.fine"}}</summary>
+  <ul class="rows">{{range .Setup}}{{if eq .Level "ok"}}{{template "setup_row" .}}{{end}}{{end}}</ul>
+  </details>{{end}}
+  <p class="muted" style="margin-top:.8rem">{{t "setup.read"}} {{when .SetupAt}}. {{t "setup.hint"}}</p>
+  {{else}}<p class="muted">{{t "setup.none"}}</p>{{end}}{{end}}
+</section>
+
 <section>
   <h2>{{t "section.backups"}}</h2>
   <div id="backup-list" aria-live="polite">{{template "backup_list" .BackupList}}</div>

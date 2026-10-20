@@ -1,0 +1,10 @@
+archive_mode	off		postmaster
+archive_timeout	0	s	sighup
+data_checksums	off		internal
+full_page_writes	on		sighup
+max_replication_slots	10		postmaster
+max_slot_wal_keep_size	-1	MB	sighup
+max_wal_senders	10		postmaster
+server_version_num	160013		internal
+wal_compression	off		superuser
+wal_level	replica		postmaster

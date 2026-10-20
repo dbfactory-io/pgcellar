@@ -45,6 +45,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST "+v+"/servers", a.auth(app.RoleAdmin, a.createServer))
 	mux.HandleFunc("GET "+v+"/servers/{name}", a.auth(app.RoleViewer, a.getServer))
 	mux.HandleFunc("PUT "+v+"/servers/{name}", a.auth(app.RoleAdmin, a.putServer))
+	mux.HandleFunc("GET "+v+"/servers/{name}/setup", a.auth(app.RoleViewer, a.setup))
 	mux.HandleFunc("POST "+v+"/servers/{name}/check", a.auth(app.RoleOperator, a.check))
 	mux.HandleFunc("POST "+v+"/servers/{name}/backup", a.auth(app.RoleOperator, a.backup))
 	mux.HandleFunc("POST "+v+"/servers/{name}/switch-wal", a.auth(app.RoleOperator, a.switchWAL))
@@ -247,6 +248,15 @@ func (a *API) switchWAL(w http.ResponseWriter, r *http.Request, p principal) {
 		return
 	}
 	writeData(w, http.StatusOK, map[string]any{"output": out})
+}
+
+func (a *API) setup(w http.ResponseWriter, r *http.Request, p principal) {
+	v, err := a.app.Setup(r.PathValue("name"))
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, v)
 }
 
 func (a *API) backups(w http.ResponseWriter, r *http.Request, p principal) {

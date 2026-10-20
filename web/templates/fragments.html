@@ -66,6 +66,7 @@
       <div>{{.BackupCount}} {{if eq .BackupCount 1}}{{t "unit.backup"}}{{else}}{{t "unit.backups"}}{{end}} &middot; {{if .CheckOK}}<span class="pill ok">checks OK</span>{{else if .Checks}}<span class="pill bad">check FAILED</span>{{else}}<span class="pill warn">check unknown</span>{{end}}</div>
     </div>
   </a>
+  {{template "setup_pill" .}}
   {{if or .Problems .Error}}<ul class="probs">{{range .Problems}}<li>{{.}}</li>{{end}}{{if .Error}}<li>{{.Error}}</li>{{end}}</ul>{{end}}
 </article>
 {{end}}
@@ -188,4 +189,14 @@
 {{end}}
 </ul>
 {{else}}<div class="empty">{{t "recovery.none"}}{{if .CanOperate}} {{t "recovery.none_hint"}}{{end}}</div>{{end}}
+{{end}}
+
+{{define "setup_pill"}}{{if .SetupLevel}}<a class="pill {{if eq .SetupLevel "ok"}}ok{{else if eq .SetupLevel "warning"}}warn{{else}}bad{{end}}" href="/servers/{{.Name}}#setup"><span aria-hidden="true">🔧</span> {{if eq .SetupLevel "ok"}}{{t "setup.pill_ok"}}{{else if eq .SetupLevel "warning"}}{{.SetupIssues}} {{t "setup.pill_review"}}{{else}}{{t "setup.pill_error"}}{{end}}</a>{{end}}{{end}}
+
+{{define "setup_row"}}
+<li class="row{{if eq .Level "error"}} bad{{else if eq .Level "warning"}} warnrow{{else if eq .Level "info"}} inforow{{end}}">
+  <div class="grow"><strong><span aria-hidden="true">{{if eq .Level "error"}}❌{{else if eq .Level "warning"}}⚠️{{else if eq .Level "ok"}}✅{{else}}ℹ️{{end}}</span> {{.Name}} = <code>{{.Value}}</code></strong>{{if .Expected}}<div class="meta">{{t "setup.expected"}}: {{.Expected}}</div>{{end}}</div>
+  <div>{{if eq .Level "error"}}<span class="pill bad">error</span>{{else if eq .Level "warning"}}<span class="pill warn">warning</span>{{else if eq .Level "ok"}}<span class="pill ok">OK</span>{{else}}<span class="pill">info</span>{{end}}</div>
+  <div class="msg">{{.Why}}{{if .Fix}}<pre class="fixbox">{{.Fix}}</pre><div class="fixnote">{{if .Restart}}{{t "setup.restart"}}{{else}}{{t "setup.reload"}}{{end}}</div>{{end}}</div>
+</li>
 {{end}}

@@ -68,6 +68,17 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		}
 		return "0", true
 	})
+	family("pgcellar_setup_level", "Server setup: 0 ok, 1 warning, 2 error. Absent until the PostgreSQL settings were read.", func(st app.ServerState) (string, bool) {
+		switch st.SetupLevel {
+		case "ok":
+			return "0", true
+		case "warning":
+			return "1", true
+		case "error":
+			return "2", true
+		}
+		return "", false
+	})
 	_, _ = b.WriteString("# HELP pgcellar_recoveries_total Restores to a directory that finished successfully, since the database was created.\n# TYPE pgcellar_recoveries_total counter\n")
 	done, _ := s.app.Store.CountRuns("recover")
 	for _, st := range states {

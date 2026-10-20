@@ -42,6 +42,7 @@ func funcs(assets map[string]string) template.FuncMap {
 		"span":      fmtSpan,
 		"whenstr":   fmtWhenStr,
 		"okcount":   okCount,
+		"setupok":   setupOK,
 		"ago":       func(t time.Time) string { return app.HumanDuration(time.Since(t)) },
 		"ageSec":    ageSec,
 		"size":      humanSize,

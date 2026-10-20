@@ -273,6 +273,26 @@ func TestStatusInterval(t *testing.T) {
 	}
 }
 
+func TestSetupInterval(t *testing.T) {
+	d := Defaults()
+	if d.SetupInterval != 30*time.Minute {
+		t.Errorf("default setup_interval = %v", d.SetupInterval)
+	}
+	for _, c := range []struct {
+		d  time.Duration
+		ok bool
+	}{{0, true}, {time.Minute, true}, {2 * time.Hour, true}, {10 * time.Second, false}, {-time.Minute, false}} {
+		d.SetupInterval = c.d
+		bad := false
+		for _, p := range Validate(d) {
+			bad = bad || strings.Contains(p, "setup_interval")
+		}
+		if bad == c.ok {
+			t.Errorf("setup_interval %v: problem reported = %v", c.d, bad)
+		}
+	}
+}
+
 func TestRecoveriesDefaultsAndValidation(t *testing.T) {
 	d := Defaults().Recoveries
 	if d.Dir != "/var/lib/pgcellar/recoveries" || d.MaxDownloadBytes != 2<<30 || d.KeepDays != 7 {

@@ -54,6 +54,21 @@ func ActorFrom(ctx context.Context) string {
 	return a
 }
 
+type targetKey struct{}
+
+// WithTarget returns a context that names the server the commands run with it
+// are about; it is recorded in the audit entries of tools other than Barman,
+// whose arguments do not end with the server name.
+func WithTarget(ctx context.Context, server string) context.Context {
+	return context.WithValue(ctx, targetKey{}, server)
+}
+
+// TargetFrom returns the server set by WithTarget, or "".
+func TargetFrom(ctx context.Context) string {
+	t, _ := ctx.Value(targetKey{}).(string)
+	return t
+}
+
 // currentUser is a variable so tests can pretend to be someone else.
 var currentUser = func() string {
 	if u, err := user.Current(); err == nil {
@@ -68,6 +83,11 @@ func (r CLIRunner) argv(args []string) []string {
 	if bin == "" {
 		bin = "barman"
 	}
+	return r.argvFor(bin, args)
+}
+
+// argvFor builds the full command line for any binary, with the same sudo rule.
+func (r CLIRunner) argvFor(bin string, args []string) []string {
 	var out []string
 	if r.User != "" && r.User != currentUser() {
 		out = append(out, "sudo", "-u", r.User)
@@ -81,7 +101,19 @@ func (r CLIRunner) argv(args []string) []string {
 // exiting non-zero (barman check does that). The error is a *RunError for a
 // non-zero exit, or the context error when the context ended first.
 func (r CLIRunner) Run(ctx context.Context, args ...string) (stdout, stderr []byte, err error) {
-	argv := r.argv(args)
+	bin := r.Binary
+	if bin == "" {
+		bin = "barman"
+	}
+	return r.RunBinary(ctx, bin, args...)
+}
+
+// RunBinary executes `<binary> <args...>` through the same path as Run: same
+// user switch, same audit entry. It exists for the few read-only tools pgCellar
+// needs next to Barman (psql for the server setup, pg_basebackup --version);
+// nothing else in pgCellar starts a process.
+func (r CLIRunner) RunBinary(ctx context.Context, binary string, args ...string) (stdout, stderr []byte, err error) {
+	argv := r.argvFor(binary, args)
 	command := strings.Join(argv, " ")
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	var out, errb bytes.Buffer
@@ -106,6 +138,8 @@ func (r CLIRunner) Run(ctx context.Context, args ...string) (stdout, stderr []by
 		r.Audit(AuditEntry{
 			When:     start,
 			Args:     append([]string(nil), args...),
+			Binary:   binary,
+			Target:   TargetFrom(ctx),
 			Command:  command,
 			ExitCode: code,
 			Duration: dur,

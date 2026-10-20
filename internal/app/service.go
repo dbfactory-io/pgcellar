@@ -411,7 +411,7 @@ func (a *App) Check(ctx context.Context, actor, name string) ([]CheckView, error
 	if err != nil {
 		return nil, err
 	}
-	a.applyCheck(name, res)
+	a.applyCheck(ctx, name, res)
 	return checkViews(res), nil
 }
 
