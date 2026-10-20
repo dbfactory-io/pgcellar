@@ -149,11 +149,15 @@ func Load(configPath string, dev bool) (*App, error) {
 
 	if err := config.EnsureRepo(a.ConfigDir); err != nil {
 		a.Logger.Printf("warning: no git history for %s: %v", a.ConfigDir, err)
+	} else if _, err := config.ImportExisting(a.ConfigDir); err != nil {
+		a.Logger.Printf("warning: cannot record the existing configuration of %s: %v", a.ConfigDir, err)
 	}
 	if d := a.barmanDirIfSeparate(); d != "" {
 		if _, err := os.Stat(d); err == nil {
 			if err := config.EnsureRepo(d); err != nil {
 				a.Logger.Printf("warning: no git history for %s: %v", d, err)
+			} else if _, err := config.ImportExisting(d); err != nil {
+				a.Logger.Printf("warning: cannot record the existing configuration of %s: %v", d, err)
 			}
 		}
 	}

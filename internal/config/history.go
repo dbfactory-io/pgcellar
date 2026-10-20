@@ -68,6 +68,19 @@ func EnsureRepo(dir string) error {
 	return os.WriteFile(ignore, []byte(content), 0o644)
 }
 
+// ImportExisting makes the first commit of a repository that has none, so the
+// configuration found on disk is the baseline of the history. It does nothing
+// when a commit already exists. It returns the new short hash, or "".
+func ImportExisting(dir string) (string, error) {
+	if err := EnsureRepo(dir); err != nil {
+		return "", err
+	}
+	if _, err := git(dir, nil, "rev-parse", "--verify", "-q", "HEAD"); err == nil {
+		return "", nil
+	}
+	return Commit(dir, "Import the existing configuration", "pgcellar", "pgcellar@localhost")
+}
+
 var safeIdent = regexp.MustCompile(`[<>\n\r]`)
 
 // Commit records all changes in dir. It returns the new short hash, or ""
