@@ -32,6 +32,8 @@ servers:
     schedule:
       backup: "daily 02:00"            # or "weekly sun 03:00", or a raw cron expression
       enabled: true
+    drills:
+      schedule: "weekly sun 04:30"      # restore drill; empty = none
     retention:
       recovery_window_days: 14
       redundancy: 0
@@ -86,10 +88,15 @@ recoveries:
   max_download_bytes: 2147483648       # 2 GiB: above this an archive has no download link, only its path; 0 = no limit
   keep_days: 7                         # restores older than this are removed daily; 0 = keep forever
 
-# Weekly restore drill: restore the latest backup in a throwaway container,
-# check it, write a dated report.
+# Restore drills: pgCellar restores a backup of each server whose
+# servers[].drills.schedule is set, starts the copy with the PostgreSQL binaries of
+# the same major version, checks it and writes a dated PDF report
+# (<recoveries.dir>/<server>/reports/). One drill at a time, never during a backup
+# of the same server.
 drills:
-  enabled: true
-  schedule: "weekly sun 05:00"
-  image: postgres:16
-  report_dir: /var/lib/pgcellar/reports
+  enabled: true                        # false stops the scheduled drills (manual ones stay possible)
+  timeout: 30m                         # a whole drill, restore included
+  recovery_timeout: 10m                # wait for the copy to finish replaying WAL
+  keep_last: true                      # keep the data directory of the last good drill
+  verify_tables: false                 # true = SELECT count(*) on every table (slow)
+  max_age: 192h                        # orange when the last good drill is older (8 days)

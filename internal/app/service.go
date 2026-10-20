@@ -264,6 +264,7 @@ func upsertServer(cfg *config.Config, in ServerInput) {
 	for _, s := range cfg.Servers {
 		if s.Name == in.Name {
 			entry.Tags = s.Tags
+			entry.Drills = s.Drills // set in pgcellar.yaml, not in the server form
 			s = entry
 			replaced = true
 		}
@@ -503,6 +504,10 @@ func (a *App) StartBackup(ctx context.Context, actor, name string) (int64, error
 	if id, busy := a.running[name]; busy {
 		a.runMu.Unlock()
 		return id, &ConflictError{Msg: fmt.Sprintf("A backup of %s is already running (run #%d).", name, id)}
+	}
+	if id, busy := a.running[drillRunKey+name]; busy {
+		a.runMu.Unlock()
+		return id, &ConflictError{Msg: fmt.Sprintf("A restore drill of %s is running (run #%d): a backup never runs at the same time, try again when it ends.", name, id), Retry: true}
 	}
 	id, err := a.Store.StartRun(name, store.KindBackup, actor)
 	if err != nil {

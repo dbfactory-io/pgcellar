@@ -68,11 +68,12 @@ const DefaultCatchUp = 6 * time.Hour
 // Server holds the pgCellar side of a server: schedule, retention, notes.
 // The name must match a [section] in barman.d.
 type Server struct {
-	Name      string    `yaml:"name" json:"name"`
-	Label     string    `yaml:"label" json:"label"` // free text shown in the UI
-	Schedule  Schedule  `yaml:"schedule" json:"schedule"`
-	Retention Retention `yaml:"retention" json:"retention"`
-	Tags      []string  `yaml:"tags" json:"tags"`
+	Name      string       `yaml:"name" json:"name"`
+	Label     string       `yaml:"label" json:"label"` // free text shown in the UI
+	Schedule  Schedule     `yaml:"schedule" json:"schedule"`
+	Retention Retention    `yaml:"retention" json:"retention"`
+	Drills    ServerDrills `yaml:"drills" json:"drills"`
+	Tags      []string     `yaml:"tags" json:"tags"`
 }
 
 // Schedule is human-readable and rendered into a crontab line for `barman cron`
@@ -132,13 +133,42 @@ type APIKey struct {
 	KeyHash string `yaml:"key_hash" json:"key_hash"`
 }
 
-// Drills configures the automatic restore drills (milestone 5).
+// Drills configures the automatic restore drills: a real restore of a backup,
+// started as a throwaway PostgreSQL and checked, with a dated PDF report. What
+// is global lives here; the schedule of each server is Server.Drills.
 type Drills struct {
-	Enabled   bool   `yaml:"enabled" json:"enabled"`
-	Schedule  string `yaml:"schedule" json:"schedule"` // "weekly sun 05:00"
-	Image     string `yaml:"image" json:"image"`       // postgres:16 for the throwaway container
-	ReportDir string `yaml:"report_dir" json:"report_dir"`
+	Enabled bool `yaml:"enabled" json:"enabled"` // default true; false stops the scheduled drills only
+	// Timeout bounds a whole drill (restore included). Default 30m.
+	Timeout time.Duration `yaml:"timeout" json:"timeout"`
+	// RecoveryTimeout bounds the wait for the restored copy to finish its
+	// recovery (WAL replay) once it is started. Default 10m.
+	RecoveryTimeout time.Duration `yaml:"recovery_timeout" json:"recovery_timeout"`
+	// KeepLast keeps the data directory of the last successful drill of each
+	// server and removes the previous one. Default true; false removes it at once.
+	KeepLast bool `yaml:"keep_last" json:"keep_last"`
+	// VerifyTables adds a SELECT count(*) on every table: slow on big databases.
+	VerifyTables bool `yaml:"verify_tables" json:"verify_tables"`
+	// MaxAge: a server with a drill schedule turns orange when its last
+	// successful drill is older than this. Default 192h (8 days).
+	MaxAge time.Duration `yaml:"max_age" json:"max_age"`
+	// BinDir holds one directory per PostgreSQL major version, each with a
+	// bin/ (pg_ctl, psql...). Default /usr/lib/postgresql.
+	BinDir string `yaml:"bin_dir" json:"bin_dir"`
 }
+
+// ServerDrills is the drill setting of one server.
+type ServerDrills struct {
+	// Schedule: same syntax as schedule.backup. Empty = no automatic drill.
+	Schedule string `yaml:"schedule" json:"schedule"`
+}
+
+// Default drill settings.
+const (
+	DefaultDrillTimeout         = 30 * time.Minute
+	DefaultDrillRecoveryTimeout = 10 * time.Minute
+	DefaultDrillMaxAge          = 8 * 24 * time.Hour
+	DefaultPGBinDir             = "/usr/lib/postgresql"
+)
 
 // Recoveries configures the "restore to a directory" feature. The directory
 // lives inside the container and must be mapped to the Docker host, owned by

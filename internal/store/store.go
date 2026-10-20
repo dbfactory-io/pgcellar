@@ -144,6 +144,19 @@ var migrations = []string{
 		actor TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX recoveries_server_created ON recoveries (server, created_at);`,
+	`CREATE TABLE drills (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		server TEXT NOT NULL,
+		backup_id TEXT NOT NULL DEFAULT '',
+		started_at TEXT NOT NULL,
+		finished_at TEXT NOT NULL,
+		ok INTEGER NOT NULL DEFAULT 0,
+		step_failed TEXT NOT NULL DEFAULT '',
+		details TEXT NOT NULL DEFAULT '{}',
+		run_id INTEGER NOT NULL DEFAULT 0,
+		report_path TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX drills_server_started ON drills (server, started_at);`,
 }
 
 // Migrate applies pending migrations; calling it again is harmless.

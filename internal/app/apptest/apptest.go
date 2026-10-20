@@ -54,7 +54,11 @@ func repoRoot() string {
 }
 
 // New creates the environment and refreshes the status cache once.
-func New(t *testing.T) *Env {
+func New(t *testing.T) *Env { return NewWith(t, nil) }
+
+// NewWith is New with a last chance to change the configuration before it is
+// written and loaded.
+func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 	t.Helper()
 	root := repoRoot()
 	testdata := filepath.Join(root, "internal", "barman", "testdata")
@@ -143,6 +147,9 @@ func New(t *testing.T) *Env {
 		keys[role] = clear
 		cfg.APIKeys = append(cfg.APIKeys, config.APIKey{Name: role + "-key", Role: role, KeyHash: h})
 	}
+	if mutate != nil {
+		mutate(cfg)
+	}
 	path := filepath.Join(dir, "pgcellar.yaml")
 	if err := config.Save(path, cfg); err != nil {
 		t.Fatal(err)
@@ -155,6 +162,8 @@ func New(t *testing.T) *Env {
 	a.Version = "test"
 	a.SSHHome = filepath.Join(dir, "barman-home-dir")
 	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
+	a.DrillTools = app.DrillTools{PgCtl: "fake-pg_ctl", PgIsReady: "fake-pg_isready", PgChecksums: "fake-pg_checksums"}
+	a.DrillPollInterval = 20 * time.Millisecond
 	fixed := time.Date(2026, 10, 20, 2, 30, 0, 0, time.Local)
 	a.Now = func() time.Time { return fixed }
 	t.Cleanup(func() { _ = a.Close() })

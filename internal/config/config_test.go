@@ -102,7 +102,8 @@ func TestValidate(t *testing.T) {
 			c.Servers[0].Retention = Retention{Redundancy: 2, MinimumRedundancy: 5}
 		}, "higher than redundancy"},
 		{"bad api role", func(c *Config) { c.APIKeys = []APIKey{{Name: "k", Role: "x", KeyHash: "h"}} }, "api key"},
-		{"drill schedule", func(c *Config) { c.Drills = Drills{Enabled: true, Schedule: "nope", Image: "postgres:16"} }, "drills.schedule"},
+		{"drill schedule", func(c *Config) { c.Servers[0].Drills.Schedule = "nope" }, "drills.schedule"},
+		{"drill timeout", func(c *Config) { c.Drills.Timeout = 0 }, "drills.timeout"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

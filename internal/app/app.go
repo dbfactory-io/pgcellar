@@ -54,6 +54,12 @@ type App struct {
 	// the same audited path as Barman. SetupTools names the programs.
 	Tools      barman.BinaryRunner
 	SetupTools barman.SetupTools
+	// DrillTools names pg_ctl, pg_isready and pg_checksums for the restore
+	// drills (empty = the binaries of the PostgreSQL major version of the
+	// restored copy). DrillPollInterval is the pause between two looks at a
+	// copy that is recovering (0 = 2 s).
+	DrillTools        DrillTools
+	DrillPollInterval time.Duration
 
 	ConfigPath string // absolute path of pgcellar.yaml
 	ConfigDir  string // its directory, a git repository
@@ -499,6 +505,11 @@ type ProblemsError struct{ Problems []string }
 func (e *ProblemsError) Error() string { return strings.Join(e.Problems, " ") }
 
 // ConflictError means the request is valid but cannot be done now.
-type ConflictError struct{ Msg string }
+type ConflictError struct {
+	Msg string
+	// Retry: the request is fine and only has to wait (a drill while a backup
+	// runs); the scheduler keeps it pending instead of dropping it.
+	Retry bool
+}
 
 func (e *ConflictError) Error() string { return e.Msg }

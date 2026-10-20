@@ -537,6 +537,7 @@ func (a *App) DeleteRecovery(actor string, id int64) error {
 // keeps everything) and returns how many were removed. The background loop
 // calls it once a day.
 func (a *App) PurgeRecoveries() int {
+	a.purgeOrphanDrillCopies()
 	cfg := a.Config().Recoveries
 	if cfg.KeepDays <= 0 {
 		return 0

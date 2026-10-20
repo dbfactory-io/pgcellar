@@ -18,15 +18,45 @@ fi
 
 conninfo=""
 sql=""
+sockdir=""
+dbname=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -c) sql="${2:-}"; shift 2 ;;
+    -h) sockdir="${2:-}"; shift 2 ;;
+    -d) dbname="${2:-}"; shift 2 ;;
+    -p|-U) shift 2 ;;
     -F|-v) shift 2 ;;
     -X|-At|-A|-t) shift ;;
     -*) echo "psql: error: unsupported option $1" >&2; exit 2 ;;
     *) conninfo="$1"; shift ;;
   esac
 done
+
+# Restore drill: psql -h <socket dir> -p <port> -U <role> -d <db> -c <sql>, answered
+# from fixtures/psql-drill-*.tsv. FAKE_DRILL_PSQL_FAIL=1 refuses the connection,
+# FAKE_DRILL_STUCK=1 stays in recovery for ever, FAKE_DRILL_CHECKSUMS=off turns
+# data_checksums off, FAKE_DRILL_COUNT_FAIL=1 makes the table counts fail.
+if [ -n "$sockdir" ]; then
+  if [ -n "${FAKE_DRILL_PSQL_FAIL:-}" ]; then
+    echo "psql: error: connection to server on socket \"$sockdir/.s.PGSQL.54400\" failed: No such file or directory" >&2
+    exit 2
+  fi
+  case "$sql" in
+    *pg_is_in_recovery*) if [ -n "${FAKE_DRILL_STUCK:-}" ]; then echo t; else echo f; fi ;;
+    "select version()") cat "$fx/psql-drill-version.tsv" ;;
+    *pg_last_wal_replay_lsn*) cat "$fx/psql-drill-lsn.tsv" ;;
+    *data_checksums*) echo "${FAKE_DRILL_CHECKSUMS:-on}" ;;
+    *pg_database_size*) cat "$fx/psql-drill-databases.tsv" ;;
+    *"select count(*) from pg_stat_user_tables"*) cat "$fx/psql-drill-tables-${dbname:-postgres}.tsv" ;;
+    *"format("*) cat "$fx/psql-drill-tablelist-${dbname:-postgres}.tsv" ;;
+    "select count(*) from "*)
+      if [ -n "${FAKE_DRILL_COUNT_FAIL:-}" ]; then echo 'ERROR:  could not read block 3 in file "base/16384/16401"' >&2; exit 1; fi
+      echo 1000 ;;
+    *) echo "psql: error: fake-psql does not know this drill query: $sql" >&2; exit 2 ;;
+  esac
+  exit 0
+fi
 
 host="$(printf '%s' "$conninfo" | sed -n 's/.*host=\([^ .]*\).*/\1/p')"
 if [ -z "$host" ] || [ -z "$sql" ]; then

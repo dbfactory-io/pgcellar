@@ -235,3 +235,45 @@ func TestRecoveries(t *testing.T) {
 		t.Errorf("successful recover runs: %v", n)
 	}
 }
+
+func TestDrills(t *testing.T) {
+	s := newStore(t)
+	t0 := time.Date(2026, 10, 20, 3, 10, 0, 0, time.UTC)
+	a, err := s.AddDrill(Drill{Server: "pg-main", BackupID: "20261019T020001", StartedAt: t0, FinishedAt: t0.Add(40 * time.Second), OK: true, Details: `{"summary":"ok"}`, RunID: 5, ReportPath: "/r/pg-main/reports/a.pdf"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := s.AddDrill(Drill{Server: "pg-main", BackupID: "20261020T020001", StartedAt: t0.Add(24 * time.Hour), FinishedAt: t0.Add(24*time.Hour + time.Second), StepFailed: "start", RunID: 9})
+	if _, err := s.AddDrill(Drill{Server: "other", StartedAt: t0, FinishedAt: t0}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetDrill(a)
+	if err != nil || !got.OK || got.StepFailed != "" || got.Details != `{"summary":"ok"}` || !got.FinishedAt.Equal(t0.Add(40*time.Second)) || got.ReportPath == "" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if d, _ := s.GetDrill(b); d.OK || d.StepFailed != "start" || d.Details != "{}" {
+		t.Errorf("failed drill: %+v", d)
+	}
+	list, _ := s.ListDrills("pg-main", 0)
+	if len(list) != 2 || list[0].ID != b {
+		t.Errorf("newest first, one server: %+v", list)
+	}
+	if all, _ := s.ListDrills("", 1); len(all) != 1 {
+		t.Errorf("limit: %d", len(all))
+	}
+	if d, err := s.DrillForRun(5); err != nil || d.ID != a {
+		t.Errorf("by run: %+v %v", d, err)
+	}
+	if err := s.UpdateDrillDetails(a, `{"data_dir":""}`, "/r/x.pdf"); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := s.GetDrill(a); d.Details != `{"data_dir":""}` || d.ReportPath != "/r/x.pdf" {
+		t.Errorf("update: %+v", d)
+	}
+	if _, err := s.GetDrill(999); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown: %v", err)
+	}
+	if err := s.UpdateDrillDetails(999, "{}", ""); !errors.Is(err, ErrNotFound) {
+		t.Errorf("update unknown: %v", err)
+	}
+}

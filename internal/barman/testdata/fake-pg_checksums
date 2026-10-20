@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# fake-pg_checksums: --check -D dir. FAKE_CHECKSUMS_BAD=1 reports corrupted blocks.
+set -u
+[ -n "${FAKE_CHECKSUMS_LOG:-}" ] && printf '%s\n' "$*" >>"$FAKE_CHECKSUMS_LOG"
+dir=""; check=0
+while [ $# -gt 0 ]; do
+  case "$1" in -D) dir="${2:-}"; shift 2 ;; --check|-c) check=1; shift ;; *) shift ;; esac
+done
+[ "$check" = 1 ] && [ -f "$dir/PG_VERSION" ] || { echo "pg_checksums: error: need --check and a data directory" >&2; exit 1; }
+[ -f "$dir/postmaster.pid" ] && { echo "pg_checksums: error: cluster must be shut down" >&2; exit 1; }
+echo "Checksum operation completed"
+echo "Files scanned:   42"
+echo "Blocks scanned:  1536"
+if [ -n "${FAKE_CHECKSUMS_BAD:-}" ]; then
+  echo 'pg_checksums: error: checksum verification failed in file "'"$dir"'/base/16384/16401", block 7: calculated checksum 9A13 but block contains 1F0E' >&2
+  echo "Bad checksums:  3"
+  echo "Data checksum version: 1"
+  exit 1
+fi
+echo "Bad checksums:  0"
+echo "Data checksum version: 1"

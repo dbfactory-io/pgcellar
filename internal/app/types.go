@@ -87,6 +87,8 @@ type ServerState struct {
 	StreamingLive              bool      `json:"streaming_live"`                 // the WAL receiver runs (check receive_wal_running)
 	LastDataReceived           time.Time `json:"last_data_received,omitzero"`    // when data last reached Barman (streaming directory)
 	LastDataReceivedAgeSeconds *int64    `json:"last_data_received_age_seconds,omitempty"`
+	// Drill is the state of the restore drills, filled when the state is read.
+	Drill *DrillStatus `json:"drill,omitempty"`
 	// Notes are remarks that are not alerts.
 	Notes       []string    `json:"notes"`
 	BackupCount int         `json:"backup_count"`

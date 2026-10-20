@@ -108,3 +108,24 @@ func TestWriteTarGzSkipsNothingThatMatters(t *testing.T) {
 		t.Error("the .partial file must be gone")
 	}
 }
+
+func TestDrillDestIsUniqueAndUnderTheRoot(t *testing.T) {
+	root := t.TempDir()
+	at := time.Date(2026, 10, 20, 3, 10, 0, 0, time.UTC)
+	first, err := drillDest(root, "pg-main", at)
+	if err != nil || first != filepath.Join(root, "pg-main", "drill-20261020T031000") {
+		t.Fatalf("%q %v", first, err)
+	}
+	if err := os.MkdirAll(first, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	second, _ := drillDest(root, "pg-main", at)
+	if second != first+"-2" {
+		t.Errorf("a second drill in the same second gets its own directory: %q", second)
+	}
+	for _, bad := range []string{"..", "a/b", "", "../x"} {
+		if p, err := drillDest(root, bad, at); err == nil {
+			t.Errorf("%q must be refused, got %q", bad, p)
+		}
+	}
+}

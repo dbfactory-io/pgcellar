@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# fake-pg_isready: accepting connections, unless FAKE_PGISREADY_NEVER=1 (the copy
+# never finishes its recovery: "rejecting connections", exit 1).
+set -u
+[ -n "${FAKE_PGISREADY_LOG:-}" ] && printf '%s\n' "$*" >>"$FAKE_PGISREADY_LOG"
+sock="/tmp"; port=5432
+while [ $# -gt 0 ]; do
+  case "$1" in -h) sock="${2:-}"; shift 2 ;; -p) port="${2:-}"; shift 2 ;; *) shift ;; esac
+done
+if [ -n "${FAKE_PGISREADY_NEVER:-}" ]; then echo "$sock:$port - rejecting connections"; exit 1; fi
+echo "$sock:$port - accepting connections"

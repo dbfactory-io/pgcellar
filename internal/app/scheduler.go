@@ -20,10 +20,47 @@ const SchedulerActor = "scheduler"
 const DefaultSchedulerInterval = 30 * time.Second
 
 const (
-	settingSchedulerTick = "scheduler.tick"
-	settingSchedulerLast = "scheduler.last."
-	maxDuesPerTick       = 2000
+	settingSchedulerTick      = "scheduler.tick"
+	settingSchedulerLast      = "scheduler.last."
+	settingSchedulerDrillLast = "scheduler.drill.last."
+	maxDuesPerTick            = 2000
 )
+
+// A schedule kind is something the scheduler starts at due times: the backups
+// (schedule.backup) and the restore drills (drills.schedule).
+const (
+	kindBackup = iota
+	kindDrill
+)
+
+// entryKey is the key of a server's entry for a kind in the scheduler memory.
+func entryKey(kind int, server string) string {
+	if kind == kindDrill {
+		return drillRunKey + server
+	}
+	return server
+}
+
+func lastKey(kind int, server string) string {
+	if kind == kindDrill {
+		return settingSchedulerDrillLast + server
+	}
+	return settingSchedulerLast + server
+}
+
+// specOf returns the schedule text of a server for a kind, "" when it has none.
+func specOf(cfg *config.Config, kind int, srv config.Server) string {
+	if kind == kindDrill {
+		if !cfg.Drills.Enabled {
+			return ""
+		}
+		return strings.TrimSpace(srv.Drills.Schedule)
+	}
+	if !srv.Schedule.Enabled {
+		return ""
+	}
+	return srv.Schedule.Backup
+}
 
 // ScheduledRun is what the scheduler did with the last due time it handled
 // for a server. It is kept in the settings table, so a restart does not run
@@ -62,6 +99,11 @@ func NextDue(s config.Schedule, after time.Time) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return nextCron(cron, after)
+}
+
+// configScheduleOf wraps a schedule text for NextDue.
+func configScheduleOf(spec string) config.Schedule {
+	return config.Schedule{Backup: spec, Enabled: true}
 }
 
 // lastDueIn returns the latest due time of a cron expression in (after, now].
@@ -114,7 +156,11 @@ func (a *App) schedulerLoop(ctx context.Context) {
 }
 
 func (a *App) lastScheduled(server string) (ScheduledRun, bool) {
-	v, ok, err := a.Store.GetSetting(settingSchedulerLast + server)
+	return a.lastScheduledKind(kindBackup, server)
+}
+
+func (a *App) lastScheduledKind(kind int, server string) (ScheduledRun, bool) {
+	v, ok, err := a.Store.GetSetting(lastKey(kind, server))
 	if err != nil || !ok {
 		return ScheduledRun{}, false
 	}
@@ -130,7 +176,7 @@ func (a *App) lastScheduled(server string) (ScheduledRun, bool) {
 // counts from now. At startup the due times the process missed while it was
 // stopped count too, but not older than catch_up and not those already
 // handled.
-func (a *App) initialAfter(server string, now time.Time, noCatchUp bool, catchUp time.Duration) time.Time {
+func (a *App) initialAfter(kind int, server string, now time.Time, noCatchUp bool, catchUp time.Duration) time.Time {
 	after := now
 	if noCatchUp || catchUp <= 0 {
 		return after
@@ -143,7 +189,7 @@ func (a *App) initialAfter(server string, now time.Time, noCatchUp bool, catchUp
 			}
 		}
 	}
-	if rec, ok := a.lastScheduled(server); ok && rec.DueAt.After(after) && !rec.DueAt.After(now) {
+	if rec, ok := a.lastScheduledKind(kind, server); ok && rec.DueAt.After(after) && !rec.DueAt.After(now) {
 		after = rec.DueAt
 	}
 	return after
@@ -171,38 +217,43 @@ func (a *App) SchedulerTick(ctx context.Context, now time.Time) {
 	started := s.started
 
 	type due struct {
+		kind   int
 		server string
 		at     time.Time
 		e      *schedEntry
 	}
 	var pending []due
 	seen := map[string]bool{}
-	for _, srv := range cfg.Servers {
-		if !srv.Schedule.Enabled {
-			continue
-		}
-		cron, _, err := config.ParseSchedule(srv.Schedule.Backup)
-		if err != nil {
-			continue
-		}
-		seen[srv.Name] = true
-		e := s.entries[srv.Name]
-		if e == nil || e.spec != srv.Schedule.Backup {
-			e = &schedEntry{spec: srv.Schedule.Backup, cron: cron, after: a.initialAfter(srv.Name, now, started || e != nil, sc.CatchUp)}
-			s.entries[srv.Name] = e
-		}
-		if e.dead {
-			continue
-		}
-		at, found, never := lastDueIn(e.cron, e.after, now)
-		if never {
-			e.dead = true
-			continue
-		}
-		if found {
-			pending = append(pending, due{srv.Name, at, e})
-		} else {
-			e.after = now
+	for _, kind := range []int{kindBackup, kindDrill} {
+		for _, srv := range cfg.Servers {
+			spec := specOf(cfg, kind, srv)
+			if spec == "" {
+				continue
+			}
+			cron, _, err := config.ParseSchedule(spec)
+			if err != nil {
+				continue
+			}
+			key := entryKey(kind, srv.Name)
+			seen[key] = true
+			e := s.entries[key]
+			if e == nil || e.spec != spec {
+				e = &schedEntry{spec: spec, cron: cron, after: a.initialAfter(kind, srv.Name, now, started || e != nil, sc.CatchUp)}
+				s.entries[key] = e
+			}
+			if e.dead {
+				continue
+			}
+			at, found, never := lastDueIn(e.cron, e.after, now)
+			if never {
+				e.dead = true
+				continue
+			}
+			if found {
+				pending = append(pending, due{kind, srv.Name, at, e})
+			} else {
+				e.after = now
+			}
 		}
 	}
 	for name := range s.entries { // servers that left the schedule start afresh if they come back
@@ -214,6 +265,9 @@ func (a *App) SchedulerTick(ctx context.Context, now time.Time) {
 		if !pending[i].at.Equal(pending[j].at) {
 			return pending[i].at.Before(pending[j].at)
 		}
+		if pending[i].kind != pending[j].kind {
+			return pending[i].kind < pending[j].kind // a backup before a drill
+		}
 		return pending[i].server < pending[j].server
 	})
 	for _, p := range pending {
@@ -221,21 +275,31 @@ func (a *App) SchedulerTick(ctx context.Context, now time.Time) {
 			break // the others wait for the next tick
 		}
 		rec := ScheduledRun{DueAt: p.at}
-		id, err := a.StartBackup(ctx, SchedulerActor, p.server)
+		var id int64
+		var err error
+		what := "backup"
+		if p.kind == kindDrill {
+			what = "drill"
+			id, err = a.StartDrill(ctx, SchedulerActor, p.server, DrillInput{})
+		} else {
+			id, err = a.StartBackup(ctx, SchedulerActor, p.server)
+		}
 		var conflict *ConflictError
 		switch {
 		case err == nil:
 			rec.RunID = id
+		case errors.As(err, &conflict) && conflict.Retry:
+			continue // busy: the due time stays pending and is tried again at the next tick
 		case errors.As(err, &conflict):
-			rec.Note = "a backup was already running"
-			a.Logf("scheduler: %s due %s skipped: %v", p.server, p.at.Format(time.RFC3339), err)
+			rec.Note = "a " + what + " was already running"
+			a.Logf("scheduler: %s %s due %s skipped: %v", what, p.server, p.at.Format(time.RFC3339), err)
 		default:
 			rec.Note = err.Error()
-			a.Logf("scheduler: %s due %s not started: %v", p.server, p.at.Format(time.RFC3339), err)
+			a.Logf("scheduler: %s %s due %s not started: %v", what, p.server, p.at.Format(time.RFC3339), err)
 		}
 		if b, merr := json.Marshal(rec); merr == nil {
-			if serr := a.Store.SetSetting(settingSchedulerLast+p.server, string(b)); serr != nil {
-				a.Logf("scheduler: cannot record the run of %s: %v", p.server, serr)
+			if serr := a.Store.SetSetting(lastKey(p.kind, p.server), string(b)); serr != nil {
+				a.Logf("scheduler: cannot record the %s of %s: %v", what, p.server, serr)
 			}
 		}
 		p.e.after = now
@@ -271,6 +335,12 @@ func (a *App) scheduleInfo(name string, now time.Time) (next time.Time, last *Sc
 	if !ok {
 		return next, nil
 	}
+	a.deriveStatus(&rec)
+	return next, &rec
+}
+
+// deriveStatus sets the Status of a scheduled run from its run record.
+func (a *App) deriveStatus(rec *ScheduledRun) {
 	rec.Status = "skipped"
 	if rec.RunID > 0 {
 		rec.Status = "failed"
@@ -283,5 +353,4 @@ func (a *App) scheduleInfo(name string, now time.Time) (next time.Time, last *Sc
 			}
 		}
 	}
-	return next, &rec
 }

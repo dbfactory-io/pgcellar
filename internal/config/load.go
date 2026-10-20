@@ -36,6 +36,8 @@ func Defaults() *Config {
 			User:         "barman",
 			CronInterval: time.Minute,
 		},
+		Drills: Drills{Enabled: true, Timeout: DefaultDrillTimeout, RecoveryTimeout: DefaultDrillRecoveryTimeout,
+			KeepLast: true, MaxAge: DefaultDrillMaxAge, BinDir: DefaultPGBinDir},
 		Scheduler:          Scheduler{Enabled: true, CatchUp: DefaultCatchUp, Parallel: 1},
 		StatusInterval:     time.Minute,
 		SetupInterval:      DefaultSetupInterval,
@@ -249,12 +251,23 @@ func Validate(cfg *Config) []string {
 		add("alerts.webhook.url must start with http:// or https://")
 	}
 
-	if cfg.Drills.Enabled {
-		if _, _, err := ParseSchedule(cfg.Drills.Schedule); err != nil {
-			add("drills.schedule: %v", err)
-		}
-		if cfg.Drills.Image == "" {
-			add("drills.image is empty (for example \"postgres:16\")")
+	if cfg.Drills.Timeout <= 0 {
+		add("drills.timeout must be positive (for example \"30m\")")
+	}
+	if cfg.Drills.RecoveryTimeout <= 0 {
+		add("drills.recovery_timeout must be positive (for example \"10m\")")
+	}
+	if cfg.Drills.MaxAge <= 0 {
+		add("drills.max_age must be positive (for example \"192h\" for 8 days)")
+	}
+	if !filepath.IsAbs(cfg.Drills.BinDir) {
+		add("drills.bin_dir must be an absolute path (default %s)", DefaultPGBinDir)
+	}
+	for _, s := range cfg.Servers {
+		if strings.TrimSpace(s.Drills.Schedule) != "" {
+			if _, _, err := ParseSchedule(s.Drills.Schedule); err != nil {
+				add("server %s: drills.schedule: %v", s.Name, err)
+			}
 		}
 	}
 	return p

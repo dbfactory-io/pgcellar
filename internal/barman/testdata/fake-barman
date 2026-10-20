@@ -164,8 +164,12 @@ case "$cmd" in
     fi
     # A tiny stand-in for a restored data directory.
     mkdir -p "$dest/base/1" "$dest/pg_wal" || fail "Cannot create $dest"
-    echo "16" >"$dest/PG_VERSION"
+    echo "${FAKE_BARMAN_PG_VERSION:-16}" >"$dest/PG_VERSION"
     echo "# restored from $1/$id" >"$dest/postgresql.auto.conf"
+    # What Barman writes for a local restore without --get-wal: the WAL it needs is
+    # copied into barman_wal/ of the destination and fetched from there.
+    mkdir -p "$dest/barman_wal"
+    echo "restore_command = 'cp barman_wal/%f %p'" >>"$dest/postgresql.auto.conf"
     if [ -n "$target_time" ]; then echo "recovery_target_time = '$target_time'" >>"$dest/postgresql.auto.conf"; fi
     head -c 4096 /dev/zero >"$dest/base/1/1259"
     : >"$dest/recovery.signal"

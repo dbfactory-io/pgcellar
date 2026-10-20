@@ -18,6 +18,12 @@ FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Major versions of the PostgreSQL server binaries kept for restore drills. A drill
+# starts the restored copy with the binaries of the same major version, so list here
+# every major version of the servers you back up. Fewer versions = a smaller image:
+#   docker build --build-arg PG_MAJORS="17" ...
+ARG PG_MAJORS="16 17 18"
+
 # PGDG apt repository, as documented on postgresql.org/download/linux/debian
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
@@ -29,7 +35,14 @@ RUN apt-get update \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
       barman barman-cli postgresql-client-18 rsync openssh-client openssh-server \
-      ca-certificates git tzdata \
+      ca-certificates git tzdata postgresql-common \
+# Server binaries for the restore drills, nothing else: no cluster is created
+# (create_main_cluster = false), no service is started, and whatever a postinst
+# left behind is removed. Binaries end up in /usr/lib/postgresql/<major>/bin.
+ && printf 'create_main_cluster = false\n' >> /etc/postgresql-common/createcluster.conf \
+ && apt-get install -y --no-install-recommends $(for v in ${PG_MAJORS}; do printf 'postgresql-%s ' "$v"; done) \
+ && rm -rf /etc/postgresql /var/lib/postgresql/* /var/log/postgresql \
+ && for v in ${PG_MAJORS}; do test -x /usr/lib/postgresql/$v/bin/pg_ctl || { echo "missing pg_ctl for PostgreSQL $v" >&2; exit 1; }; done \
  && apt-get purge -y curl gnupg \
  && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*

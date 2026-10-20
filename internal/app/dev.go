@@ -29,6 +29,8 @@ func (a *App) setupDev(src string, cfg *config.Config) (string, error) {
 		return "", err
 	}
 	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
+	a.DrillTools = DrillTools{PgCtl: "fake-pg_ctl", PgIsReady: "fake-pg_isready", PgChecksums: "fake-pg_checksums"}
+	a.DrillPollInterval = 100 * time.Millisecond
 	// The fixtures are dated 2026-10-20 around 02:10: freeze the clock used
 	// for ages and thresholds so the demo shows a healthy pg-main.
 	frozen := time.Date(2026, 10, 20, 2, 30, 0, 0, time.Local)

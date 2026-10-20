@@ -362,6 +362,7 @@ func (a *App) States() ([]ServerState, time.Time, string) {
 	now := a.now()
 	for i := range out {
 		out[i].NextBackup, out[i].LastScheduled = a.scheduleInfo(out[i].Name, now)
+		a.applyDrill(&out[i], now)
 	}
 	return out, at, msg
 }
@@ -386,6 +387,7 @@ func (a *App) State(name string) (ServerState, bool) {
 	v, ok := a.cacheEntry(name)
 	if ok {
 		v.NextBackup, v.LastScheduled = a.scheduleInfo(name, a.now())
+		a.applyDrill(&v, a.now())
 	}
 	return v, ok
 }

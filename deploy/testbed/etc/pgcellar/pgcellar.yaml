@@ -25,6 +25,8 @@ servers:
       recovery_window_days: 7
       redundancy: 0
       minimum_redundancy: 1
+    drills:
+      schedule: "weekly sun 04:30"      # restore drill, after the Sunday backups
     tags: [testbed, hawking]
 
   - name: chutag
@@ -36,6 +38,8 @@ servers:
       recovery_window_days: 7
       redundancy: 0
       minimum_redundancy: 1
+    drills:
+      schedule: "weekly sun 04:30"      # restore drill, after the Sunday backups
     tags: [testbed, hawking]
 
   - name: sygnet
@@ -47,6 +51,8 @@ servers:
       recovery_window_days: 7
       redundancy: 0
       minimum_redundancy: 1
+    drills:
+      schedule: "weekly sun 04:30"      # restore drill, after the Sunday backups
     tags: [testbed, hawking]
 
   - name: listmonk
@@ -58,6 +64,8 @@ servers:
       recovery_window_days: 7
       redundancy: 0
       minimum_redundancy: 1
+    drills:
+      schedule: "weekly sun 04:30"      # restore drill, after the Sunday backups
     tags: [testbed, hawking]
 
   - name: postiz
@@ -69,6 +77,8 @@ servers:
       recovery_window_days: 7
       redundancy: 0
       minimum_redundancy: 1
+    drills:
+      schedule: "weekly sun 04:30"      # restore drill, after the Sunday backups
     tags: [testbed, hawking]
 
   - name: nyx
@@ -80,6 +90,8 @@ servers:
       recovery_window_days: 7
       redundancy: 0
       minimum_redundancy: 1
+    drills:
+      schedule: "weekly sun 04:30"      # restore drill, after the Sunday backups
     tags: [testbed, hawking]
 
 alerts:
@@ -103,8 +115,13 @@ recoveries:
   max_download_bytes: 2147483648       # 2 GiB: above this, no download link, read the file on the Pi
   keep_days: 7                         # restores are removed after a week; 0 = keep forever
 
+# Restore drills (README "Restore drills"): each server restores its latest backup
+# on Sunday 04:30, one at a time. The Pi has little RAM: the copy runs with 64 MB of
+# shared_buffers, and the drills are sequential.
 drills:
-  enabled: false                       # switched on after the first manual restore (step 13)
-  schedule: "weekly sun 05:00"
-  image: postgres:17
-  report_dir: /var/lib/pgcellar/reports
+  enabled: true
+  timeout: 45m
+  recovery_timeout: 15m
+  keep_last: true
+  verify_tables: false
+  max_age: 192h
