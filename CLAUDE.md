@@ -20,7 +20,7 @@ A control room for PostgreSQL backups, built on top of Barman (EnterpriseDB, GPL
 - Agents working in parallel own one directory each and do not touch `go.mod`, `go.sum` or files outside their directory; the orchestrator integrates and runs `go mod tidy`.
 
 ## Layout
-cmd/pgcellar (main: `serve`, `check`, `version`) · internal/report (PDF writer for the drill report) · internal/barman (INI config read/write, CLI runner, JSON parsing, fake binary for tests) · internal/config (pgcellar.yaml, validation, git history of the config dir) · internal/store (SQLite: runs, audit, sessions, api keys) · internal/web (handlers, templates, HTMX pages, auth) · internal/api (JSON API v1, api keys) · internal/sshkeys (ed25519 keypair, deploy public key, test connection) · web/ (templates, static) · deploy/ (Dockerfile, docker-compose.yml, pgcellar.example.yaml, systemd unit) · docs/ · internal/barman/testdata
+cmd/pgcellar (main: `serve`, `check`, `apikey`, `license`, `hash-password`, `version`) · internal/alerts (Telegram, mail, signed webhook channels; the rules that decide what is worth a message are in internal/app/alerts.go) · internal/license (Ed25519 licence keys, embedded public key) · internal/report (PDF writer for the drill report) · internal/barman (INI config read/write, CLI runner, JSON parsing, fake binary for tests) · internal/config (pgcellar.yaml, validation, git history of the config dir) · internal/store (SQLite: runs, audit, sessions, api keys) · internal/web (handlers, templates, HTMX pages, auth) · internal/api (JSON API v1, api keys) · internal/sshkeys (ed25519 keypair, deploy public key, test connection) · web/ (templates, static) · deploy/ (Dockerfile, docker-compose.yml, pgcellar.example.yaml, systemd unit) · docs/ · internal/barman/testdata
 
 ## Commands (Makefile)
 - `make build`  -> ./pgcellar
@@ -28,6 +28,7 @@ cmd/pgcellar (main: `serve`, `check`, `version`) · internal/report (PDF writer 
 - `make lint`   -> gofmt check + go vet + golangci-lint
 - `make run`    -> ./pgcellar serve --config deploy/pgcellar.example.yaml --dev (fake barman on PATH)
 - `make docker` -> docker build deploy/
+- `make release-dry` -> goreleaser snapshot (linux amd64/arm64, darwin arm64, checksums in dist/), nothing published; `make version-check` -> the injected version is printed
 
 ## Milestones
 1. Foundations: barman package (parse/write barman.d, run CLI, parse JSON of check/list-backups/show-backup/status), config package (yaml + git history), store, fake barman, deploy skeleton. DONE when `go test ./...` is green and `pgcellar check --config deploy/pgcellar.example.yaml` lists the servers from a fixture barman.d.
@@ -35,4 +36,4 @@ cmd/pgcellar (main: `serve`, `check`, `version`) · internal/report (PDF writer 
 3. SSH keys: generate ed25519 pair for the barman user, show the public key, optional deploy with a one-time password, test connection.
 4. Scheduling and retention: DONE (2026-10-20). pgCellar runs the `schedule.backup` of each server itself (`internal/app/scheduler.go`, `scheduler:` keys enabled/catch_up/parallel); Barman applies the `retention_policy` written to barman.d from the server form.
 5. PITR wizard and restore drills: DONE (2026-10-20). The wizard is the Restore page; the drill (`internal/app/drills*.go`) restores a backup, starts the copy with the PostgreSQL binaries of its major version (`/usr/lib/postgresql/<major>/bin`, installed in the image by `PG_MAJORS`), checks it, stops it, and writes a dated PDF (`internal/report`, no dependency). Per-server `drills.schedule` run by the scheduler; global `drills:` block (enabled, timeout, recovery_timeout, keep_last, verify_tables, max_age, bin_dir).
-6. Alerts (mail, Telegram, webhook), licence key (Free/Pro/Business, Ed25519-signed, verified offline), release 0.1.
+6. Alerts, licence key, release 0.1: DONE (2026-10-20). Alerts: Telegram, mail and signed webhook (`internal/alerts`, rules in `internal/app/alerts.go`, page `/alerts`, API `/api/v1/alerts`). Licence: `internal/license`, `pgcellar license keygen|issue|verify|show`; a licence never blocks a backup, a restore or a drill, it only limits adding a server (Free = 2). Release 0.1 is prepared (CHANGELOG.md, README.md, goreleaser, CI) and NOT tagged: the owner tags after the repository has moved to its GitHub organisation (module path then changes).

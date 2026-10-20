@@ -28,6 +28,9 @@ archives:
       - LICENSE
       - README.md
 
+changelog:
+  disable: true   # CHANGELOG.md is written by hand
+
 checksum:
   name_template: checksums.txt
 

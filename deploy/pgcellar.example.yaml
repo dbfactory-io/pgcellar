@@ -59,22 +59,23 @@ alerts:
   repeat_every: 24h                    # a condition that lasts is announced again only after this delay
   on_drill_success: false              # also send a message when a restore drill passes
   daily_summary: ""                    # "08:30" = one message a day with the state of every server; empty = none
-  # Channels. Secrets are never written here: only the NAME of an environment variable.
-  mail:
-    host: smtp.example.com
-    port: 587
-    starttls: true                     # false = no encryption (a relay on a trusted network)
-    from: pgcellar@example.com
-    to:
-      - dba@example.com
-    user_env: PGCELLAR_SMTP_USER           # name of the variable, not the value
-    password_env: PGCELLAR_SMTP_PASSWORD
-  telegram:
-    token_env: PGCELLAR_TELEGRAM_TOKEN
-    chat_id: "-1001234567890"
-  webhook:
-    url: https://hooks.example.com/pgcellar
-    secret_env: PGCELLAR_WEBHOOK_SECRET    # optional: signs the body, header X-PgCellar-Signature: sha256=<hmac>
+  # Channels: uncomment the ones you use. Secrets are never written here, only the NAME of an
+  # environment variable (set it in the container environment, see docker-compose.yml).
+  # mail:
+  #   host: smtp.example.com
+  #   port: 587
+  #   starttls: true                     # false = no encryption (a relay on a trusted network)
+  #   from: pgcellar@example.com
+  #   to:
+  #     - dba@example.com
+  #   user_env: PGCELLAR_SMTP_USER           # name of the variable, not the value
+  #   password_env: PGCELLAR_SMTP_PASSWORD
+  # telegram:
+  #   token_env: PGCELLAR_TELEGRAM_TOKEN
+  #   chat_id: "-1001234567890"
+  # webhook:
+  #   url: https://hooks.example.com/pgcellar
+  #   secret_env: PGCELLAR_WEBHOOK_SECRET    # optional: signs the body, header X-PgCellar-Signature: sha256=<hmac>
 
 # Licence: without a key pgCellar is the Free edition (2 servers). A licence never stops a
 # backup, a restore or a drill; it only limits how many servers you can add.

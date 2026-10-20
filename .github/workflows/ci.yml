@@ -25,13 +25,29 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: gofmt
-        run: test -z "$(gofmt -l .)"
-      - name: vet
-        run: go vet ./...
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+          install-only: true
+      - name: Lint (gofmt, go vet, golangci-lint)
+        run: make lint
+
+  release-dry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+      - name: Version is injected at build time
+        run: make version-check
+      - name: Release archives (nothing is published)
+        run: make release-dry
 
   docker:
     runs-on: ubuntu-latest

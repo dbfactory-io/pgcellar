@@ -25,6 +25,7 @@ services:
       # PGCELLAR_SMTP_USER: ""
       # PGCELLAR_SMTP_PASSWORD: ""
       # PGCELLAR_TELEGRAM_TOKEN: ""
+      # PGCELLAR_WEBHOOK_SECRET: ""
     restart: unless-stopped
 
   # SSH companion: same image, sshd run by the barman user (no root), same Barman
