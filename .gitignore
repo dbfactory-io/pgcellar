@@ -6,3 +6,4 @@
 .DS_Store
 !internal/barman/testdata/**/*-xlog.db
 !internal/barman/testdata/real/*.db
+/site/docs/_manual.html

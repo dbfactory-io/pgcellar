@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 LDFLAGS := -X main.Version=$(VERSION)
 
-.PHONY: build test lint run demo docker release-dry version-check clean
+.PHONY: build test lint run demo docker release-dry version-check clean docs docs-pdf
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o pgcellar ./cmd/pgcellar
@@ -43,6 +43,25 @@ release-dry:
 version-check:
 	@v=$$(CGO_ENABLED=0 go run -ldflags "-X main.Version=0.0.0-check" ./cmd/pgcellar version); \
 	if [ "$$v" != "pgcellar 0.0.0-check" ]; then echo "unexpected: $$v"; exit 1; fi; echo "$$v"
+
+# The manual (docs/manual/*.md) as static HTML in site/docs/, plus site/sitemap.xml.
+# The generator is a separate Go module (tools/docs) so the product gets no extra dependency.
+docs:
+	cd tools/docs && go run . -root "$(CURDIR)"
+
+# The same manual as one PDF, printed by headless Chrome from site/docs/_manual.html.
+# Without Chrome or Chromium the target says so and stops without failing the build.
+docs-pdf: docs
+	@chrome=""; \
+	for c in "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" google-chrome google-chrome-stable chromium chromium-browser; do \
+		if [ -x "$$c" ] || command -v "$$c" >/dev/null 2>&1; then chrome="$$c"; break; fi; \
+	done; \
+	if [ -z "$$chrome" ]; then echo "docs-pdf: Chrome or Chromium not found, PDF not produced (the HTML manual in site/docs/ is built)"; exit 0; fi; \
+	"$$chrome" --headless=new --disable-gpu --no-pdf-header-footer \
+		--print-to-pdf="$(CURDIR)/site/docs/pgcellar-manual.pdf" \
+		"file://$(CURDIR)/site/docs/_manual.html" >/dev/null 2>&1 \
+	&& echo "wrote site/docs/pgcellar-manual.pdf" \
+	|| { echo "docs-pdf: Chrome failed to print the PDF"; exit 1; }
 
 clean:
 	rm -f pgcellar
