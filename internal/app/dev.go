@@ -38,6 +38,7 @@ func (a *App) setupDev(src string, cfg *config.Config) (string, error) {
 	a.TempDir = tmp
 
 	cfg.DataDir = filepath.Join(tmp, "data")
+	cfg.Recoveries.Dir = filepath.Join(tmp, "recoveries")
 	cfg.Barman.Binary = fakeBinary
 	cfg.Barman.User = ""
 	cfg.Barman.ConfigFile = filepath.Join(tmp, "barman.conf")

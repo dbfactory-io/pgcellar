@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -49,6 +50,11 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST "+v+"/servers/{name}/switch-wal", a.auth(app.RoleOperator, a.switchWAL))
 	mux.HandleFunc("GET "+v+"/servers/{name}/backups", a.auth(app.RoleViewer, a.backups))
 	mux.HandleFunc("DELETE "+v+"/servers/{name}/backups/{id}", a.auth(app.RoleAdmin, a.deleteBackup))
+	mux.HandleFunc("POST "+v+"/servers/{name}/recoveries", a.auth(app.RoleOperator, a.startRecovery))
+	mux.HandleFunc("GET "+v+"/servers/{name}/recoveries", a.auth(app.RoleViewer, a.recoveries))
+	mux.HandleFunc("GET "+v+"/recoveries/{id}", a.auth(app.RoleViewer, a.recovery))
+	mux.HandleFunc("GET "+v+"/recoveries/{id}/download", a.auth(app.RoleOperator, a.downloadRecovery))
+	mux.HandleFunc("DELETE "+v+"/recoveries/{id}", a.auth(app.RoleAdmin, a.deleteRecovery))
 	mux.HandleFunc("GET "+v+"/status", a.auth(app.RoleViewer, a.status))
 	mux.HandleFunc("GET "+v+"/runs", a.auth(app.RoleViewer, a.runs))
 	mux.HandleFunc("GET "+v+"/runs/{id}", a.auth(app.RoleViewer, a.run))
@@ -85,6 +91,8 @@ func (a *API) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, app.ErrRefreshPending):
 		w.Header().Set("Retry-After", "30")
 		writeError(w, http.StatusServiceUnavailable, "first refresh pending: the status cache has no data for this server yet")
+	case errors.Is(err, app.ErrTooLarge):
+		writeError(w, http.StatusRequestEntityTooLarge, err.Error())
 	case errors.Is(err, app.ErrNoFile):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.As(err, &conflict):
@@ -311,6 +319,92 @@ func (a *API) audit(w http.ResponseWriter, r *http.Request, p principal) {
 
 func (a *API) deleteBackup(w http.ResponseWriter, r *http.Request, p principal) {
 	if err := a.app.DeleteBackup(r.Context(), p.actor(), r.PathValue("name"), r.PathValue("id")); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) startRecovery(w http.ResponseWriter, r *http.Request, p principal) {
+	var in app.RecoveryInput
+	if err := decode(r, &in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+		return
+	}
+	id, err := a.app.StartRecovery(r.Context(), p.actor(), r.PathValue("name"), in)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	loc := "/api/v1/runs/" + strconv.FormatInt(id, 10)
+	w.Header().Set("Location", loc)
+	writeData(w, http.StatusAccepted, map[string]any{"run_id": id, "status": app.RunRunning, "location": loc})
+}
+
+func (a *API) recoveries(w http.ResponseWriter, r *http.Request, p principal) {
+	name := r.PathValue("name")
+	if _, err := a.app.GetServer(r.Context(), name); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	list, err := a.app.ListRecoveries(name)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, list)
+}
+
+func recoveryID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "the recovery id must be a number")
+		return 0, false
+	}
+	return id, true
+}
+
+func (a *API) recovery(w http.ResponseWriter, r *http.Request, p principal) {
+	id, ok := recoveryID(w, r)
+	if !ok {
+		return
+	}
+	v, err := a.app.GetRecovery(id)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, v)
+}
+
+// downloadRecovery serves the .tar.gz with http.ServeFile, so that ranges
+// and conditional requests work for large files.
+func (a *API) downloadRecovery(w http.ResponseWriter, r *http.Request, p principal) {
+	id, ok := recoveryID(w, r)
+	if !ok {
+		return
+	}
+	path, _, err := a.app.RecoveryArchive(p.actor(), id)
+	if err != nil {
+		if errors.Is(err, app.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "this recovery has no archive to download")
+			return
+		}
+		a.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, path)
+}
+
+func (a *API) deleteRecovery(w http.ResponseWriter, r *http.Request, p principal) {
+	id, ok := recoveryID(w, r)
+	if !ok {
+		return
+	}
+	if err := a.app.DeleteRecovery(p.actor(), id); err != nil {
 		a.fail(w, r, err)
 		return
 	}

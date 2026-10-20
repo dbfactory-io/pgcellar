@@ -31,7 +31,7 @@ type Server struct {
 	apiH    http.Handler
 }
 
-var pages = []string{"login", "status", "servers", "server_new", "server", "runs", "run", "history", "audit", "error"}
+var pages = []string{"login", "status", "servers", "server_new", "server", "restore", "runs", "run", "history", "audit", "error"}
 
 func funcs(assets map[string]string) template.FuncMap {
 	return template.FuncMap{
@@ -145,6 +145,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /servers/{name}/switch-wal", s.guard(app.RoleOperator, s.serverSwitchWAL))
 	mux.HandleFunc("GET /servers/{name}/backups/list", s.guard(app.RoleViewer, s.backupListFragment))
 	mux.HandleFunc("POST /servers/{name}/backups/{id}/delete", s.guard(app.RoleAdmin, s.serverBackupDelete))
+	mux.HandleFunc("GET /servers/{name}/restore", s.guard(app.RoleOperator, s.restoreForm))
+	mux.HandleFunc("POST /servers/{name}/restore", s.guard(app.RoleOperator, s.restoreSubmit))
+	mux.HandleFunc("GET /servers/{name}/recoveries/list", s.guard(app.RoleViewer, s.recoveryListFragment))
+	mux.HandleFunc("GET /recoveries/{id}/download", s.guard(app.RoleOperator, s.recoveryDownload))
+	mux.HandleFunc("POST /recoveries/{id}/delete", s.guard(app.RoleAdmin, s.recoveryDelete))
 	mux.HandleFunc("GET /runs", s.guard(app.RoleViewer, s.runsPage))
 	mux.HandleFunc("GET /runs/{id}", s.guard(app.RoleViewer, s.runPage))
 	mux.HandleFunc("GET /runs/{id}/fragment", s.guard(app.RoleViewer, s.runFragment))

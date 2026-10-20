@@ -13,6 +13,7 @@
   <button class="btn" hx-post="/servers/{{.Detail.Name}}/backup" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#backup-busy" hx-disabled-elt="this" hx-confirm="Start a backup of {{.Detail.Name}} now?">{{t "btn.backup_now"}}</button>
   <span id="backup-busy" class="busy" role="status">{{t "busy.backup"}}</span>
   <button class="btn alt" hx-post="/servers/{{.Detail.Name}}/switch-wal" hx-target="#backup-run" hx-swap="innerHTML" hx-indicator="#backup-busy" hx-disabled-elt="this">{{t "btn.switch_wal"}}</button>
+  <a class="btn alt" href="/servers/{{.Detail.Name}}/restore">{{t "btn.restore_ask"}}</a>
 </div>
 {{end}}
 <div id="backup-run" aria-live="polite"></div>
@@ -41,6 +42,11 @@
 <section>
   <h2>{{t "section.backups"}}</h2>
   <div id="backup-list" aria-live="polite">{{template "backup_list" .BackupList}}</div>
+</section>
+
+<section>
+  <h2>{{t "section.recoveries"}}</h2>
+  <div id="recovery-list" aria-live="polite">{{template "recovery_list" .Recoveries}}</div>
 </section>
 
 <section>

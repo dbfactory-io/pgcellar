@@ -65,11 +65,13 @@ emit() {
 
 minimal=0
 target_time=
+target_immediate=0
 args=()
 while [ $# -gt 0 ]; do
   a="$1"; shift
   case "$a" in
     --target-time) target_time="${1:-}"; shift ;;
+    --target-immediate) target_immediate=1 ;;
     --minimal) minimal=1 ;;
     --force|--archive|--wait|--no-wait) ;;
     -*) echo "barman: error: unrecognized arguments: $a" >&2; exit 2 ;;
@@ -147,6 +149,16 @@ case "$cmd" in
     backup_known "$1" "$id" || fail "Unknown backup '$id' for server '$1'"
     if [ -n "$target_time" ]; then
       echo "Target time: $target_time"
+    fi
+    if [ "$target_immediate" = 1 ]; then
+      echo "Target: end of the backup (immediate)"
+    fi
+    # FAKE_BARMAN_RECOVER_DELAY (seconds): a slow restore.
+    [ -n "${FAKE_BARMAN_RECOVER_DELAY:-}" ] && sleep "$FAKE_BARMAN_RECOVER_DELAY"
+    # FAKE_BARMAN_RECOVER_FAIL: a restore that dies half way, leaving a file behind.
+    if [ -n "${FAKE_BARMAN_RECOVER_FAIL:-}" ]; then
+      mkdir -p "$dest" && echo partial >"$dest/PG_VERSION"
+      fail "No space left on device while copying base/1/1259"
     fi
     # A tiny stand-in for a restored data directory.
     mkdir -p "$dest/base/1" "$dest/pg_wal" || fail "Cannot create $dest"

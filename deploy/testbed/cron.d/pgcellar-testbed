@@ -3,7 +3,7 @@
 # One server every ten minutes from 03:00, like the schedules in pgcellar.yaml.
 # Each backup goes through pgCellar's API (key in /etc/pgcellar-testbed.key, see
 # deploy/testbed/README.md, B7) so it shows up on the Runs page and in the audit
-# log; StartBackup runs `barman backup` then the forced WAL switch (B8).
+# log; StartBackup runs `barman backup` then the forced WAL switch (B9).
 # The call answers 202 at once: the backup itself runs inside pgCellar.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -129,6 +130,7 @@ type serverPageData struct {
 	Detail     app.ServerDetail
 	Form       formData
 	BackupList backupListData
+	Recoveries recoveryListData
 	Updated    time.Time // when the cache entry of the server was built
 	Runs       []app.RunView
 	CanOperate bool
@@ -158,6 +160,7 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 		data.Form = *override
 	}
 	data.BackupList = s.backupList(r, u, name)
+	data.Recoveries = s.recoveryList(u, name)
 	data.Runs, _ = s.app.Runs(name, 10)
 	s.render(w, status, "server", s.newPage(r, u, name, "servers", data))
 }
@@ -273,7 +276,26 @@ func (s *Server) serverCheck(w http.ResponseWriter, r *http.Request, u *userCtx)
 	s.fragment(w, http.StatusOK, "check_fragment", checkData{Checks: checks})
 }
 
-type runData struct{ Run app.RunView }
+type runData struct {
+	Run        app.RunView
+	Recovery   *app.RecoveryView // the restore a finished recover run produced
+	CanOperate bool
+	CanAdmin   bool
+}
+
+func (s *Server) newRunData(run *app.RunView, u *userCtx) runData {
+	d := runData{Run: *run}
+	if u != nil {
+		d.CanOperate = app.RoleAtLeast(u.Role, app.RoleOperator)
+		d.CanAdmin = app.RoleAtLeast(u.Role, app.RoleAdmin)
+	}
+	if run.Kind == "recover" && run.Status != app.RunRunning {
+		if rec, ok := s.app.RecoveryOfRun(run.ID); ok {
+			d.Recovery = rec
+		}
+	}
+	return d
+}
 
 func (s *Server) serverBackup(w http.ResponseWriter, r *http.Request, u *userCtx) {
 	id, err := s.app.StartBackup(r.Context(), u.Name, r.PathValue("name"))
@@ -290,7 +312,7 @@ func (s *Server) serverBackup(w http.ResponseWriter, r *http.Request, u *userCtx
 		s.fail(w, r, u, err)
 		return
 	}
-	s.fragment(w, http.StatusOK, "run_fragment", runData{*run})
+	s.fragment(w, http.StatusOK, "run_fragment", s.newRunData(run, u))
 }
 
 func (s *Server) serverSwitchWAL(w http.ResponseWriter, r *http.Request, u *userCtx) {
@@ -336,7 +358,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
 		s.fail(w, r, u, err)
 		return
 	}
-	s.render(w, http.StatusOK, "run", s.newPage(r, u, fmt.Sprintf("Run #%d", run.ID), "runs", runData{*run}))
+	s.render(w, http.StatusOK, "run", s.newPage(r, u, fmt.Sprintf("Run #%d", run.ID), "runs", s.newRunData(run, u)))
 }
 
 func (s *Server) runFragment(w http.ResponseWriter, r *http.Request, u *userCtx) {
@@ -345,7 +367,7 @@ func (s *Server) runFragment(w http.ResponseWriter, r *http.Request, u *userCtx)
 		s.fail(w, r, u, err)
 		return
 	}
-	s.fragment(w, http.StatusOK, "run_fragment", runData{*run})
+	s.fragment(w, http.StatusOK, "run_fragment", s.newRunData(run, u))
 }
 
 type historyData struct {
@@ -396,4 +418,179 @@ func everyText(d time.Duration) string {
 		return fmt.Sprintf("%d seconds", int(d.Seconds()))
 	}
 	return d.String()
+}
+
+// ---- restore (point-in-time recovery to a directory) ----
+
+type restoreData struct {
+	Server   string
+	Backups  []app.BackupView // complete backups only, newest first
+	Err      string
+	Dir      string // recoveries.dir
+	Zone     string // time zone a datetime without zone is read in
+	MaxDL    int64
+	KeepDays int
+	Problems []string
+	// What the user typed, kept when the form comes back with problems.
+	BackupID, Target, TargetTime string
+	Archive                      bool
+}
+
+func (s *Server) restoreData(r *http.Request, u *userCtx, name string) (restoreData, error) {
+	if _, err := s.app.GetServer(r.Context(), name); err != nil {
+		return restoreData{}, err
+	}
+	cfg := s.app.Config().Recoveries
+	d := restoreData{Server: name, Dir: cfg.Dir, MaxDL: cfg.MaxDownloadBytes, KeepDays: cfg.KeepDays, Target: app.TargetLatest}
+	d.Zone = time.Now().Format("MST (UTC-07:00)")
+	switch backups, err := s.app.Backups(r.Context(), u.Name, name); {
+	case errors.Is(err, app.ErrRefreshPending):
+		d.Err = "First refresh pending: the backup list appears after pgCellar has read Barman once."
+	case err != nil:
+		d.Err = "The backup list is not available: " + err.Error()
+	default:
+		for _, b := range backups {
+			if b.Status == "DONE" {
+				d.Backups = append(d.Backups, b)
+			}
+		}
+	}
+	if len(d.Backups) > 0 {
+		d.BackupID = d.Backups[0].ID
+		if want := r.URL.Query().Get("backup"); want != "" {
+			for _, b := range d.Backups {
+				if b.ID == want {
+					d.BackupID = want
+				}
+			}
+		}
+	}
+	return d, nil
+}
+
+func (s *Server) restoreForm(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	name := r.PathValue("name")
+	d, err := s.restoreData(r, u, name)
+	if err != nil {
+		s.fail(w, r, u, err)
+		return
+	}
+	s.render(w, http.StatusOK, "restore", s.newPage(r, u, tr("restore.title")+" "+name, "servers", d))
+}
+
+func (s *Server) restoreSubmit(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	name := r.PathValue("name")
+	if err := r.ParseForm(); err != nil {
+		s.errorPage(w, r, u, http.StatusBadRequest, "The form could not be read.")
+		return
+	}
+	f := r.PostForm.Get
+	in := app.RecoveryInput{BackupID: f("backup_id"), Target: f("target"), TargetTime: f("target_time"), Archive: f("archive") != ""}
+	id, err := s.app.StartRecovery(r.Context(), u.Name, name, in)
+	if err == nil {
+		http.Redirect(w, r, "/runs/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		return
+	}
+	var pe *app.ProblemsError
+	var ce *app.ConflictError
+	if !errors.As(err, &pe) && !errors.As(err, &ce) {
+		s.fail(w, r, u, err)
+		return
+	}
+	d, derr := s.restoreData(r, u, name)
+	if derr != nil {
+		s.fail(w, r, u, derr)
+		return
+	}
+	if pe != nil {
+		d.Problems = pe.Problems
+	} else {
+		d.Problems = []string{ce.Msg}
+	}
+	d.BackupID, d.Target, d.TargetTime, d.Archive = in.BackupID, in.Target, in.TargetTime, in.Archive
+	s.render(w, http.StatusUnprocessableEntity, "restore", s.newPage(r, u, tr("restore.title")+" "+name, "servers", d))
+}
+
+// ---- recoveries of a server ----
+
+// recoveryListData feeds the "recovery_list" fragment.
+type recoveryListData struct {
+	Server     string
+	Recoveries []app.RecoveryView
+	CanOperate bool
+	CanAdmin   bool
+	Confirm    int64 // id of the restore whose deletion is being confirmed
+	Flash      string
+	FlashBad   bool
+}
+
+func (s *Server) recoveryList(u *userCtx, name string) recoveryListData {
+	d := recoveryListData{Server: name, CanOperate: app.RoleAtLeast(u.Role, app.RoleOperator), CanAdmin: app.RoleAtLeast(u.Role, app.RoleAdmin)}
+	d.Recoveries, _ = s.app.ListRecoveries(name)
+	return d
+}
+
+func (s *Server) recoveryListFragment(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	d := s.recoveryList(u, r.PathValue("name"))
+	if id, err := strconv.ParseInt(r.URL.Query().Get("confirm"), 10, 64); err == nil && d.CanAdmin {
+		for _, rec := range d.Recoveries {
+			if rec.ID == id {
+				d.Confirm = id
+			}
+		}
+	}
+	s.fragment(w, http.StatusOK, "recovery_list", d)
+}
+
+func (s *Server) recoveryDelete(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	id, perr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if perr != nil {
+		s.fail(w, r, u, app.ErrNotFound)
+		return
+	}
+	rec, gerr := s.app.GetRecovery(id)
+	if gerr != nil {
+		s.fail(w, r, u, gerr)
+		return
+	}
+	err := s.app.DeleteRecovery(u.Name, id)
+	if !isHX(r) {
+		if err != nil {
+			s.fail(w, r, u, err)
+			return
+		}
+		http.Redirect(w, r, "/servers/"+rec.Server, http.StatusSeeOther)
+		return
+	}
+	d := s.recoveryList(u, rec.Server)
+	if err != nil {
+		s.app.Logf("delete recovery %d: %v", id, err)
+		d.Flash, d.FlashBad = "The restore was not deleted: "+err.Error(), true
+	} else {
+		d.Flash = "Restore " + filepath.Base(rec.Path) + " deleted."
+	}
+	s.fragment(w, http.StatusOK, "recovery_list", d)
+}
+
+func (s *Server) recoveryDownload(w http.ResponseWriter, r *http.Request, u *userCtx) {
+	id, perr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if perr != nil {
+		s.fail(w, r, u, app.ErrNotFound)
+		return
+	}
+	path, _, err := s.app.RecoveryArchive(u.Name, id)
+	switch {
+	case errors.Is(err, app.ErrNotFound):
+		s.errorPage(w, r, u, http.StatusNotFound, "This restore has no archive to download.")
+		return
+	case errors.Is(err, app.ErrTooLarge):
+		s.errorPage(w, r, u, http.StatusRequestEntityTooLarge, err.Error())
+		return
+	case err != nil:
+		s.fail(w, r, u, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
+	http.ServeFile(w, r, path)
 }

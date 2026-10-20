@@ -1,0 +1,39 @@
+{{define "content"}}
+{{with .Data}}
+<div class="head">
+  <div>
+    <h1>{{t "restore.title"}} <a href="/servers/{{.Server}}">{{.Server}}</a></h1>
+    <p class="muted" style="margin:0">{{t "restore.intro"}}</p>
+  </div>
+</div>
+{{template "problems" .Problems}}
+{{if .Err}}<div class="flash bad">{{.Err}}</div>
+{{else if not .Backups}}<div class="empty"><strong>{{t "restore.no_backup"}}</strong></div>
+{{else}}
+<form class="grid" method="post" action="/servers/{{.Server}}/restore">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <fieldset>
+    <legend>{{t "restore.backup"}}</legend>
+    <label>{{t "restore.from"}}
+      <select name="backup_id" required>
+        {{range .Backups}}<option value="{{.ID}}"{{if eq .ID $.Data.BackupID}} selected{{end}}>{{.ID}} - {{ts .EndTime}} - {{size .SizeBytes}}</option>{{end}}
+      </select>
+    </label>
+  </fieldset>
+  <fieldset>
+    <legend>{{t "restore.target"}}</legend>
+    <label class="chk"><input type="radio" name="target" value="latest"{{if eq .Target "latest"}} checked{{end}}> <span>{{t "target.latest"}}<small>{{t "target.latest_help"}}</small></span></label>
+    <label class="chk"><input type="radio" name="target" value="backup_end"{{if eq .Target "backup_end"}} checked{{end}}> <span>{{t "target.backup_end"}}<small>{{t "target.backup_end_help"}}</small></span></label>
+    <label class="chk"><input type="radio" name="target" value="time"{{if eq .Target "time"}} checked{{end}}> <span>{{t "target.time"}}<small>{{t "target.time_help"}} {{.Zone}}.</small></span></label>
+    <label>{{t "target.time_field"}} <input type="datetime-local" name="target_time" value="{{.TargetTime}}"></label>
+  </fieldset>
+  <fieldset>
+    <legend>{{t "restore.result"}}</legend>
+    <label class="chk"><input type="checkbox" name="archive" value="1"{{if .Archive}} checked{{end}}> <span>{{t "restore.archive"}}<small>{{t "restore.archive_help"}}</small></span></label>
+    <p class="help">{{t "restore.where"}} <code>{{.Dir}}</code>{{t "restore.where_b"}}{{if .KeepDays}} {{t "restore.keep_a"}} {{.KeepDays}} {{t "restore.keep_b"}}{{end}}</p>
+  </fieldset>
+  <div class="actions"><button class="btn" type="submit">{{t "btn.restore_now"}}</button> <a class="btn alt" href="/servers/{{.Server}}">{{t "btn.cancel"}}</a></div>
+</form>
+{{end}}
+{{end}}
+{{end}}

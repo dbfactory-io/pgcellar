@@ -65,6 +65,14 @@ func TestEngineRecover(t *testing.T) {
 		t.Errorf("target time not written: %q", b)
 	}
 
+	dest3 := filepath.Join(t.TempDir(), "immediate")
+	if out, err := e.Recover(ctx, "pg-main", "20261020T020001", dest3, RecoverOptions{TargetImmediate: true}); err != nil || !strings.Contains(out, "immediate") {
+		t.Fatalf("immediate: %q %v", out, err)
+	}
+	if got := strings.Join((*entries)[2].Args, " "); got != "recover --target-immediate pg-main 20261020T020001 "+dest3 {
+		t.Errorf("args = %q", got)
+	}
+
 	if _, err := e.Recover(ctx, "pg-main", "19990101T000000", t.TempDir(), RecoverOptions{}); err == nil || !strings.Contains(err.Error(), "Unknown backup") {
 		t.Errorf("unknown backup: %v", err)
 	}

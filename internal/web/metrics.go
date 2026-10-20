@@ -68,6 +68,11 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		}
 		return "0", true
 	})
+	_, _ = b.WriteString("# HELP pgcellar_recoveries_total Restores to a directory that finished successfully, since the database was created.\n# TYPE pgcellar_recoveries_total counter\n")
+	done, _ := s.app.Store.CountRuns("recover")
+	for _, st := range states {
+		_, _ = fmt.Fprintf(&b, "pgcellar_recoveries_total{server=\"%s\"} %d\n", promEscape(st.Name), done[st.Name])
+	}
 	_, _ = fmt.Fprintf(&b, "# HELP pgcellar_build_info Version of the running pgCellar.\n# TYPE pgcellar_build_info gauge\npgcellar_build_info{version=\"%s\"} 1\n", promEscape(s.app.Version))
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(b.String()))

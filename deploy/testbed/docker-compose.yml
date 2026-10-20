@@ -13,6 +13,8 @@ services:
     volumes:
       - /mnt/usbdata/pgcellar/barman:/var/lib/barman
       - /mnt/usbdata/pgcellar/data:/var/lib/pgcellar
+      # Restores written by "Restore..." (recoveries.dir): mapped on the Docker host, owned by the barman uid.
+      - /mnt/usbdata/pgcellar/recoveries:/var/lib/pgcellar/recoveries
       - ./etc/pgcellar:/etc/pgcellar
       - ./etc/barman.d:/etc/barman.d
       - ./etc/barman.conf:/etc/barman.conf:ro

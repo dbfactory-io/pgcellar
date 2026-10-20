@@ -95,6 +95,14 @@ users:
     role: admin
     password_hash: "CHANGE_ME_BCRYPT_HASH"
 
+# Restore to a directory / .tar.gz ("Restore..." in the server page). The folder is
+# /mnt/usbdata/pgcellar/recoveries on the Pi (see docker-compose.yml, README "Restore
+# to a point in time"). The USB disk is the only place with room for a restore.
+recoveries:
+  dir: /var/lib/pgcellar/recoveries
+  max_download_bytes: 2147483648       # 2 GiB: above this, no download link, read the file on the Pi
+  keep_days: 7                         # restores are removed after a week; 0 = keep forever
+
 drills:
   enabled: false                       # switched on after the first manual restore (step 13)
   schedule: "weekly sun 05:00"

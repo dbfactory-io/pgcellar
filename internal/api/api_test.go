@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stranix79/pgcellar/internal/app/apptest"
 )
@@ -223,17 +225,21 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 	}
 	paths := out["paths"].(map[string]any)
 	for path, methods := range map[string][]string{
-		"/servers":                   {"get", "post"},
-		"/servers/{name}":            {"get", "put"},
-		"/servers/{name}/check":      {"post"},
-		"/servers/{name}/backup":     {"post"},
-		"/servers/{name}/backups":    {"get"},
-		"/servers/{name}/switch-wal": {"post"},
-		"/status":                    {"get"},
-		"/runs":                      {"get"},
-		"/runs/{id}":                 {"get"},
-		"/history":                   {"get"},
-		"/audit":                     {"get"},
+		"/servers":                     {"get", "post"},
+		"/servers/{name}":              {"get", "put"},
+		"/servers/{name}/check":        {"post"},
+		"/servers/{name}/backup":       {"post"},
+		"/servers/{name}/backups":      {"get"},
+		"/servers/{name}/backups/{id}": {"delete"},
+		"/servers/{name}/recoveries":   {"get", "post"},
+		"/recoveries/{id}":             {"get", "delete"},
+		"/recoveries/{id}/download":    {"get"},
+		"/servers/{name}/switch-wal":   {"post"},
+		"/status":                      {"get"},
+		"/runs":                        {"get"},
+		"/runs/{id}":                   {"get"},
+		"/history":                     {"get"},
+		"/audit":                       {"get"},
 	} {
 		item, ok := paths[path].(map[string]any)
 		if !ok {
@@ -275,5 +281,142 @@ func TestDeleteBackup(t *testing.T) {
 	}
 	if code, _ := f.call(t, "DELETE", "/servers/pg-main/backups/latest", f.env.Keys["admin"], ""); code != 422 {
 		t.Errorf("malformed id: %d", code)
+	}
+}
+
+// recover starts a restore through the API and waits for its run.
+func (f *fixture) recoverOK(t *testing.T, body string) map[string]any {
+	t.Helper()
+	code, out := f.call(t, "POST", "/servers/pg-main/recoveries", f.env.Keys["operator"], body)
+	if code != 202 {
+		t.Fatalf("start: %d %v", code, out)
+	}
+	data := out["data"].(map[string]any)
+	id := int64(data["run_id"].(float64))
+	if data["location"] != "/api/v1/runs/"+strconv.FormatInt(id, 10) {
+		t.Errorf("location: %v", data)
+	}
+	if r := apptest.WaitRun(t, f.env.App, id); r.Status != "ok" {
+		t.Fatalf("run: %+v", r)
+	}
+	code, out = f.call(t, "GET", "/servers/pg-main/recoveries", f.env.Keys["viewer"], "")
+	list, _ := out["data"].([]any)
+	if code != 200 || len(list) == 0 {
+		t.Fatalf("list: %d %v", code, out)
+	}
+	return list[0].(map[string]any)
+}
+
+func TestRecoveriesAPI(t *testing.T) {
+	f := newFixture(t)
+	op, viewer, admin := f.env.Keys["operator"], f.env.Keys["viewer"], f.env.Keys["admin"]
+
+	if code, _ := f.call(t, "POST", "/servers/pg-main/recoveries", viewer, `{"backup_id":"20261019T020001"}`); code != 403 {
+		t.Errorf("viewer start: %d", code)
+	}
+	if code, _ := f.call(t, "POST", "/servers/pg-main/recoveries", op, `{"backup_id":"20261019T020001","bogus":1}`); code != 400 {
+		t.Errorf("unknown field: %d", code)
+	}
+	if code, out := f.call(t, "POST", "/servers/pg-main/recoveries", op, `{"backup_id":"20261019T020001","target":"time","target_time":"2026-01-01T00:00:00Z"}`); code != 422 || !strings.Contains(out["error"].(string), "before the end of backup") {
+		t.Errorf("early target: %d %v", code, out)
+	}
+	if code, _ := f.call(t, "POST", "/servers/nope/recoveries", op, `{"backup_id":"20261019T020001"}`); code != 404 {
+		t.Errorf("unknown server: %d", code)
+	}
+	if code, _ := f.call(t, "GET", "/servers/nope/recoveries", viewer, ""); code != 404 {
+		t.Errorf("list of unknown server: %d", code)
+	}
+
+	rec := f.recoverOK(t, `{"backup_id":"20261019T020001","target":"latest","archive":true}`)
+	id := strconv.Itoa(int(rec["id"].(float64)))
+	if rec["downloadable"] != true || rec["backup_id"] != "20261019T020001" || rec["archive_path"] == "" || !strings.HasPrefix(rec["path"].(string), f.env.Dir) {
+		t.Errorf("recovery: %v", rec)
+	}
+	if code, out := f.call(t, "GET", "/recoveries/"+id, viewer, ""); code != 200 || out["data"].(map[string]any)["path"] != rec["path"] {
+		t.Errorf("get: %d %v", code, out)
+	}
+	if code, _ := f.call(t, "GET", "/recoveries/9999", viewer, ""); code != 404 {
+		t.Errorf("unknown id: %d", code)
+	}
+	if code, _ := f.call(t, "GET", "/recoveries/abc", viewer, ""); code != 400 {
+		t.Errorf("bad id: %d", code)
+	}
+
+	// Download: operator, attachment, byte ranges.
+	if code, _ := f.call(t, "GET", "/recoveries/"+id+"/download", viewer, ""); code != 403 {
+		t.Errorf("viewer download: %d", code)
+	}
+	get := func(hdr ...string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", "/api/v1/recoveries/"+id+"/download", nil)
+		req.Header.Set("Authorization", "Bearer "+op)
+		for i := 0; i+1 < len(hdr); i += 2 {
+			req.Header.Set(hdr[i], hdr[i+1])
+		}
+		w := httptest.NewRecorder()
+		f.h.ServeHTTP(w, req)
+		return w
+	}
+	dl := get()
+	if dl.Code != 200 || !strings.HasPrefix(dl.Header().Get("Content-Disposition"), "attachment; filename=\"20261019T020001-") || !strings.HasSuffix(dl.Header().Get("Content-Disposition"), `.tar.gz"`) {
+		t.Fatalf("download: %d %v", dl.Code, dl.Header())
+	}
+	if b := dl.Body.Bytes(); len(b) < 20 || b[0] != 0x1f || b[1] != 0x8b {
+		t.Error("not a gzip stream")
+	}
+	if part := get("Range", "bytes=0-9"); part.Code != http.StatusPartialContent || part.Body.Len() != 10 {
+		t.Errorf("range: %d, %d bytes", part.Code, part.Body.Len())
+	}
+
+	// A restore without archive: nothing to download.
+	rec2 := f.recoverOK(t, `{"backup_id":"20261019T020001","target":"backup_end"}`)
+	id2 := strconv.Itoa(int(rec2["id"].(float64)))
+	if rec2["target"] != "backup_end" || rec2["downloadable"] == true {
+		t.Errorf("no archive: %v", rec2)
+	}
+	if code, _ := f.call(t, "GET", "/recoveries/"+id2+"/download", op, ""); code != 404 {
+		t.Errorf("download without archive: %d", code)
+	}
+
+	// Delete: admin only.
+	if code, _ := f.call(t, "DELETE", "/recoveries/"+id, op, ""); code != 403 {
+		t.Errorf("operator delete: %d", code)
+	}
+	req := httptest.NewRequest("DELETE", "/api/v1/recoveries/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+admin)
+	w := httptest.NewRecorder()
+	f.h.ServeHTTP(w, req)
+	if w.Code != 204 {
+		t.Errorf("admin delete: %d", w.Code)
+	}
+	if _, err := os.Stat(rec["path"].(string)); !os.IsNotExist(err) {
+		t.Error("directory must be gone")
+	}
+	if code, _ := f.call(t, "GET", "/recoveries/"+id, viewer, ""); code != 404 {
+		t.Errorf("deleted: %d", code)
+	}
+}
+
+func TestRecoveryDownloadTooLarge(t *testing.T) {
+	f := newFixture(t)
+	rec := f.recoverOK(t, `{"backup_id":"20261019T020001","archive":true}`)
+	id := strconv.Itoa(int(rec["id"].(float64)))
+
+	path := filepath.Join(f.env.Dir, "pgcellar.yaml")
+	b, _ := os.ReadFile(path)
+	if err := os.WriteFile(path, []byte(strings.Replace(string(b), "max_download_bytes: 2147483648", "max_download_bytes: 1", 1)), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(2 * time.Second)
+	_ = os.Chtimes(path, future, future)
+	deadline := time.Now().Add(10 * time.Second)
+	for f.env.App.Config().Recoveries.MaxDownloadBytes != 1 && time.Now().Before(deadline) {
+		time.Sleep(200 * time.Millisecond)
+	}
+	code, out := f.call(t, "GET", "/recoveries/"+id+"/download", f.env.Keys["operator"], "")
+	if code != 413 || !strings.Contains(out["error"].(string), "max_download_bytes") {
+		t.Errorf("too large: %d %v", code, out)
+	}
+	if _, out := f.call(t, "GET", "/recoveries/"+id, f.env.Keys["viewer"], ""); out["data"].(map[string]any)["downloadable"] == true {
+		t.Error("downloadable must be false above the limit")
 	}
 }

@@ -264,6 +264,7 @@ func (a *App) Start(ctx context.Context) {
 			_, _ = a.Store.PurgeExpiredSessions()
 			if time.Since(lastAuditPurge) >= 24*time.Hour {
 				a.PurgeAudit()
+				a.PurgeRecoveries()
 				lastAuditPurge = time.Now()
 			}
 			select {

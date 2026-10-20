@@ -13,6 +13,10 @@ services:
     volumes:
       - barman-data:/var/lib/barman
       - pgcellar-data:/var/lib/pgcellar
+      # Restores (recoveries.dir). To read them on the Docker host, replace this named
+      # volume with a bind mount such as /srv/pgcellar/recoveries:/var/lib/pgcellar/recoveries
+      # (mapped on the Docker host, owned by the barman uid).
+      - pgcellar-recoveries:/var/lib/pgcellar/recoveries
       - ./etc-pgcellar:/etc/pgcellar
       - ./etc-barman.d:/etc/barman.d
     environment:
@@ -26,3 +30,4 @@ services:
 volumes:
   barman-data:
   pgcellar-data:
+  pgcellar-recoveries:

@@ -80,6 +80,7 @@ func New(t *testing.T) *Env {
 	}
 	cfg := config.Defaults()
 	cfg.DataDir = filepath.Join(dir, "data")
+	cfg.Recoveries.Dir = filepath.Join(dir, "recoveries")
 	cfg.Barman.Binary = "fake-barman"
 	cfg.Barman.User = ""
 	cfg.Barman.ConfigDir = barmanDir

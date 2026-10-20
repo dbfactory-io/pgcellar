@@ -29,6 +29,19 @@
     {{else if eq .Run.Status "ok"}}<span class="pill ok">finished</span> in {{runtime .Run}}.
     {{else}}<span class="pill bad">failed</span> with exit code {{if .Run.ExitCode}}{{.Run.ExitCode}}{{end}} after {{runtime .Run}}. {{t "run.failed_hint"}}{{end}}
   </p>
+  {{if and (eq .Run.Kind "recover") (ne .Run.Status "running")}}{{with .Recovery}}
+  <div class="softnote">
+    {{if eq $.Run.Status "ok"}}<p class="cheer">{{t "recover.done"}}</p>{{end}}
+    <dl class="facts">
+      <div><dt>{{t "recover.path"}}</dt><dd><code class="wrapany">{{.Path}}</code></dd></div>
+      <div><dt>{{t "recover.size"}}</dt><dd>{{size .SizeBytes}}</dd></div>
+      {{if .ArchivePath}}<div><dt>{{t "recover.archive"}}</dt><dd><code class="wrapany">{{.ArchivePath}}</code> ({{size .ArchiveBytes}})</dd></div>{{end}}
+    </dl>
+    {{if and .Downloadable $.CanOperate}}<p><a class="btn" href="/recoveries/{{.ID}}/download">{{t "btn.download"}}</a></p>
+    {{else if .ArchivePath}}<p class="muted">{{t "recover.no_link"}}</p>{{end}}
+    <p>{{t "recover.ready"}}</p>
+  </div>
+  {{end}}{{end}}
   {{if .Run.Stdout}}<pre class="out">{{.Run.Stdout}}</pre>{{end}}
   {{if .Run.Stderr}}{{if eq .Run.Status "failed"}}<pre class="out err">{{.Run.Stderr}}</pre>{{else}}<div class="softnote"><strong>{{t "run.also_said"}}</strong><pre class="out">{{.Run.Stderr}}</pre></div>{{end}}{{end}}
 </div>
@@ -147,4 +160,32 @@
 {{end}}
 </ul>
 {{else}}<div class="empty"><strong>{{t "empty.cellar"}}</strong><p>{{t "empty.cellar_hint"}}</p></div>{{end}}
+{{end}}
+
+{{define "recovery_list"}}
+{{if .Flash}}<div class="flash {{if .FlashBad}}bad{{else}}ok{{end}}" role="status">{{.Flash}}</div>{{end}}
+{{if .Recoveries}}
+<ul class="rows">
+{{range .Recoveries}}
+{{if and $.Confirm (eq $.Confirm .ID)}}
+<li class="row bad">
+  <div class="grow"><strong>{{t "recovery.delete_ask_a"}} <code>{{.Path}}</code> ({{size .SizeBytes}}){{if .ArchivePath}} {{t "recovery.delete_and_archive"}}{{end}}{{t "backup.delete_ask_b"}}</strong> {{t "backup.delete_warn"}}</div>
+  <div class="btns">
+    <button class="btn" hx-post="/recoveries/{{.ID}}/delete" hx-target="#recovery-list" hx-swap="innerHTML" hx-disabled-elt="this">{{t "btn.delete"}}</button>
+    <button class="btn alt" hx-get="/servers/{{$.Server}}/recoveries/list" hx-target="#recovery-list" hx-swap="innerHTML">{{t "btn.keep"}}</button>
+  </div>
+</li>
+{{else}}
+<li class="row">
+  <div class="grow"><code>{{.BackupID}}</code> &middot; {{if eq .Target "time"}}{{.TargetTime}}{{else if eq .Target "backup_end"}}{{t "target.backup_end"}}{{else}}{{t "target.latest"}}{{end}}</div>
+  <div class="meta">{{when .CreatedAt}}</div>
+  <div class="meta num">{{size .SizeBytes}}{{if .ArchivePath}} / {{size .ArchiveBytes}} .tar.gz{{end}}</div>
+  {{if and .Downloadable $.CanOperate}}<div><a class="btn alt" href="/recoveries/{{.ID}}/download">{{t "btn.download_short"}}</a></div>{{end}}
+  {{if $.CanAdmin}}<div><button class="btn alt" hx-get="/servers/{{$.Server}}/recoveries/list?confirm={{.ID}}" hx-target="#recovery-list" hx-swap="innerHTML">{{t "btn.delete_ask"}}</button></div>{{end}}
+  <div class="msg meta"><code class="wrapany">{{.Path}}</code></div>
+</li>
+{{end}}
+{{end}}
+</ul>
+{{else}}<div class="empty">{{t "recovery.none"}}{{if .CanOperate}} {{t "recovery.none_hint"}}{{end}}</div>{{end}}
 {{end}}

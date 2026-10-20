@@ -17,6 +17,8 @@ type Config struct {
 	Users   []User   `yaml:"users" json:"users"`
 	APIKeys []APIKey `yaml:"api_keys" json:"api_keys"`
 	Drills  Drills   `yaml:"drills" json:"drills"`
+	// Recoveries is where point-in-time restores are written.
+	Recoveries Recoveries `yaml:"recoveries" json:"recoveries"`
 	// StatusInterval is how often the cached status of every server is
 	// refreshed. Each refresh runs several Barman commands per server.
 	StatusInterval time.Duration `yaml:"status_interval" json:"status_interval"`
@@ -108,4 +110,16 @@ type Drills struct {
 	Schedule  string `yaml:"schedule" json:"schedule"` // "weekly sun 05:00"
 	Image     string `yaml:"image" json:"image"`       // postgres:16 for the throwaway container
 	ReportDir string `yaml:"report_dir" json:"report_dir"`
+}
+
+// Recoveries configures the "restore to a directory" feature. The directory
+// lives inside the container and must be mapped to the Docker host, owned by
+// the barman user, to be of any use there.
+type Recoveries struct {
+	Dir string `yaml:"dir" json:"dir"` // every restore is written under <dir>/<server>/<backup id>-<timestamp>
+	// MaxDownloadBytes: an archive bigger than this has no download link, only
+	// its path. 0 = no limit.
+	MaxDownloadBytes int64 `yaml:"max_download_bytes" json:"max_download_bytes"`
+	// KeepDays: restores older than this are removed daily. 0 = keep forever.
+	KeepDays int `yaml:"keep_days" json:"keep_days"`
 }

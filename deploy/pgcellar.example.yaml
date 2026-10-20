@@ -69,6 +69,14 @@ api_keys:
     role: viewer
     key_hash: "0000000000000000000000000000000000000000000000000000000000000000"
 
+# Restore to a directory (and optionally a .tar.gz): written by "Restore..." in the
+# server page and by POST /api/v1/servers/<name>/recoveries. Map this folder on the
+# Docker host, owned by the barman user (see docker-compose.yml).
+recoveries:
+  dir: /var/lib/pgcellar/recoveries    # every restore goes to <dir>/<server>/<backup id>-<timestamp>
+  max_download_bytes: 2147483648       # 2 GiB: above this an archive has no download link, only its path; 0 = no limit
+  keep_days: 7                         # restores older than this are removed daily; 0 = keep forever
+
 # Weekly restore drill: restore the latest backup in a throwaway container,
 # check it, write a dated report.
 drills:

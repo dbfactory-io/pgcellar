@@ -46,6 +46,10 @@ func nameParam() m {
 	return m{"name": "name", "in": "path", "required": true, "schema": m{"type": "string"}}
 }
 
+func recoveryParam() m {
+	return m{"name": "id", "in": "path", "required": true, "schema": m{"type": "integer"}}
+}
+
 func body(schema string) m {
 	return m{"required": true, "content": m{"application/json": m{"schema": ref(schema)}}}
 }
@@ -84,6 +88,17 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			},
 			"/servers/{name}/backups/{id}": m{
 				"delete": op("Delete one complete backup (barman delete). Barman refuses to go below minimum_redundancy: its message comes back in a 409. Audited as backup.delete.", "admin", m{"parameters": []m{nameParam(), {"name": "id", "in": "path", "required": true, "schema": m{"type": "string", "pattern": "^[0-9]{8}T[0-9]{6}$"}}}, "responses": m{"204": resp("Deleted", nil), "404": errResp, "409": errResp, "502": errResp}}),
+			},
+			"/servers/{name}/recoveries": m{
+				"post": op("Restore a backup to a directory (barman recover, local) and optionally build a .tar.gz, in the background. Follow the run with GET /runs/{id}; the result then shows in GET /servers/{name}/recoveries. 422 when the point in time is before the end of the backup.", "operator", m{"parameters": server, "requestBody": body("RecoveryInput"), "responses": m{"202": resp("Accepted: follow the run with GET /runs/{id}", dataOf(m{"type": "object", "properties": m{"run_id": m{"type": "integer"}, "status": m{"type": "string"}, "location": m{"type": "string"}}})), "404": errResp, "409": errResp, "422": errResp}}),
+				"get":  op("Restores of a server, newest first", "viewer", m{"parameters": server, "responses": m{"200": resp("Recoveries", dataOf(m{"type": "array", "items": ref("Recovery")})), "404": errResp}}),
+			},
+			"/recoveries/{id}": m{
+				"get":    op("One restore", "viewer", m{"parameters": []m{recoveryParam()}, "responses": m{"200": resp("Recovery", dataOf(ref("Recovery"))), "404": errResp}}),
+				"delete": op("Delete a restore: its directory, its archive and its record. Audited as recovery.delete.", "admin", m{"parameters": []m{recoveryParam()}, "responses": m{"204": resp("Deleted", nil), "404": errResp}}),
+			},
+			"/recoveries/{id}/download": m{
+				"get": op("Download the .tar.gz of a restore (Content-Disposition: attachment, byte ranges supported). The archive holds a copy of the database: operator role. 404 when there is no archive, 413 when it exceeds recoveries.max_download_bytes (read it from the host path instead).", "operator", m{"parameters": []m{recoveryParam()}, "responses": m{"200": m{"description": "The archive", "content": m{"application/gzip": m{"schema": m{"type": "string", "format": "binary"}}}}, "404": errResp, "413": errResp}}),
 			},
 			"/status": m{
 				"get": op("Cached status of every server (refreshed every status interval)", "viewer", m{"responses": m{"200": resp("Status", dataOf(m{"type": "object", "properties": m{"servers": m{"type": "array", "items": ref("ServerState")}, "updated_at": m{"type": "string", "format": "date-time"}}}))}}),
@@ -134,6 +149,18 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 				"Backup": m{"type": "object", "properties": m{
 					"id": m{"type": "string"}, "status": m{"type": "string"}, "begin_time": m{"type": "string", "format": "date-time"}, "end_time": m{"type": "string", "format": "date-time"},
 					"size_bytes": m{"type": "integer"}, "wal_size_bytes": m{"type": "integer"}, "pg_version": m{"type": "string"},
+				}},
+				"RecoveryInput": m{"type": "object", "required": []string{"backup_id"}, "properties": m{
+					"backup_id":   m{"type": "string", "pattern": "^[0-9]{8}T[0-9]{6}$"},
+					"target":      m{"type": "string", "enum": []string{"latest", "backup_end", "time"}, "default": "latest", "description": "latest = as far as the archived WAL goes; backup_end = the state at the end of the backup; time = the point in time of target_time"},
+					"target_time": m{"type": "string", "example": "2026-10-20 14:30:00+02:00", "description": "With target=time: RFC 3339 or 'YYYY-MM-DD HH:MM:SS+TZ'; without a zone, the time zone of the server. Must not be before the end of the backup."},
+					"archive":     m{"type": "boolean", "description": "Also build <directory>.tar.gz"},
+				}},
+				"Recovery": m{"type": "object", "properties": m{
+					"id": m{"type": "integer"}, "server": m{"type": "string"}, "backup_id": m{"type": "string"}, "target": m{"type": "string"}, "target_time": m{"type": "string"},
+					"path": m{"type": "string", "description": "Directory inside the container, under recoveries.dir"}, "archive_path": m{"type": "string"},
+					"size_bytes": m{"type": "integer"}, "archive_bytes": m{"type": "integer"}, "downloadable": m{"type": "boolean"},
+					"run_id": m{"type": "integer"}, "created_at": m{"type": "string", "format": "date-time"}, "actor": m{"type": "string"},
 				}},
 				"Run": m{"type": "object", "properties": m{
 					"id": m{"type": "integer"}, "server": m{"type": "string"}, "kind": m{"type": "string"}, "status": m{"type": "string", "enum": []string{"running", "ok", "failed"}},

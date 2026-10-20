@@ -129,6 +129,21 @@ var migrations = []string{
 		json TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	);`,
+	`CREATE TABLE recoveries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		server TEXT NOT NULL,
+		backup_id TEXT NOT NULL,
+		target TEXT NOT NULL DEFAULT 'latest',
+		target_time TEXT NOT NULL DEFAULT '',
+		path TEXT NOT NULL,
+		archive_path TEXT NOT NULL DEFAULT '',
+		size_bytes INTEGER NOT NULL DEFAULT 0,
+		archive_bytes INTEGER NOT NULL DEFAULT 0,
+		run_id INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL,
+		actor TEXT NOT NULL DEFAULT ''
+	);
+	CREATE INDEX recoveries_server_created ON recoveries (server, created_at);`,
 }
 
 // Migrate applies pending migrations; calling it again is harmless.

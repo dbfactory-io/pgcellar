@@ -221,7 +221,7 @@ Everything here is local to the Pi: files under `/mnt/usbdata/pgcellar`, one ima
 ### B1. Layout (safe)
 
 ```bash
-sudo mkdir -p /mnt/usbdata/pgcellar/barman /mnt/usbdata/pgcellar/data
+sudo mkdir -p /mnt/usbdata/pgcellar/barman /mnt/usbdata/pgcellar/data /mnt/usbdata/pgcellar/recoveries
 mkdir -p ~/pgcellar-testbed
 ```
 
@@ -253,7 +253,7 @@ sudo docker run --rm --entrypoint /usr/lib/postgresql/18/bin/pg_basebackup pgcel
 
 ```bash
 read BUID BGID < <(sudo docker run --rm --entrypoint sh pgcellar:testbed -c 'echo $(id -u barman) $(id -g barman)')
-sudo chown -R "$BUID:$BGID" /mnt/usbdata/pgcellar/barman /mnt/usbdata/pgcellar/data etc/barman.d etc/pgcellar
+sudo chown -R "$BUID:$BGID" /mnt/usbdata/pgcellar/barman /mnt/usbdata/pgcellar/data /mnt/usbdata/pgcellar/recoveries etc/barman.d etc/pgcellar
 ```
 
 `etc/barman.conf` stays root-owned and is mounted read-only. pgCellar writes `etc/barman.d` and `etc/pgcellar` (and commits them in a local git repository).
@@ -317,7 +317,24 @@ The key is printed once, only its SHA-256 is stored in `pgcellar.yaml` (a runnin
 
 The six schedules in `pgcellar.yaml` are `daily 03:00` to `03:50`, ten minutes apart, all enabled. Set `enabled: false` on the servers whose part A is not done yet, otherwise pgCellar alerts on them. Turn on `drills.enabled` after the first manual restore (TESTBED.md step 13).
 
-### B8. Notes
+### B8. Restore to a point in time (safe)
+
+pgCellar can write a restored PostgreSQL data directory, and optionally a `.tar.gz` of it, without touching hawking: Barman runs `barman recover` locally, inside the container, into `/var/lib/pgcellar/recoveries`. The folder is mapped on the Pi as `/mnt/usbdata/pgcellar/recoveries` (compose volume, `recoveries.dir` in `pgcellar.yaml`).
+
+1. **Once**, give the folder to the barman user (B3 does it with the other volumes; to do it alone, `997` is the uid and gid of `barman` in this image, check with B3's first line):
+
+   ```bash
+   sudo mkdir -p /mnt/usbdata/pgcellar/recoveries
+   sudo chown -R 997:997 /mnt/usbdata/pgcellar/recoveries
+   ```
+
+   Without it the restore fails at once with `Permission denied` on the first line of the run output. Check the free space first (`df -h /mnt/usbdata`): a restore is as big as the database plus its WAL, a second time if you tick the archive.
+2. In the web interface open a server, **Restore...**, pick the backup, the target (latest possible, end of the backup, or a point in time) and, if you want a file to download, tick the `.tar.gz`. The same thing through the API: `POST /api/v1/servers/<name>/recoveries` with `{"backup_id":"20261020T020001","target":"time","target_time":"2026-10-20 14:30:00+02:00","archive":true}` (operator key), then follow `GET /api/v1/runs/<run_id>`.
+3. Where to find the result on the Pi: `/mnt/usbdata/pgcellar/recoveries/<server>/<backup id>-<timestamp>/` (the data directory) and, next to it, `<same name>.tar.gz`. The run page shows the full path (as seen inside the container: replace `/var/lib/pgcellar/recoveries` by `/mnt/usbdata/pgcellar/recoveries`) and a **Download .tar.gz** button when the archive is under `recoveries.max_download_bytes` (2 GiB). Above it, copy the file with `scp` from the Pi.
+4. The directory is a ready-to-start data directory: start a PostgreSQL of the **same major version** on it (for example `docker run --rm -v /mnt/usbdata/pgcellar/recoveries/chutag/<name>:/var/lib/postgresql/data postgres:16`, mind the ownership: the postgres user of that image must be able to read it).
+5. Restores older than `recoveries.keep_days` (7) are removed every day by pgCellar. Administrators can delete one earlier from the Recoveries section of the server page.
+
+### B9. Notes
 
 - Memory: `mem_limit: 768m` on a Pi with 3.7 GiB shared with Home Assistant, Grafana and Plex. Watch them during the first runs. On this Pi the kernel runs without the memory cgroup (`Your kernel does not support memory limit capabilities` at `compose up`), so the limit is ignored; enabling it means `cgroup_enable=memory cgroup_memory=1` in `/boot/firmware/cmdline.txt` and a reboot.
 - The container runs as `barman` (uid 997 in this image). If `docker logs pgcellar` shows `attempt to write a readonly database`, a volume was created by an older root container: `sudo chown -R 997:997 /mnt/usbdata/pgcellar/data` and restart.

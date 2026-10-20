@@ -184,3 +184,54 @@ func TestStatusCache(t *testing.T) {
 		t.Fatalf("a replaced cache keeps only the new servers: %v", rows)
 	}
 }
+
+func TestRecoveries(t *testing.T) {
+	s := newStore(t)
+	old := time.Now().Add(-10 * 24 * time.Hour)
+	a, err := s.AddRecovery(Recovery{Server: "pg-main", BackupID: "20261018T020001", Target: "time", TargetTime: "2026-10-18 12:00:00+02:00", Path: "/r/pg-main/a", ArchivePath: "/r/pg-main/a.tar.gz", SizeBytes: 100, ArchiveSize: 40, RunID: 7, CreatedAt: old, Actor: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := s.AddRecovery(Recovery{Server: "pg-main", BackupID: "20261019T020001", Path: "/r/pg-main/b"})
+	if _, err := s.AddRecovery(Recovery{Server: "other", BackupID: "20261019T020001", Path: "/r/other/c"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetRecovery(a)
+	if err != nil || got.Server != "pg-main" || got.ArchivePath != "/r/pg-main/a.tar.gz" || got.ArchiveSize != 40 || got.Target != "time" || !got.CreatedAt.Equal(old.Truncate(time.Second)) {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if r, _ := s.GetRecovery(b); r.Target != "latest" {
+		t.Errorf("default target: %q", r.Target)
+	}
+	list, _ := s.ListRecoveries("pg-main")
+	if len(list) != 2 || list[0].ID != b {
+		t.Errorf("newest first, one server: %+v", list)
+	}
+	if all, _ := s.ListRecoveries(""); len(all) != 3 {
+		t.Errorf("all: %d", len(all))
+	}
+	if r, err := s.RecoveryForRun(7); err != nil || r.ID != a {
+		t.Errorf("by run: %+v %v", r, err)
+	}
+	if _, err := s.RecoveryForRun(99); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown run: %v", err)
+	}
+	if olds, _ := s.RecoveriesOlderThan(time.Now().Add(-7 * 24 * time.Hour)); len(olds) != 1 || olds[0].ID != a {
+		t.Errorf("older: %+v", olds)
+	}
+	if err := s.DeleteRecovery(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteRecovery(a); !errors.Is(err, ErrNotFound) {
+		t.Errorf("second delete: %v", err)
+	}
+
+	r1, _ := s.StartRun("pg-main", KindRecover, "x")
+	_ = s.FinishRun(r1, 0, "", "")
+	r2, _ := s.StartRun("pg-main", KindRecover, "x")
+	_ = s.FinishRun(r2, 1, "", "")
+	if n, _ := s.CountRuns(KindRecover); n["pg-main"] != 1 {
+		t.Errorf("successful recover runs: %v", n)
+	}
+}

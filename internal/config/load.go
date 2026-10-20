@@ -16,6 +16,9 @@ import (
 // starts several Python processes per server.
 const MinStatusInterval = 30 * time.Second
 
+// DefaultRecoveriesDir is where restores go when recoveries.dir is not set.
+const DefaultRecoveriesDir = "/var/lib/pgcellar/recoveries"
+
 func Defaults() *Config {
 	return &Config{
 		Listen:  ":8080",
@@ -29,6 +32,11 @@ func Defaults() *Config {
 		},
 		StatusInterval:     time.Minute,
 		AuditRetentionDays: 90,
+		Recoveries: Recoveries{
+			Dir:              DefaultRecoveriesDir,
+			MaxDownloadBytes: 2 << 30,
+			KeepDays:         7,
+		},
 	}
 }
 
@@ -117,6 +125,17 @@ func Validate(cfg *Config) []string {
 	}
 	if cfg.AuditRetentionDays < 0 {
 		add("audit_retention_days cannot be negative (0 keeps everything)")
+	}
+	if strings.TrimSpace(cfg.Recoveries.Dir) == "" || !filepath.IsAbs(cfg.Recoveries.Dir) {
+		add("recoveries.dir must be an absolute path (default %s)", DefaultRecoveriesDir)
+	} else if filepath.Clean(cfg.Recoveries.Dir) == string(filepath.Separator) {
+		add("recoveries.dir cannot be the root directory")
+	}
+	if cfg.Recoveries.MaxDownloadBytes < 0 {
+		add("recoveries.max_download_bytes cannot be negative (0 means no limit)")
+	}
+	if cfg.Recoveries.KeepDays < 0 {
+		add("recoveries.keep_days cannot be negative (0 keeps everything)")
 	}
 
 	seen := map[string]bool{}

@@ -281,7 +281,7 @@ func (e *CLIEngine) DeleteBackup(ctx context.Context, server, backupID string) (
 	return e.runText(ctx, "delete", server, backupID)
 }
 
-// Recover runs `barman recover [--target-time T] <server> <backup_id> <dest>`.
+// Recover runs `barman recover [--target-time T | --target-immediate] <server> <backup_id> <dest>`.
 // The recovery is local (no --remote-ssh-command): dest is a directory of the
 // host where Barman runs.
 func (e *CLIEngine) Recover(ctx context.Context, server, backupID, dest string, opts RecoverOptions) (string, error) {
@@ -291,6 +291,9 @@ func (e *CLIEngine) Recover(ctx context.Context, server, backupID, dest string, 
 	args := []string{"recover"}
 	if opts.TargetTime != "" {
 		args = append(args, "--target-time", opts.TargetTime)
+	}
+	if opts.TargetImmediate {
+		args = append(args, "--target-immediate")
 	}
 	args = append(args, server, backupID, dest)
 	return e.runText(ctx, args...)

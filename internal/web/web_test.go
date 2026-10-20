@@ -521,3 +521,127 @@ func TestDeleteBackupConfirmationInPage(t *testing.T) {
 		t.Errorf("refusal: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestRestoreFormAndRoles(t *testing.T) {
+	f := newFixture(t)
+	viewer, _ := f.login(t, "viewer")
+	operator, ocsrf := f.login(t, "operator")
+	admin, acsrf := f.login(t, "admin")
+
+	// The button and the page are for operators.
+	if body := f.get("/servers/pg-main", viewer).Body.String(); strings.Contains(body, "Restore…") || strings.Contains(body, "/servers/pg-main/restore") {
+		t.Error("viewer must not see the Restore… button")
+	}
+	if body := f.get("/servers/pg-main", operator).Body.String(); !strings.Contains(body, "Restore…") || !strings.Contains(body, `href="/servers/pg-main/restore"`) {
+		t.Error("operator must see the Restore… button")
+	}
+	if rec := f.get("/servers/pg-main/restore", viewer); rec.Code != http.StatusForbidden {
+		t.Errorf("viewer on the restore page: %d", rec.Code)
+	}
+	if rec := f.post("/servers/pg-main/restore", viewer, url.Values{"csrf": {"x"}}); rec.Code != http.StatusForbidden {
+		t.Errorf("viewer restore: %d", rec.Code)
+	}
+	if rec := f.post("/servers/pg-main/restore", operator, url.Values{"backup_id": {"20261019T020001"}}); rec.Code != http.StatusForbidden {
+		t.Errorf("restore without CSRF: %d", rec.Code)
+	}
+	if rec := f.get("/servers/nope/restore", operator); rec.Code != 404 {
+		t.Errorf("unknown server: %d", rec.Code)
+	}
+
+	rec := f.get("/servers/pg-main/restore", operator)
+	body := rec.Body.String()
+	if rec.Code != 200 {
+		t.Fatalf("restore page: %d", rec.Code)
+	}
+	for _, want := range []string{
+		"20261020T020001", "20261019T020001", "20261018T020001", "1.4 GiB",
+		"Latest possible", "End of this backup", "Point in time", `type="datetime-local"`, `name="target_time"`,
+		"Also build a .tar.gz I can download", `name="archive"`, "Restore now",
+		f.env.Dir + "/recoveries", "mapped on the Docker host", "Restores are removed after 7 days",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("restore page lacks %q", want)
+		}
+	}
+	if strings.Index(body, "20261020T020001") > strings.Index(body, "20261018T020001") {
+		t.Error("backups must be listed newest first")
+	}
+	if strings.Contains(body, "confirm(") {
+		t.Error("no browser dialog")
+	}
+
+	// A refused request comes back to the form with the reason and what was typed.
+	rec = f.post("/servers/pg-main/restore", operator, url.Values{"csrf": {ocsrf}, "backup_id": {"20261019T020001"}, "target": {"time"}, "target_time": {"2026-10-01T00:00"}, "archive": {"1"}})
+	body = rec.Body.String()
+	if rec.Code != 422 || !strings.Contains(body, "before the end of backup 20261019T020001") || !strings.Contains(body, `value="2026-10-01T00:00"`) || !strings.Contains(body, "checked") {
+		t.Errorf("early target: %d\n%s", rec.Code, body)
+	}
+
+	// A good one redirects to the run page, which shows the outcome.
+	rec = f.post("/servers/pg-main/restore", operator, url.Values{"csrf": {ocsrf}, "backup_id": {"20261019T020001"}, "target": {"time"}, "target_time": {"2026-10-20T12:30"}, "archive": {"1"}})
+	loc := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/runs/") {
+		t.Fatalf("restore: %d %q %s", rec.Code, loc, rec.Body.String())
+	}
+	id, _ := strconv.ParseInt(strings.TrimPrefix(loc, "/runs/"), 10, 64)
+	apptest.WaitRun(t, f.env.App, id)
+
+	page := f.get(loc, operator).Body.String()
+	for _, want := range []string{
+		"recover of pg-main", "Restored. Sleep well.", f.env.Dir + "/recoveries/pg-main/20261019T020001-", ".tar.gz",
+		"Download .tar.gz", "The directory is a ready-to-start PostgreSQL data directory: start a server of the same major version on it.",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("run page lacks %q", want)
+		}
+	}
+	if !strings.Contains(f.get(loc, viewer).Body.String(), "Restored. Sleep well.") || strings.Contains(f.get(loc, viewer).Body.String(), "Download .tar.gz") {
+		t.Error("a viewer sees the result but not the download button")
+	}
+
+	// The server page lists the restore; the download works and is for operators.
+	server := f.get("/servers/pg-main", admin).Body.String()
+	if !strings.Contains(server, "Recoveries") || !strings.Contains(server, "2026-10-20 12:30:00") || !strings.Contains(server, ">Download</a>") {
+		t.Errorf("server page lacks the recovery:\n%s", server)
+	}
+	m := regexp.MustCompile(`/recoveries/(\d+)/download`).FindStringSubmatch(server)
+	if m == nil {
+		t.Fatal("no download link")
+	}
+	if rec := f.get("/recoveries/"+m[1]+"/download", viewer); rec.Code != http.StatusForbidden {
+		t.Errorf("viewer download: %d", rec.Code)
+	}
+	dl := f.get("/recoveries/"+m[1]+"/download", operator)
+	if dl.Code != 200 || !strings.Contains(dl.Header().Get("Content-Disposition"), "attachment") || dl.Body.Len() < 20 {
+		t.Errorf("download: %d %v", dl.Code, dl.Header())
+	}
+	if strings.Contains(f.get("/servers/pg-main", viewer).Body.String(), "/download") {
+		t.Error("a viewer gets no download link")
+	}
+
+	// Deleting: administrators only, confirmed inside the page.
+	if b := f.get("/servers/pg-main", operator).Body.String(); strings.Contains(b, "recoveries/list?confirm=") {
+		t.Error("operator must not see Delete… on a restore")
+	}
+	conf := f.get("/servers/pg-main/recoveries/list?confirm="+m[1], admin, "HX-Request", "true").Body.String()
+	for _, want := range []string{"cannot be undone", ">Keep it</button>", ">Delete</button>", "/recoveries/" + m[1] + "/delete", ".tar.gz"} {
+		if !strings.Contains(conf, want) {
+			t.Errorf("confirmation lacks %q", want)
+		}
+	}
+	if rec := f.post("/recoveries/"+m[1]+"/delete", operator, url.Values{}, "HX-Request", "true", "X-CSRF-Token", ocsrf); rec.Code != http.StatusForbidden {
+		t.Errorf("operator delete: %d", rec.Code)
+	}
+	rec = f.post("/recoveries/"+m[1]+"/delete", admin, url.Values{}, "HX-Request", "true", "X-CSRF-Token", acsrf)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "deleted.") || !strings.Contains(rec.Body.String(), "No restore yet") {
+		t.Errorf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if dl := f.get("/recoveries/"+m[1]+"/download", operator); dl.Code != 404 {
+		t.Errorf("download after delete: %d", dl.Code)
+	}
+
+	// The metric counts the successful restore.
+	if mt := f.get("/metrics", nil).Body.String(); !strings.Contains(mt, `pgcellar_recoveries_total{server="pg-main"} 1`) || !strings.Contains(mt, `pgcellar_recoveries_total{server="pg-rsync"} 0`) {
+		t.Errorf("metrics:\n%s", mt)
+	}
+}

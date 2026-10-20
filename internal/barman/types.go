@@ -181,4 +181,7 @@ type RecoverOptions struct {
 	// --target-time. Empty means "as far as the archived WAL goes" (no
 	// target at all), which is also what Barman does by default.
 	TargetTime string
+	// TargetImmediate recovers to the end of the backup itself and stops as
+	// soon as the data is consistent (--target-immediate).
+	TargetImmediate bool
 }

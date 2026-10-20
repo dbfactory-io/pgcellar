@@ -272,3 +272,37 @@ func TestStatusInterval(t *testing.T) {
 		}
 	}
 }
+
+func TestRecoveriesDefaultsAndValidation(t *testing.T) {
+	d := Defaults().Recoveries
+	if d.Dir != "/var/lib/pgcellar/recoveries" || d.MaxDownloadBytes != 2<<30 || d.KeepDays != 7 {
+		t.Fatalf("defaults: %+v", d)
+	}
+	path := filepath.Join(t.TempDir(), "pgcellar.yaml")
+	if err := os.WriteFile(path, []byte("recoveries:\n  dir: /srv/restores\n  keep_days: 0\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Recoveries.Dir != "/srv/restores" || cfg.Recoveries.KeepDays != 0 || cfg.Recoveries.MaxDownloadBytes != 2<<30 {
+		t.Fatalf("partial section keeps the other defaults: %+v", cfg.Recoveries)
+	}
+	for name, mod := range map[string]func(*Config){
+		"relative": func(c *Config) { c.Recoveries.Dir = "restores" },
+		"empty":    func(c *Config) { c.Recoveries.Dir = "" },
+		"root":     func(c *Config) { c.Recoveries.Dir = "/" },
+		"neg size": func(c *Config) { c.Recoveries.MaxDownloadBytes = -1 },
+		"neg days": func(c *Config) { c.Recoveries.KeepDays = -1 },
+	} {
+		c := sampleConfig(t)
+		mod(c)
+		if p := Validate(c); len(p) != 1 || !strings.Contains(p[0], "recoveries.") {
+			t.Errorf("%s: %v", name, p)
+		}
+	}
+	if p := Validate(sampleConfig(t)); len(p) != 0 {
+		t.Errorf("sample config: %v", p)
+	}
+}
