@@ -50,6 +50,8 @@ var messages = map[string]string{
 	"audit.title":       "Audit log",
 
 	// Look and feel: the status headline, empty states, small celebrations.
+	"foot.docs":           "Docs",
+	"foot.site":           "dbfactory.io",
 	"motto":               "The barman serves, the cellar keeps.",
 	"level.ok":            "Healthy",
 	"level.warn":          "Attention",

@@ -43,7 +43,7 @@
 {{if .Warn}}<div class="flash warn" role="status">{{.Warn}}</div>{{end}}
 {{template "content" .}}
 </main>
-<footer class="wrap foot">pgCellar {{.Version}}{{if .LicenseFooter}} &middot; <span class="licence">{{.LicenseFooter}}</span>{{end}} &middot; <span>{{t "motto"}}</span></footer>
+<footer class="wrap foot">pgCellar {{.Version}}{{if .LicenseFooter}} &middot; <span class="licence">{{.LicenseFooter}}</span>{{end}} &middot; <a href="https://pgcellar.dbfactory.io/docs/" target="_blank" rel="noopener">{{t "foot.docs"}}</a> &middot; <a href="https://dbfactory.io/pgcellar" target="_blank" rel="noopener">{{t "foot.site"}}</a> &middot; <span>{{t "motto"}}</span></footer>
 </body>
 </html>
 {{end}}

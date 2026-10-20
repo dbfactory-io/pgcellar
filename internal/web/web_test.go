@@ -415,7 +415,7 @@ func TestStaticAndNoExternalResources(t *testing.T) {
 	}
 	for _, p := range []string{"/login", "/nope"} {
 		body := f.get(p, nil).Body.String()
-		if regexp.MustCompile(`(src|href)="https?://`).MatchString(body) {
+		if regexp.MustCompile(`src="https?://|<link[^>]*href="https?://`).MatchString(body) {
 			t.Errorf("%s loads an external resource", p)
 		}
 	}

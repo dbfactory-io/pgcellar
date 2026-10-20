@@ -264,3 +264,5 @@ svg.tl{display:block;width:100%;min-width:28rem;height:auto;font-family:var(--sa
 .demo-locked,.demo-locked[disabled]{opacity:.5;cursor:not-allowed}
 .demo-try{margin-top:1rem;text-align:center}
 .demo-try .hint{margin:.4rem 0 0;font-size:.85rem;color:var(--muted,inherit);opacity:.8}
+.foot a{color:inherit;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:.15em}
+.foot a:hover{color:var(--tx);text-decoration-color:currentColor}
