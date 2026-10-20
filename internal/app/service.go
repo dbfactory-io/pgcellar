@@ -455,7 +455,16 @@ func (a *App) StartBackup(ctx context.Context, actor, name string) (int64, error
 		bctx, cancel := context.WithTimeout(barman.WithActor(context.Background(), actor), 12*time.Hour)
 		defer cancel()
 		cr := &captureRunner{inner: a.Runner}
-		berr := barman.NewEngine(cr).Backup(bctx, name)
+		eng := barman.NewEngine(cr)
+		berr := eng.Backup(bctx, name)
+		if berr == nil {
+			// The backup's end LSN usually sits in the WAL segment still being
+			// written; on a quiet server that segment would stay open for hours
+			// and the backup would remain WAITING_FOR_WALS. Close it now.
+			if serr := eng.SwitchWAL(bctx, name); serr != nil {
+				a.Logf("switch-wal after the backup of %s failed: %v", name, serr)
+			}
+		}
 		code := exitCodeOf(berr)
 		stderr := cr.stderr.String()
 		if berr != nil && !strings.Contains(stderr, berr.Error()) {

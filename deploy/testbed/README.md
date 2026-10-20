@@ -292,7 +292,7 @@ sudo docker exec pgcellar pgcellar check --config /etc/pgcellar/pgcellar.yaml
 sudo docker exec -u barman pgcellar barman check chutag
 ```
 
-`check-from-pi.sh` fails on 5438 until A7 is done, and on any port whose role does not exist yet; read its output port by port (`HOST` can be overridden). Web UI: `http://127.0.0.1:8080` on the Pi, or from the Mac `ssh -L 8080:127.0.0.1:8080 rasp001` then `http://localhost:8080`.
+`check-from-pi.sh` fails on 5438 until A7 is done, and on any port whose role does not exist yet; read its output port by port (`HOST` can be overridden). Web UI: `http://127.0.0.1:8082` on the Pi (8080 is taken by cadvisor there, 8081 by qbittorrent), or from the Mac `ssh -L 8082:127.0.0.1:8082 rasp001` then `http://localhost:8082`.
 
 On the first `barman check chutag` expect PostgreSQL, `pg_basebackup` compatibility and connection lines OK; the replication slot missing; and the minimum redundancy failing until the first backup. `create_slot = auto` makes Barman create the slot at the first `barman cron`, which is the first persistent object on production (TESTBED.md step 11, needs its own go): until then keep `streaming_archiver = off` in the server file, or leave the server out of `etc/barman.d` and of `servers:`.
 
@@ -303,10 +303,15 @@ sudo docker exec -u barman pgcellar barman backup chutag      # off-peak
 sudo docker exec -u barman pgcellar barman list-backup chutag
 ```
 
+Until milestone 4 (scheduling) ships, pgCellar does not run the schedules itself: install `cron.d/pgcellar-testbed` on the Pi (`sudo install -m 644 -o root -g root cron.d/pgcellar-testbed /etc/cron.d/`), which takes one base backup per server from 03:00, ten minutes apart, and logs to `/var/log/pgcellar-testbed.log`. Remove it when pgCellar takes over.
+
 The six schedules in `pgcellar.yaml` are `daily 03:00` to `03:50`, ten minutes apart, all enabled. Set `enabled: false` on the servers whose part A is not done yet, otherwise pgCellar alerts on them. Turn on `drills.enabled` after the first manual restore (TESTBED.md step 13).
 
 ### B8. Notes
 
 - Memory: `mem_limit: 768m` on a Pi with 3.7 GiB shared with Home Assistant, Grafana and Plex. Watch them during the first runs.
+- The container runs as `barman` (uid 997 in this image). If `docker logs pgcellar` shows `attempt to write a readonly database`, a volume was created by an older root container: `sudo chown -R 997:997 /mnt/usbdata/pgcellar/data` and restart.
+- Do not run `barman backup --wait` by hand on a quiet server: it waits for the current WAL segment, which closes only after 16 MB or a switch. Run `barman backup <server>` then `barman switch-wal --force --archive <server>` (pgCellar does exactly that).
+- nyx keeps its `host all all all trust` line for now (the application's credentials were not verified): the barman lines sit after it, the replication one is the one that matters. Replacing `trust` by `scram-sha-256` is a separate change, to be tested with the nyx application.
 - All the test bed data stays on `/mnt/usbdata/pgcellar`; only the image sits on the SD card.
 - Tear-down: `sudo docker compose down`, remove `/mnt/usbdata/pgcellar`. On hawking drop the slots (`SELECT pg_drop_replication_slot('barman_chutag')`) and the two roles; the `pg_hba.conf.bak-<date>` files hold the original state.

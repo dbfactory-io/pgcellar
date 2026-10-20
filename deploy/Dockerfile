@@ -43,5 +43,11 @@ COPY --from=build /out/pgcellar /usr/local/bin/pgcellar
 VOLUME ["/var/lib/barman", "/var/lib/pgcellar"]
 EXPOSE 8080
 
+# pgcellar runs as the barman user itself: no root in the container and no
+# sudo (the image has none), Barman is executed directly. Bind-mounted
+# directories must be writable by that user (uid of "barman" in this image).
+USER barman
+WORKDIR /var/lib/barman
+
 ENTRYPOINT ["/usr/local/bin/pgcellar"]
 CMD ["serve", "--config", "/etc/pgcellar/pgcellar.yaml"]
