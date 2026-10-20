@@ -38,7 +38,7 @@ done
 sudo -n install -d -o "$BARMAN_UID" -g "$BARMAN_UID" -m 750 "$BARMAN_VOLUME"
 sudo -n install -o "$BARMAN_UID" -g "$BARMAN_UID" -m 600 "$tmp" "$BARMAN_VOLUME/.pgpass"
 rm -f "$tmp"
-echo "1. .pgpass written: $BARMAN_VOLUME/.pgpass ($(sudo -n wc -l < "$BARMAN_VOLUME/.pgpass") lines, mode 600, uid $BARMAN_UID)"
+echo "1. .pgpass written: $BARMAN_VOLUME/.pgpass ($(sudo -n wc -l "$BARMAN_VOLUME/.pgpass" | cut -d" " -f1) lines, mode 600, uid $BARMAN_UID)"
 
 # 2. admin password and its bcrypt hash
 if [ -z "${PGCELLAR_ADMIN_PASSWORD:-}" ]; then
