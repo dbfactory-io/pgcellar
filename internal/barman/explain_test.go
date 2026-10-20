@@ -43,3 +43,19 @@ func TestStandardChecksAreExplained(t *testing.T) {
 		}
 	}
 }
+
+func TestFailingCheckDescribesTheFailure(t *testing.T) {
+	what, _ := Explain(CheckResult{Name: "receive_wal_running"})
+	if what != "The process that streams WAL files from PostgreSQL is not running." {
+		t.Errorf("failing what = %q", what)
+	}
+	what, _ = Explain(CheckResult{Name: "receive_wal_running", OK: true})
+	if !strings.Contains(what, "is running") {
+		t.Errorf("passing what = %q", what)
+	}
+	for k, e := range checkTable {
+		if e.bad == "" || e.bad == e.what {
+			t.Errorf("%s: failure text missing or identical to the passing text", k)
+		}
+	}
+}
