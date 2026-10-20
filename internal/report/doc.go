@@ -38,12 +38,11 @@ var fontNames = []string{"Helvetica", "Helvetica-Bold", "Courier"}
 // Doc is a document under construction. Content goes from top to bottom; a
 // new page starts by itself when the content does not fit.
 type Doc struct {
-	Title    string // the /Title of the PDF
-	FooterL  string // left part of the footer, repeated on every page
-	pages    []*strings.Builder
-	y        float64 // distance from the top of the current page
-	sum      hash.Hash
-	finished bool
+	Title   string // the /Title of the PDF
+	FooterL string // left part of the footer, repeated on every page
+	pages   []*strings.Builder
+	y       float64 // distance from the top of the current page
+	sum     hash.Hash
 }
 
 // New starts a document.
@@ -281,7 +280,7 @@ func (d *Doc) Header(brand, subtitle string, art []string) {
 
 // Heading draws a section title.
 func (d *Doc) Heading(s string) {
-	d.ensure(40)
+	d.ensure(90) // a heading is never alone at the bottom of a page
 	d.y += 8
 	d.textAt(margin, d.y+12, fontBold, 12, Black, s)
 	d.y += 20
