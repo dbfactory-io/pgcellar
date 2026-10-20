@@ -43,6 +43,9 @@ type ServerDetail struct {
 	ScheduleHuman string       `json:"schedule_human,omitempty"`
 	Problems      []string     `json:"problems"` // what is wrong with the barman.d definition
 	State         *ServerState `json:"state,omitempty"`
+	// NextBackup is the next due time of the schedule (zero when it is off).
+	NextBackup    time.Time     `json:"next_backup,omitzero"`
+	LastScheduled *ScheduledRun `json:"last_scheduled,omitempty"`
 }
 
 // Levels of a server state.
@@ -63,12 +66,15 @@ type CheckView struct {
 
 // ServerState is the cached digest of a server (refreshed every status interval).
 type ServerState struct {
-	Name                 string    `json:"name"`
-	Level                string    `json:"level"`
-	LastBackupID         string    `json:"last_backup_id,omitempty"`
-	LastBackupEnd        time.Time `json:"last_backup_end,omitzero"`
-	LastBackupSize       int64     `json:"last_backup_size,omitempty"`
-	LastBackupAgeSeconds *int64    `json:"last_backup_age_seconds,omitempty"`
+	Name  string `json:"name"`
+	Level string `json:"level"`
+	// NextBackup and LastScheduled come from the scheduler, not from Barman.
+	NextBackup           time.Time     `json:"next_backup,omitzero"`
+	LastScheduled        *ScheduledRun `json:"last_scheduled,omitempty"`
+	LastBackupID         string        `json:"last_backup_id,omitempty"`
+	LastBackupEnd        time.Time     `json:"last_backup_end,omitzero"`
+	LastBackupSize       int64         `json:"last_backup_size,omitempty"`
+	LastBackupAgeSeconds *int64        `json:"last_backup_age_seconds,omitempty"`
 	// LastFilledWAL is the last WAL file Barman received complete (a WAL file
 	// is 16 MB; a quiet server fills one slowly). Name and time come from the
 	// WAL catalogue file.

@@ -36,6 +36,7 @@ func Defaults() *Config {
 			User:         "barman",
 			CronInterval: time.Minute,
 		},
+		Scheduler:          Scheduler{Enabled: true, CatchUp: DefaultCatchUp, Parallel: 1},
 		StatusInterval:     time.Minute,
 		SetupInterval:      DefaultSetupInterval,
 		AuditRetentionDays: 90,
@@ -132,6 +133,12 @@ func Validate(cfg *Config) []string {
 	}
 	if cfg.SetupInterval != 0 && cfg.SetupInterval < MinSetupInterval {
 		add("setup_interval must be at least %s (for example \"30m\"); leave it out for the default", MinSetupInterval)
+	}
+	if cfg.Scheduler.CatchUp < 0 {
+		add("scheduler.catch_up cannot be negative (0 disables the catch-up)")
+	}
+	if cfg.Scheduler.Parallel < 1 {
+		add("scheduler.parallel must be at least 1")
 	}
 	if cfg.AuditRetentionDays < 0 {
 		add("audit_retention_days cannot be negative (0 keeps everything)")

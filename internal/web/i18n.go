@@ -147,6 +147,8 @@ var messages = map[string]string{
 	"recover.archive":             "Archive",
 	"recover.no_link":             "The archive is above recoveries.max_download_bytes, so there is no download link: take it from the path above on the host.",
 	"recover.ready":               "The directory is a ready-to-start PostgreSQL data directory: start a server of the same major version on it.",
+	"sched.next":                  "Next backup",
+	"sched.last":                  "Last scheduled run",
 }
 
 // tr returns the text for a key.

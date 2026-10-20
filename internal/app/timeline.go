@@ -366,11 +366,7 @@ func buildTimeline(in timelineInput) *Timeline {
 	sort.Slice(t.Branches, func(i, j int) bool { return t.Branches[i].ID < t.Branches[j].ID })
 
 	// Next planned backup.
-	if in.Schedule.Enabled && in.Schedule.Backup != "" {
-		if cron, _, err := config.ParseSchedule(in.Schedule.Backup); err == nil {
-			t.NextBackup, _ = nextCron(cron, now)
-		}
-	}
+	t.NextBackup, _ = NextDue(in.Schedule, now)
 
 	t.axis()
 	return t

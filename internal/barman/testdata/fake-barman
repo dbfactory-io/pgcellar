@@ -122,6 +122,8 @@ case "$cmd" in
   backup)
     need_server "${1:-}"
     [ "$1" = broken ] && fail "Cannot connect to PostgreSQL for server 'broken'"
+    # FAKE_BARMAN_BACKUP_DELAY (seconds): a slow backup.
+    [ -n "${FAKE_BARMAN_BACKUP_DELAY:-}" ] && sleep "$FAKE_BARMAN_BACKUP_DELAY"
     if [ "$format" = json ]; then sed -e "s/SERVER/$1/g" -e "s/ID/20261020T120000/g" "$fx/backup.json"; else echo "Backup completed"; fi
     ;;
   switch-wal)

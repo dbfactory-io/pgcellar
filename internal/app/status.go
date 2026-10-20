@@ -358,6 +358,15 @@ func HumanDuration(d time.Duration) string {
 // States returns the cached state of every server, in Barman's order, with
 // ages computed at the time of the call, and when the cache was built.
 func (a *App) States() ([]ServerState, time.Time, string) {
+	out, at, msg := a.cachedStates()
+	now := a.now()
+	for i := range out {
+		out[i].NextBackup, out[i].LastScheduled = a.scheduleInfo(out[i].Name, now)
+	}
+	return out, at, msg
+}
+
+func (a *App) cachedStates() ([]ServerState, time.Time, string) {
 	a.cacheMu.RLock()
 	defer a.cacheMu.RUnlock()
 	now := a.now()
@@ -374,6 +383,14 @@ func (a *App) States() ([]ServerState, time.Time, string) {
 
 // State returns the cached state of one server.
 func (a *App) State(name string) (ServerState, bool) {
+	v, ok := a.cacheEntry(name)
+	if ok {
+		v.NextBackup, v.LastScheduled = a.scheduleInfo(name, a.now())
+	}
+	return v, ok
+}
+
+func (a *App) cacheEntry(name string) (ServerState, bool) {
 	a.cacheMu.RLock()
 	defer a.cacheMu.RUnlock()
 	s, ok := a.cache[name]

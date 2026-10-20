@@ -8,15 +8,17 @@ import "time"
 // Config is the whole pgcellar.yaml. Keep it boring: strings, lists, maps.
 // A sysadmin, an automation agent or git must be able to edit it by hand.
 type Config struct {
-	Listen  string   `yaml:"listen" json:"listen"`     // ":8080"
-	BaseURL string   `yaml:"base_url" json:"base_url"` // "https://cellar.example.com", used in links and alerts
-	DataDir string   `yaml:"data_dir" json:"data_dir"` // SQLite and runtime files, e.g. /var/lib/pgcellar
-	Barman  Barman   `yaml:"barman" json:"barman"`
-	Servers []Server `yaml:"servers" json:"servers"` // what pgCellar adds on top of barman.d, keyed by name
-	Alerts  Alerts   `yaml:"alerts" json:"alerts"`
-	Users   []User   `yaml:"users" json:"users"`
-	APIKeys []APIKey `yaml:"api_keys" json:"api_keys"`
-	Drills  Drills   `yaml:"drills" json:"drills"`
+	Listen  string `yaml:"listen" json:"listen"`     // ":8080"
+	BaseURL string `yaml:"base_url" json:"base_url"` // "https://cellar.example.com", used in links and alerts
+	DataDir string `yaml:"data_dir" json:"data_dir"` // SQLite and runtime files, e.g. /var/lib/pgcellar
+	Barman  Barman `yaml:"barman" json:"barman"`
+	// Scheduler runs the backup schedules of the servers.
+	Scheduler Scheduler `yaml:"scheduler" json:"scheduler"`
+	Servers   []Server  `yaml:"servers" json:"servers"` // what pgCellar adds on top of barman.d, keyed by name
+	Alerts    Alerts    `yaml:"alerts" json:"alerts"`
+	Users     []User    `yaml:"users" json:"users"`
+	APIKeys   []APIKey  `yaml:"api_keys" json:"api_keys"`
+	Drills    Drills    `yaml:"drills" json:"drills"`
 	// Recoveries is where point-in-time restores are written.
 	Recoveries Recoveries `yaml:"recoveries" json:"recoveries"`
 	// StatusInterval is how often the cached status of every server is
@@ -43,6 +45,21 @@ type Barman struct {
 	// CronInterval is how often pgCellar runs `barman cron`. 0 = never.
 	CronInterval time.Duration `yaml:"cron_interval" json:"cron_interval"`
 }
+
+// Scheduler configures the built-in scheduler: pgCellar starts the backups of
+// every server whose schedule is enabled, no host cron needed.
+type Scheduler struct {
+	Enabled bool `yaml:"enabled" json:"enabled"` // default true
+	// CatchUp: a due time missed while pgCellar was stopped is still run at
+	// startup when it is not older than this. 0 = never catch up. Default 6h.
+	CatchUp time.Duration `yaml:"catch_up" json:"catch_up"`
+	// Parallel is the most backups running at once, all servers together.
+	// Default 1.
+	Parallel int `yaml:"parallel" json:"parallel"`
+}
+
+// DefaultCatchUp is the default scheduler.catch_up.
+const DefaultCatchUp = 6 * time.Hour
 
 // Server holds the pgCellar side of a server: schedule, retention, notes.
 // The name must match a [section] in barman.d.

@@ -33,6 +33,8 @@
       <div><dt>{{t "wal.filled_full"}}</dt><dd>{{if .Detail.State.LastFilledWALTime.IsZero}}none yet{{else}}{{ageSec .Detail.State.LastFilledWALAgeSeconds}} ago{{if .Detail.State.LastFilledWAL}} <code class="wrapany">{{.Detail.State.LastFilledWAL}}</code>{{end}}{{end}}<div class="help">{{t "wal.filled_help"}}</div></dd></div>
       <div><dt>Method</dt><dd>{{if .Detail.HasFile}}{{.Detail.BackupMethod}}{{else}}-{{end}}</dd></div>
       <div><dt>Schedule</dt><dd>{{if .Detail.Schedule.Enabled}}{{.Detail.ScheduleHuman}}{{else}}<span aria-hidden="true">💤</span> off{{end}}</dd></div>
+      <div><dt>{{t "sched.next"}}</dt><dd>{{if .Detail.NextBackup.IsZero}}-{{else}}{{nexttext .Detail.NextBackup}}{{end}}</dd></div>
+      <div><dt>{{t "sched.last"}}</dt><dd>{{lastsched .Detail.LastScheduled}}</dd></div>
       <div><dt>Retention</dt><dd>{{retention .Detail.Retention}}</dd></div>
     </dl>
     {{if .Detail.State.Notes}}<div class="softnote" style="margin-top:1rem"><ul>{{range .Detail.State.Notes}}<li>{{.}}</li>{{end}}</ul></div>{{end}}

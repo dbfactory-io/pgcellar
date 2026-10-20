@@ -43,6 +43,8 @@ type App struct {
 	CronInterval time.Duration
 	// StatusInterval is how often the status cache is refreshed.
 	StatusInterval time.Duration
+	// SchedulerInterval is how often the scheduler looks at the clock.
+	SchedulerInterval time.Duration
 	// SetupInterval is how often the PostgreSQL settings are read again.
 	SetupInterval time.Duration
 	// SSHHome is the home directory whose ~/.ssh holds the SSH key pair; empty
@@ -72,6 +74,7 @@ type App struct {
 	cfgModTime time.Time
 	cfgChecked time.Time
 
+	sched   schedState
 	runMu   sync.Mutex
 	running map[string]int64 // server -> run id of the backup in progress
 
@@ -272,6 +275,13 @@ func (a *App) Start(ctx context.Context) {
 		}()
 	} else {
 		close(a.firstCron)
+	}
+	if a.Config().Scheduler.Enabled {
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			a.schedulerLoop(ctx)
+		}()
 	}
 	a.wg.Add(1)
 	go func() {

@@ -111,6 +111,7 @@ func (a *App) detail(name string, file *barman.Server, cs *config.Server, inBarm
 	if st, ok := a.State(name); ok {
 		d.State = &st
 	}
+	d.NextBackup, d.LastScheduled = a.scheduleInfo(name, a.now())
 	return d
 }
 

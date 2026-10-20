@@ -18,6 +18,12 @@ barman:
   host: ""                             # empty = local Barman
   cron_interval: 1m                    # how often pgCellar runs "barman cron"; 0 = never
 
+# pgCellar starts the backups of every server whose schedule is enabled; no host cron needed.
+scheduler:
+  enabled: true                        # false = nothing is started by pgCellar
+  catch_up: 6h                         # a backup missed while pgCellar was stopped still runs if it is not older than this; 0 = never
+  parallel: 1                          # backups running at once, all servers together
+
 # What pgCellar adds on top of barman.d. "name" must match a [section] there.
 servers:
   - name: pg-main                      # streaming (see barman.d.example/pg-main.conf)

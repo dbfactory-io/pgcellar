@@ -47,6 +47,9 @@ func funcs(assets map[string]string) template.FuncMap {
 		"ageSec":    ageSec,
 		"size":      humanSize,
 		"retention": fmtRetention,
+		"nexttext":  fmtNext,
+		"lastsched": fmtLastScheduled,
+		"actor":     actorLabel,
 		"runtime":   runtime,
 		"f1":        f1,
 	}
