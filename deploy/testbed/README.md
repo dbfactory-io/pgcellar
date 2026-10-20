@@ -305,6 +305,16 @@ sudo docker exec -u barman pgcellar barman list-backup chutag
 
 Until milestone 4 (scheduling) ships, pgCellar does not run the schedules itself: install `cron.d/pgcellar-testbed` on the Pi (`sudo install -m 644 -o root -g root cron.d/pgcellar-testbed /etc/cron.d/`), which takes one base backup per server from 03:00, ten minutes apart, and logs to `/var/log/pgcellar-testbed.log`. Remove it when pgCellar takes over.
 
+The cron lines call the API (`POST /api/v1/servers/<name>/backup`) instead of `docker exec ... barman backup`, so every nightly backup appears on the Runs page and in the audit log, and the forced WAL switch is chained by pgCellar itself. The header is `Authorization: Bearer <key>`; the answer is `202` with `{"data":{"run_id":...,"status":"running"}}` and the backup keeps running inside pgCellar. Create the key once (role `operator` is enough) and put it where the cron reads it:
+
+```bash
+sudo docker exec -u barman pgcellar pgcellar apikey create --config /etc/pgcellar/pgcellar.yaml --name testbed-cron --role operator \
+  | sudo tee /etc/pgcellar-testbed.key >/dev/null
+sudo chown root:root /etc/pgcellar-testbed.key && sudo chmod 600 /etc/pgcellar-testbed.key
+```
+
+The key is printed once, only its SHA-256 is stored in `pgcellar.yaml` (a running pgCellar picks it up within a second, no restart). `pgcellar apikey list --config ...` shows names and roles. Adjust the container name and config path to your compose file. Check with `sudo bash -c 'curl -fsS -H "Authorization: Bearer $(cat /etc/pgcellar-testbed.key)" http://127.0.0.1:8082/api/v1/runs'`.
+
 The six schedules in `pgcellar.yaml` are `daily 03:00` to `03:50`, ten minutes apart, all enabled. Set `enabled: false` on the servers whose part A is not done yet, otherwise pgCellar alerts on them. Turn on `drills.enabled` after the first manual restore (TESTBED.md step 13).
 
 ### B8. Notes
