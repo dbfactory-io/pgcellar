@@ -117,7 +117,7 @@ func TestDemoRefusesEveryMutation(t *testing.T) {
 					t.Errorf("%s (signed in %v, htmx %v): status %d, want 403", r, signedIn, hx != nil, rec.Code)
 					continue
 				}
-				if !strings.Contains(rec.Body.String(), "This is the public demo: read-only.") || !strings.Contains(rec.Body.String(), "https://dbfactory.io/pgcellar") {
+				if !strings.Contains(rec.Body.String(), "This is the public demo: read-only.") || !strings.Contains(rec.Body.String(), "https://dbfactory.io/en/pgcellar/") {
 					t.Errorf("%s: no demo message in %q", r, rec.Body.String())
 				}
 			}
@@ -162,7 +162,7 @@ func TestDemoPagesReadableByViewer(t *testing.T) {
 			t.Errorf("server page lacks %q", want)
 		}
 	}
-	if !strings.Contains(body, "Demo · read-only · fictional data ·") || !strings.Contains(body, `href="https://dbfactory.io/pgcellar"`) {
+	if !strings.Contains(body, "Demo · read-only · fictional data ·") || !strings.Contains(body, `href="https://dbfactory.io/en/pgcellar/"`) {
 		t.Error("the demo banner is missing")
 	}
 	js := f.do("GET", "/static/demo.js", false)

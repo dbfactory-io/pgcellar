@@ -104,7 +104,7 @@ Early access is free during the beta.
 
 A licence never stops a backup, a restore or a drill. It only limits **adding** a server beyond the quota; what already exists keeps running, and a discreet banner on the Status page says so. After expiry you get 30 days of grace, then the Free rules apply to new servers. The edition and the number of servers are in the footer.
 
-Put the key in `pgcellar.yaml` (`license.key`, or `license.file` for a file that holds it). Keys are signed with Ed25519 and verified offline, nothing phones home. `pgcellar license show --config FILE` tells what the application sees. Get a key at [dbfactory.io/pgcellar](https://dbfactory.io/pgcellar).
+Put the key in `pgcellar.yaml` (`license.key`, or `license.file` for a file that holds it). Keys are signed with Ed25519 and verified offline, nothing phones home. `pgcellar license show --config FILE` tells what the application sees. Get a key at [dbfactory.io/en/pgcellar](https://dbfactory.io/en/pgcellar/).
 
 ## API
 

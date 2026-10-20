@@ -91,7 +91,7 @@ func TestExpiryGraceAndQuota(t *testing.T) {
 	if st.State != StateExpired || st.Max() != FreeServers || st.Allows(2) || !st.Allows(1) {
 		t.Errorf("expired: %+v", st)
 	}
-	if msg := st.AddError(2); !strings.Contains(msg, "dbfactory.io/pgcellar") || !strings.Contains(msg, "keep working") {
+	if msg := st.AddError(2); !strings.Contains(msg, "dbfactory.io/en/pgcellar") || !strings.Contains(msg, "keep working") {
 		t.Errorf("message: %q", msg)
 	}
 	if st.Banner(2) == "" {

@@ -23,7 +23,7 @@ Barman is a separate program under GPL-3.0. The image contains it unmodified; pg
 | Pro | up to 10 | 490 EUR per year |
 | Business | unlimited | 1 490 EUR per year |
 
-Prices are the ones on the project page at the time of writing; see https://dbfactory.io/pgcellar for the current ones. Early access is free during the beta.
+Prices are the ones on the project page at the time of writing; see https://dbfactory.io/en/pgcellar/ for the current ones. Early access is free during the beta.
 
 Free is not a trial. There is no expiry and no feature locked away: the Free edition simply holds two servers.
 
@@ -102,7 +102,7 @@ It prints the payload (id, edition, licensee, servers, issue and expiry dates), 
 
 `pgcellar license keygen` and `pgcellar license issue` are for the vendor: they create the signing key and sign licence keys. You never need them. The private key is never in the repository.
 
-Get a key at https://dbfactory.io/pgcellar.
+Get a key at https://dbfactory.io/en/pgcellar/.
 
 ## Which servers are counted
 

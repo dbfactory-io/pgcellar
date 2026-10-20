@@ -25,7 +25,7 @@ import (
 const Prefix = "PGC1"
 
 // URL is where the editions are sold; it appears in the messages.
-const URL = "https://dbfactory.io/pgcellar"
+const URL = "https://dbfactory.io/en/pgcellar/"
 
 // Editions.
 const (

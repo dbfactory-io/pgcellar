@@ -98,7 +98,7 @@ func TestLicenseFooterAndBanner(t *testing.T) {
 	f = fixtureWith(t, func(c *config.Config) { c.License.Key = "" })
 	cookie, _ = f.login(t, "viewer")
 	body = f.get("/status", cookie).Body.String()
-	if !strings.Contains(body, "Free edition · 4 of 2 servers") || !strings.Contains(body, "licence-note") || !strings.Contains(body, "dbfactory.io/pgcellar") {
+	if !strings.Contains(body, "Free edition · 4 of 2 servers") || !strings.Contains(body, "licence-note") || !strings.Contains(body, "dbfactory.io/en/pgcellar") {
 		t.Errorf("over quota:\n%s", body)
 	}
 	if m := f.get("/metrics", nil).Body.String(); !strings.Contains(m, "pgcellar_license_servers_max 2") {

@@ -31,7 +31,7 @@ written outside a temporary directory, removed when the program stops.
 - Every request that would change something (any POST, PUT, PATCH or DELETE
   except sign-in and sign-out, and the two GET routes that run a command or hand
   out an archive) is answered `403` with "This is the public demo: read-only.
-  Run your own pgCellar: https://dbfactory.io/pgcellar". The buttons stay on the
+  Run your own pgCellar: https://dbfactory.io/en/pgcellar/". The buttons stay on the
   page, disabled, with a tooltip, so the visitor sees what exists.
 - The PDF report of a restore drill can be downloaded (fictional); the
   restored archives cannot.

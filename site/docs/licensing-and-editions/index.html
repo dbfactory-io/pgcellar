@@ -83,7 +83,7 @@
 </tr>
 </tbody>
 </table>
-<p>Prices are the ones on the project page at the time of writing; see https://dbfactory.io/pgcellar for the current ones. Early access is free during the beta.</p>
+<p>Prices are the ones on the project page at the time of writing; see https://dbfactory.io/en/pgcellar/ for the current ones. Early access is free during the beta.</p>
 <p>Free is not a trial. There is no expiry and no feature locked away: the Free edition simply holds two servers.</p>
 <h2 id="what-a-licence-blocks-and-what-it-never-blocks">What a licence blocks, and what it never blocks</h2>
 <p><strong>A licence never blocks a backup, a restore or a drill.</strong> That is a product rule, in the code, tested. Whatever the state of your licence:</p>
@@ -162,7 +162,7 @@ footer:   Pro edition · Example Ltd · 3 of 10 servers
 <p>It prints the payload (id, edition, licensee, servers, issue and expiry dates), the state, and a verdict: <code>signature OK</code>, or <code>INVALID</code> with the reason. It exits with a non-zero status for an expired key.</p>
 <p><code>GET /api/v1/license</code> (viewer) returns the edition, the licensee, the servers allowed and used, the expiry and the state. The metrics <code>pgcellar_license_servers_max</code> and <code>pgcellar_license_servers_used</code> expose the quota.</p>
 <p><code>pgcellar license keygen</code> and <code>pgcellar license issue</code> are for the vendor: they create the signing key and sign licence keys. You never need them. The private key is never in the repository.</p>
-<p>Get a key at https://dbfactory.io/pgcellar.</p>
+<p>Get a key at https://dbfactory.io/en/pgcellar/.</p>
 <h2 id="which-servers-are-counted">Which servers are counted</h2>
 <p>Servers are counted as the Servers page lists them: the sections of <code>barman.d</code>, the entries of <code>pgcellar.yaml</code> and the servers in the status cache, each name once. <code>pgcellar license show</code> counts only the entries of <code>pgcellar.yaml</code>, so its footer line can differ from the one in the console.</p>
 

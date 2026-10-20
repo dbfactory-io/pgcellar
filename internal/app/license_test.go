@@ -28,7 +28,7 @@ func TestLicenseQuotaOnlyLimitsAdding(t *testing.T) {
 	}
 	_, err := a.CreateServer("tester", newServerInput("pg-new"))
 	var conflict *app.ConflictError
-	if !errors.As(err, &conflict) || !strings.Contains(conflict.Msg, "dbfactory.io/pgcellar") || !strings.Contains(conflict.Msg, "keep working") {
+	if !errors.As(err, &conflict) || !strings.Contains(conflict.Msg, "dbfactory.io/en/pgcellar") || !strings.Contains(conflict.Msg, "keep working") {
 		t.Fatalf("adding beyond the quota must be refused with a clear message: %v", err)
 	}
 	// ...but nothing that already exists is touched
