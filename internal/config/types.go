@@ -21,6 +21,7 @@ type Config struct {
 	Drills    Drills    `yaml:"drills" json:"drills"`
 	// Recoveries is where point-in-time restores are written.
 	Recoveries Recoveries `yaml:"recoveries" json:"recoveries"`
+	License    License    `yaml:"license" json:"license"`
 	// StatusInterval is how often the cached status of every server is
 	// refreshed. Each refresh runs several Barman commands per server.
 	StatusInterval time.Duration `yaml:"status_interval" json:"status_interval"`
@@ -104,11 +105,25 @@ type Alerts struct {
 	MinFreePercent float64 `yaml:"min_free_percent" json:"min_free_percent"`
 	// MinFreeBytes: same, in bytes. 0 = off.
 	MinFreeBytes int64 `yaml:"min_free_bytes" json:"min_free_bytes"`
+	// RepeatEvery: a condition that lasts is announced again only after this
+	// delay. Default 24h.
+	RepeatEvery time.Duration `yaml:"repeat_every" json:"repeat_every"`
+	// OnDrillSuccess also sends a message when a restore drill passes.
+	OnDrillSuccess bool `yaml:"on_drill_success" json:"on_drill_success"`
+	// DailySummary is a time of day ("08:30") at which one message sums up
+	// every server. Empty = no summary.
+	DailySummary string `yaml:"daily_summary" json:"daily_summary"`
 }
 
+// DefaultRepeatEvery is alerts.repeat_every when it is not set.
+const DefaultRepeatEvery = 24 * time.Hour
+
 type MailAlert struct {
-	SMTPHost    string   `yaml:"smtp_host" json:"smtp_host"`
-	SMTPPort    int      `yaml:"smtp_port" json:"smtp_port"`
+	Host string `yaml:"host" json:"host"`
+	Port int    `yaml:"port" json:"port"`
+	// StartTLS upgrades the connection with STARTTLS (default true); false
+	// sends in clear, for a relay on a trusted network.
+	StartTLS    *bool    `yaml:"starttls,omitempty" json:"starttls,omitempty"`
 	From        string   `yaml:"from" json:"from"`
 	To          []string `yaml:"to" json:"to"`
 	UserEnv     string   `yaml:"user_env" json:"user_env"`         // name of the env var holding the SMTP user
@@ -122,6 +137,16 @@ type TelegramAlert struct {
 
 type WebhookAlert struct {
 	URL string `yaml:"url" json:"url"`
+	// SecretEnv names the env var holding the secret that signs the body
+	// (X-PgCellar-Signature: sha256=<hmac>). Empty = unsigned.
+	SecretEnv string `yaml:"secret_env" json:"secret_env"`
+}
+
+// License holds the licence key, or the file that holds it. Neither set =
+// Free edition.
+type License struct {
+	Key  string `yaml:"key" json:"key"`
+	File string `yaml:"file" json:"file"`
 }
 
 // User is a web user. Password hashes are bcrypt. Roles: admin, operator, viewer.

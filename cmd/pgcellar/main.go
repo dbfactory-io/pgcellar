@@ -5,6 +5,7 @@
 //	pgcellar serve --config /etc/pgcellar/pgcellar.yaml   run the web UI and API
 //	pgcellar check --config ...                            validate the configuration and list the servers
 //	pgcellar apikey create|list                            manage API keys (the key is printed once)
+//	pgcellar license keygen|issue|verify|show              licence keys (signing is for the vendor only)
 //	pgcellar version
 //
 // The real work lives in internal/. This file only parses the command line.
@@ -52,6 +53,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return check(args[1:], stdout, stderr)
 	case "apikey":
 		return apikey(args[1:], stdout, stderr)
+	case "license":
+		return licenseCmd(args[1:], stdout, stderr)
 	case "help", "--help", "-h":
 		usage(stdout)
 		return 0
@@ -66,6 +69,10 @@ func usage(w io.Writer) {
   pgcellar check --config FILE [--barman-dir DIR]
   pgcellar apikey create --config FILE --name NAME --role viewer|operator|admin
   pgcellar apikey list --config FILE
+  pgcellar license keygen --out DIR
+  pgcellar license issue --key FILE --edition pro --licensee NAME --servers N --expires YYYY-MM-DD [--id ID]
+  pgcellar license verify KEY
+  pgcellar license show --config FILE
   pgcellar version`)
 }
 

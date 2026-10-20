@@ -25,6 +25,15 @@ const (
 // DefaultMinFreePercent is alerts.min_free_percent when the file does not say.
 const DefaultMinFreePercent = 10
 
+// ParseClock reads "08:30" as hour and minute.
+func ParseClock(s string) (hour, minute int, ok bool) {
+	var h, m int
+	if n, err := fmt.Sscanf(strings.TrimSpace(s), "%d:%d", &h, &m); err != nil || n != 2 || h < 0 || h > 23 || m < 0 || m > 59 || len(strings.TrimSpace(s)) > 5 {
+		return 0, 0, false
+	}
+	return h, m, true
+}
+
 // DefaultRecoveriesDir is where restores go when recoveries.dir is not set.
 const DefaultRecoveriesDir = "/var/lib/pgcellar/recoveries"
 
@@ -43,7 +52,7 @@ func Defaults() *Config {
 			KeepLast: true, MaxAge: DefaultDrillMaxAge, BinDir: DefaultPGBinDir},
 		Scheduler:          Scheduler{Enabled: true, CatchUp: DefaultCatchUp, Parallel: 1},
 		StatusInterval:     time.Minute,
-		Alerts:             Alerts{MinFreePercent: DefaultMinFreePercent},
+		Alerts:             Alerts{MinFreePercent: DefaultMinFreePercent, RepeatEvery: DefaultRepeatEvery},
 		SetupInterval:      DefaultSetupInterval,
 		AuditRetentionDays: 90,
 		Recoveries: Recoveries{
@@ -247,11 +256,19 @@ func Validate(cfg *Config) []string {
 		add("alerts.min_free_bytes cannot be negative")
 	}
 	if m := cfg.Alerts.Mail; m != nil {
-		if m.SMTPHost == "" || m.From == "" || len(m.To) == 0 {
-			add("alerts.mail needs smtp_host, from and at least one recipient in to")
+		if m.Host == "" || m.From == "" || len(m.To) == 0 {
+			add("alerts.mail needs host, from and at least one recipient in to")
 		}
-		if m.SMTPPort < 0 || m.SMTPPort > 65535 {
-			add("alerts.mail.smtp_port %d is not a valid port", m.SMTPPort)
+		if m.Port < 0 || m.Port > 65535 {
+			add("alerts.mail.port %d is not a valid port", m.Port)
+		}
+	}
+	if cfg.Alerts.RepeatEvery < 0 {
+		add("alerts.repeat_every cannot be negative")
+	}
+	if d := strings.TrimSpace(cfg.Alerts.DailySummary); d != "" {
+		if _, _, ok := ParseClock(d); !ok {
+			add("alerts.daily_summary %q is not a time of day (use \"08:30\", or leave it empty for no summary)", d)
 		}
 	}
 	if t := cfg.Alerts.Telegram; t != nil && (t.TokenEnv == "" || t.ChatID == "") {
