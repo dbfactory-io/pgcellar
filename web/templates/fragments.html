@@ -57,7 +57,7 @@
 {{end}}
 </tbody></table>
 </div>
-<p class="muted">Cached status, refreshed every minute{{if not .Updated.IsZero}}; last refresh {{ago .Updated}} ago{{if .Dev}} (clock frozen for fixtures){{end}}{{end}}.</p>
+<p class="muted">Cached status, refreshed every {{.Every}}{{if not .Updated.IsZero}}; last refresh {{ago .Updated}} ago{{if .Dev}} (clock frozen for fixtures){{end}}{{end}}.</p>
 {{else}}
 <p class="empty">No server yet, or the first status check is still running. <a href="/servers">Servers</a></p>
 {{end}}

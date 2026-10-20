@@ -197,3 +197,33 @@ func TestEngineStatusCatalogueUnreadable(t *testing.T) {
 		}
 	}
 }
+
+// show-backup runs once per last backup id, not at every status.
+func TestStatusReusesShowBackup(t *testing.T) {
+	e, entries := newTestEngine(t)
+	count := func() int {
+		n := 0
+		for _, en := range *entries {
+			for _, a := range en.Args {
+				if a == "show-backup" {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	first, err := e.Status(context.Background(), "pg-main")
+	if err != nil || first.LastBackup == nil {
+		t.Fatalf("%v %+v", err, first)
+	}
+	if count() != 1 {
+		t.Fatalf("show-backup calls after first status = %d", count())
+	}
+	second, err := e.Status(context.Background(), "pg-main")
+	if err != nil || count() != 1 {
+		t.Fatalf("err=%v show-backup calls after second status = %d", err, count())
+	}
+	if second.LastBackup == nil || second.LastBackup.ID != first.LastBackup.ID || second.LastBackup.Size != first.LastBackup.Size || !second.LastBackup.EndTime.Equal(first.LastBackup.EndTime) {
+		t.Errorf("cached backup differs: %+v vs %+v", second.LastBackup, first.LastBackup)
+	}
+}

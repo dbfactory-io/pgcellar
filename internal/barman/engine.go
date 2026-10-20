@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // CLIEngine implements Engine on top of a Runner.
@@ -13,6 +14,9 @@ type CLIEngine struct {
 	// BarmanHome is barman_home of barman.conf; the WAL catalogue of a server
 	// is read from <BarmanHome>/<server>/wals. Empty means /var/lib/barman.
 	BarmanHome string
+
+	mu       sync.Mutex
+	lastFull map[string]*Backup // server -> last `show-backup` result, reused while the last backup id stays the same
 }
 
 func (e *CLIEngine) barmanHome() string {
@@ -143,13 +147,16 @@ func (e *CLIEngine) Status(ctx context.Context, server string) (*ServerStatus, e
 			}
 		}
 		if last != nil {
-			if full, err := e.ShowBackup(ctx, server, last.ID); err == nil {
+			if full := e.cachedFull(server, last.ID); full != nil {
+				st.LastBackup = full
+			} else if full, err := e.ShowBackup(ctx, server, last.ID); err == nil {
 				if full.Size == 0 {
 					full.Size = last.Size
 				}
 				if full.EndTime.IsZero() {
 					full.EndTime = last.EndTime
 				}
+				e.storeFull(server, full)
 				st.LastBackup = full
 			} else {
 				if ctx.Err() != nil {
@@ -188,6 +195,29 @@ func (e *CLIEngine) Status(ctx context.Context, server string) (*ServerStatus, e
 
 	st.Healthy = len(st.Problems) == 0
 	return st, nil
+}
+
+// cachedFull returns a copy of the last show-backup result of server when it
+// was taken for backup id, nil otherwise. A finished backup does not change,
+// so Status runs show-backup again only when a new backup appears.
+func (e *CLIEngine) cachedFull(server, id string) *Backup {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if b := e.lastFull[server]; b != nil && b.ID == id {
+		c := *b
+		return &c
+	}
+	return nil
+}
+
+func (e *CLIEngine) storeFull(server string, b *Backup) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.lastFull == nil {
+		e.lastFull = map[string]*Backup{}
+	}
+	c := *b
+	e.lastFull[server] = &c
 }
 
 // runPlain runs a command whose output is only shown to the user, not parsed.

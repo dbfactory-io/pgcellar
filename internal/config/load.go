@@ -12,6 +12,10 @@ import (
 )
 
 // Defaults returns a Config with the documented default values.
+// MinStatusInterval is the shortest allowed status_interval: every refresh
+// starts several Python processes per server.
+const MinStatusInterval = 30 * time.Second
+
 func Defaults() *Config {
 	return &Config{
 		Listen:  ":8080",
@@ -23,6 +27,7 @@ func Defaults() *Config {
 			User:         "barman",
 			CronInterval: time.Minute,
 		},
+		StatusInterval:     time.Minute,
 		AuditRetentionDays: 90,
 	}
 }
@@ -106,6 +111,9 @@ func Validate(cfg *Config) []string {
 	}
 	if cfg.Barman.CronInterval < 0 {
 		add("barman.cron_interval cannot be negative (0 disables it)")
+	}
+	if cfg.StatusInterval != 0 && cfg.StatusInterval < MinStatusInterval {
+		add("status_interval must be at least %s (for example \"1m\" or \"5m\"); leave it out for the default", MinStatusInterval)
 	}
 	if cfg.AuditRetentionDays < 0 {
 		add("audit_retention_days cannot be negative (0 keeps everything)")

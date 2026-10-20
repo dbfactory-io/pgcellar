@@ -5,6 +5,7 @@
 listen: ":8080"
 base_url: "https://pgcellar.stranix.net"
 data_dir: /var/lib/pgcellar
+status_interval: 5m                  # Raspberry Pi: each refresh runs several Python processes per server
 audit_retention_days: 90
 
 barman:

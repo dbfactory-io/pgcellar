@@ -19,12 +19,13 @@ type statusData struct {
 	States  []app.ServerState
 	Updated time.Time
 	Err     string
-	Dev     bool // the app clock is frozen for the fixtures
+	Dev     bool   // the app clock is frozen for the fixtures
+	Every   string // refresh interval, for people
 }
 
 func (s *Server) statusData() statusData {
 	states, at, errMsg := s.app.States()
-	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev}
+	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval)}
 }
 
 func (s *Server) statusPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
@@ -314,4 +315,21 @@ func (s *Server) auditPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
 		return
 	}
 	s.render(w, http.StatusOK, "audit", s.newPage(r, u, tr("audit.title"), "audit", list))
+}
+
+// everyText renders a refresh interval for the status footer: "minute",
+// "5 minutes", "45 seconds".
+func everyText(d time.Duration) string {
+	if d <= 0 {
+		d = time.Minute
+	}
+	switch {
+	case d == time.Minute:
+		return "minute"
+	case d%time.Minute == 0:
+		return fmt.Sprintf("%d minutes", int(d/time.Minute))
+	case d < time.Minute:
+		return fmt.Sprintf("%d seconds", int(d.Seconds()))
+	}
+	return d.String()
 }

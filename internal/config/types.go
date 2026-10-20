@@ -17,6 +17,9 @@ type Config struct {
 	Users   []User   `yaml:"users" json:"users"`
 	APIKeys []APIKey `yaml:"api_keys" json:"api_keys"`
 	Drills  Drills   `yaml:"drills" json:"drills"`
+	// StatusInterval is how often the cached status of every server is
+	// refreshed. Each refresh runs several Barman commands per server.
+	StatusInterval time.Duration `yaml:"status_interval" json:"status_interval"`
 	// AuditRetentionDays: audit lines older than this are purged daily. 0 = keep forever.
 	AuditRetentionDays int `yaml:"audit_retention_days" json:"audit_retention_days"`
 }

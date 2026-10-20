@@ -252,3 +252,23 @@ func TestAuditAndCronDefaults(t *testing.T) {
 		t.Error("negative audit_retention_days should be a problem")
 	}
 }
+
+func TestStatusInterval(t *testing.T) {
+	d := Defaults()
+	if d.StatusInterval != time.Minute {
+		t.Errorf("default status_interval = %v", d.StatusInterval)
+	}
+	for _, c := range []struct {
+		d  time.Duration
+		ok bool
+	}{{0, true}, {30 * time.Second, true}, {5 * time.Minute, true}, {10 * time.Second, false}, {-time.Minute, false}} {
+		d.StatusInterval = c.d
+		bad := false
+		for _, p := range Validate(d) {
+			bad = bad || strings.Contains(p, "status_interval")
+		}
+		if bad == c.ok {
+			t.Errorf("status_interval %v: problem reported = %v", c.d, bad)
+		}
+	}
+}

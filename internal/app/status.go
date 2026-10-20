@@ -21,6 +21,13 @@ func (a *App) statusLoop(ctx context.Context) {
 	if interval <= 0 {
 		interval = time.Minute
 	}
+	if a.firstCron != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case <-a.firstCron:
+		}
+	}
 	a.RefreshStatuses(ctx)
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -57,7 +64,7 @@ func (a *App) serverNames(ctx context.Context) ([]string, error) {
 }
 
 // RefreshStatuses recomputes the status of every server and replaces the
-// cache. It is called every minute by the background loop.
+// cache. It is called every StatusInterval by the background loop.
 func (a *App) RefreshStatuses(ctx context.Context) {
 	a.refreshOnce.Lock()
 	defer a.refreshOnce.Unlock()

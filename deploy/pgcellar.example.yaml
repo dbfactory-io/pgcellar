@@ -5,6 +5,7 @@
 listen: ":8080"
 base_url: "http://localhost:8080"      # used in links inside alerts and reports
 data_dir: /var/lib/pgcellar            # SQLite and runtime files
+status_interval: 1m                    # how often the cached status is refreshed (min 30s); each refresh runs several Barman commands per server
 audit_retention_days: 90               # audit lines older than this are purged daily; 0 = keep forever
 
 barman:

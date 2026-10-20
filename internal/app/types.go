@@ -48,7 +48,7 @@ type CheckView struct {
 	Fix     string `json:"fix,omitempty"`
 }
 
-// ServerState is the cached digest of a server (refreshed every minute).
+// ServerState is the cached digest of a server (refreshed every status interval).
 type ServerState struct {
 	Name                 string      `json:"name"`
 	Level                string      `json:"level"`
