@@ -305,7 +305,7 @@ sudo docker exec -u barman pgcellar barman list-backup chutag
 
 pgCellar runs the schedules itself; remove /etc/cron.d/pgcellar-testbed if it was installed.
 
-The six schedules in `pgcellar.yaml` are `daily 03:00` to `03:50`, ten minutes apart, all enabled. Set `enabled: false` on the servers whose part A is not done yet, otherwise pgCellar alerts on them. Turn on `drills.enabled` after the first manual restore (TESTBED.md step 13).
+The six schedules in `pgcellar.yaml` are `daily 03:00` to `03:50`, ten minutes apart, all enabled. Set `enabled: false` on the servers whose part A is not done yet, otherwise pgCellar alerts on them. The weekly restore drills (`drills.schedule`, Sunday 04:30) are described in B8b.
 
 ### B8. Restore to a point in time (safe)
 
@@ -323,6 +323,18 @@ pgCellar can write a restored PostgreSQL data directory, and optionally a `.tar.
 3. Where to find the result on the Pi: `/mnt/usbdata/pgcellar/recoveries/<server>/<backup id>-<timestamp>/` (the data directory) and, next to it, `<same name>.tar.gz`. The run page shows the full path (as seen inside the container: replace `/var/lib/pgcellar/recoveries` by `/mnt/usbdata/pgcellar/recoveries`) and a **Download .tar.gz** button when the archive is under `recoveries.max_download_bytes` (2 GiB). Above it, copy the file with `scp` from the Pi.
 4. The directory is a ready-to-start data directory: start a PostgreSQL of the **same major version** on it (for example `docker run --rm -v /mnt/usbdata/pgcellar/recoveries/chutag/<name>:/var/lib/postgresql/data postgres:16`, mind the ownership: the postgres user of that image must be able to read it).
 5. Restores older than `recoveries.keep_days` (7) are removed every day by pgCellar. Administrators can delete one earlier from the Recoveries section of the server page.
+
+### B8b. Restore drills (safe)
+
+A drill proves that the latest backup of a server restores and starts. pgCellar does it by itself, one server at a time: `barman recover` into `recoveries/<server>/drill-<timestamp>/`, then a PostgreSQL of the same major version (the image holds 16, 17 and 18 under `/usr/lib/postgresql/<major>/bin`) started on `127.0.0.1`, port 54400-54499, with 64 MB of shared buffers and 10 connections, then the checks, then stop. Nothing touches hawking: the work is local to the Pi. The three sets of server binaries add about 330 MB to the image (arm64, measured); `--build-arg PG_MAJORS="17"` keeps only the versions you list.
+
+- The six servers have `drills.schedule: "weekly sun 04:30"` in `pgcellar.yaml` (after the nightly backups of `03:00` to `03:50`); `drills.enabled: true`, `drills.timeout: 45m`, `drills.keep_last: true`. Set `drills.enabled: false` for now if no backup is done yet (a server without a complete backup is only recorded as not started).
+- Disk: a drill needs the size of the database plus its WAL, in `/mnt/usbdata/pgcellar/recoveries` (the same folder as the restores of B8, same ownership step). With `keep_last: true` the last good copy stays there, one per server: `du -sh /mnt/usbdata/pgcellar/recoveries/*/drill-*`. Put `keep_last: false` if the disk is tight.
+- RAM: one drill adds some tens of MB (the drills never overlap, and never run during a backup of the same server). Watch Home Assistant and Grafana the first Sunday.
+- Run one now: **Run a drill now** in the "Restore drills" section of a server page, or `curl -X POST -H "Authorization: Bearer $KEY" http://<pi>:8080/api/v1/servers/chutag/drills` (operator key), then follow `GET /api/v1/runs/<run_id>`: the run output shows every command (barman recover, pg_ctl, pg_isready, psql, pg_checksums) with its answer.
+- Result: the server page shows the last result (a sparkle when it passed), the history and a **Report (PDF)** button. The PDF is also on the Pi: `/mnt/usbdata/pgcellar/recoveries/<server>/reports/drill-<timestamp>.pdf`. `GET /api/v1/servers/<name>/drills` lists the results; `/metrics` has `pgcellar_last_drill_ok` and `pgcellar_last_drill_age_seconds` per server.
+- A server turns orange on Status when its last drill failed, or when no drill passed for 8 days (`drills.max_age: 192h`). The line "Last drill: 3 d ago" with a check mark or a cross is on Status and on the server page.
+- If a drill fails at "Find the PostgreSQL version", the major version of that server is not in the image: rebuild with `--build-arg PG_MAJORS="16 17 18"` including it (B2). Check the major version of each hawking instance (`SHOW server_version`) against the three the image holds.
 
 ### B9. Notes
 

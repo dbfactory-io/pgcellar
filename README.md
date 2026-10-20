@@ -14,7 +14,7 @@ I wanted the missing layer: one screen that tells the truth, and a restore that 
 - Backups: list, run now, schedules and retention.
 - Status: one board per server, red when something needs a human, quiet otherwise.
 - PITR wizard: pick a date and time, get the recovery done (or the exact command).
-- Weekly restore drill: restore the latest backup into a throwaway container, run checks, write a dated report you can give to an auditor.
+- Weekly restore drill: restore the latest backup, start the copy with the PostgreSQL binaries of its version, check what is inside, write a dated PDF report you can give to an auditor.
 - Alerts: mail, Telegram, webhook.
 - API: JSON, with api keys.
 - Metrics: Prometheus format on `/metrics`.
@@ -54,9 +54,10 @@ GET    /api/v1/servers/{name}
 GET    /api/v1/servers/{name}/backups
 POST   /api/v1/servers/{name}/backups        run a backup now
 GET    /api/v1/servers/{name}/check
-POST   /api/v1/servers/{name}/recover        PITR
-GET    /api/v1/drills
-POST   /api/v1/drills                        run a drill now
+POST   /api/v1/servers/{name}/recoveries     PITR
+POST   /api/v1/servers/{name}/drills         run a drill now
+GET    /api/v1/servers/{name}/drills
+GET    /api/v1/drills/{id}/report            the PDF
 GET    /api/v1/status
 ```
 

@@ -20,7 +20,7 @@ A control room for PostgreSQL backups, built on top of Barman (EnterpriseDB, GPL
 - Agents working in parallel own one directory each and do not touch `go.mod`, `go.sum` or files outside their directory; the orchestrator integrates and runs `go mod tidy`.
 
 ## Layout
-cmd/pgcellar (main: `serve`, `check`, `version`) · internal/barman (INI config read/write, CLI runner, JSON parsing, fake binary for tests) · internal/config (pgcellar.yaml, validation, git history of the config dir) · internal/store (SQLite: runs, audit, sessions, api keys) · internal/web (handlers, templates, HTMX pages, auth) · internal/api (JSON API v1, api keys) · internal/sshkeys (ed25519 keypair, deploy public key, test connection) · web/ (templates, static) · deploy/ (Dockerfile, docker-compose.yml, pgcellar.example.yaml, systemd unit) · docs/ · internal/barman/testdata
+cmd/pgcellar (main: `serve`, `check`, `version`) · internal/report (PDF writer for the drill report) · internal/barman (INI config read/write, CLI runner, JSON parsing, fake binary for tests) · internal/config (pgcellar.yaml, validation, git history of the config dir) · internal/store (SQLite: runs, audit, sessions, api keys) · internal/web (handlers, templates, HTMX pages, auth) · internal/api (JSON API v1, api keys) · internal/sshkeys (ed25519 keypair, deploy public key, test connection) · web/ (templates, static) · deploy/ (Dockerfile, docker-compose.yml, pgcellar.example.yaml, systemd unit) · docs/ · internal/barman/testdata
 
 ## Commands (Makefile)
 - `make build`  -> ./pgcellar
@@ -34,5 +34,5 @@ cmd/pgcellar (main: `serve`, `check`, `version`) · internal/barman (INI config 
 2. Web + API: login, Servers page (list, add/edit form writing barman.d, live `barman check` with explanations), Backups page (list per server, run now), Status dashboard, JSON API v1 with api keys, `/metrics`.
 3. SSH keys: generate ed25519 pair for the barman user, show the public key, optional deploy with a one-time password, test connection.
 4. Scheduling and retention: DONE (2026-10-20). pgCellar runs the `schedule.backup` of each server itself (`internal/app/scheduler.go`, `scheduler:` keys enabled/catch_up/parallel); Barman applies the `retention_policy` written to barman.d from the server form.
-5. PITR wizard and restore drills (restore into a throwaway container, checks, dated PDF report).
+5. PITR wizard and restore drills: DONE (2026-10-20). The wizard is the Restore page; the drill (`internal/app/drills*.go`) restores a backup, starts the copy with the PostgreSQL binaries of its major version (`/usr/lib/postgresql/<major>/bin`, installed in the image by `PG_MAJORS`), checks it, stops it, and writes a dated PDF (`internal/report`, no dependency). Per-server `drills.schedule` run by the scheduler; global `drills:` block (enabled, timeout, recovery_timeout, keep_last, verify_tables, max_age, bin_dir).
 6. Alerts (mail, Telegram, webhook), licence key (Free/Pro/Business, Ed25519-signed, verified offline), release 0.1.
