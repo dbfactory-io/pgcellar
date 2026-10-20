@@ -1,0 +1,42 @@
+# Public demonstration of pgCellar: fictional data, read-only, nothing to keep.
+# Same image as the real thing (deploy/Dockerfile), started with --demo.
+#
+#   docker compose up -d --build        (from this directory)
+#
+# The instance listens on 127.0.0.1:8081; put nginx in front of it with
+# nginx-vhost.conf. See README.md in this directory.
+services:
+  pgcellar-demo:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    image: pgcellar:dev
+    container_name: pgcellar-demo
+    hostname: pgcellar-demo # shown in the public key comment (pgcellar@pgcellar-demo)
+    command: ["serve", "--demo", "--listen", ":8080"]
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      TZ: Europe/Brussels
+      PGCELLAR_BASE_URL: https://demo.pgcellar.dbfactory.io
+    # Nothing is written outside memory: the root file system is read-only and
+    # the temporary directory is a tmpfs. The two tmpfs on /var/lib/* stop the
+    # image's VOLUME declarations from creating anonymous volumes.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/lib/barman:size=1m
+      - /var/lib/pgcellar:size=1m
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 200
+    cpus: 1.0
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped

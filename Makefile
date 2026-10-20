@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 LDFLAGS := -X main.Version=$(VERSION)
 
-.PHONY: build test lint run docker release-dry version-check clean
+.PHONY: build test lint run demo docker release-dry version-check clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o pgcellar ./cmd/pgcellar
@@ -16,6 +16,10 @@ lint:
 
 run: build
 	PATH="$(CURDIR)/internal/barman/testdata:$$PATH" ./pgcellar serve --config deploy/pgcellar.example.yaml --dev
+
+# The public demo: fictional data, read-only, user demo / demo, on http://127.0.0.1:8080
+demo: build
+	./pgcellar serve --demo --listen 127.0.0.1:8080
 
 docker:
 	docker build -f deploy/Dockerfile -t pgcellar:dev --build-arg VERSION=$(VERSION) .
