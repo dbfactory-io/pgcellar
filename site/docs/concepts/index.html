@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concepts - pgCellar manual</title>
+<meta name="description" content="Six ideas explain nearly everything in pgCellar. Read this chapter once; the rest of the manual gets easier.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/concepts/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/" class="on" aria-current="page"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 2 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#barman-does-the-backups-pgcellar-drives-it">Barman does the backups, pgCellar drives it</a></li><li class="l2"><a href="#a-physical-backup-is-not-a-dump">A physical backup is not a dump</a></li><li class="l2"><a href="#two-ways-for-the-wal-to-reach-barman">Two ways for the WAL to reach Barman</a></li><li class="l2"><a href="#slots-and-why-they-are-both-a-gift-and-a-risk">Slots, and why they are both a gift and a risk</a></li><li class="l2"><a href="#point-in-time-recovery">Point-in-time recovery</a></li><li class="l2"><a href="#what-pgcellar-adds-and-what-it-never-touches">What pgCellar adds, and what it never touches</a></li><li class="l2"><a href="#files-are-the-truth">Files are the truth</a></li><li class="l2"><a href="#vocabulary">Vocabulary</a></li></ul></nav>
+<article>
+<h1 id="concepts">Concepts</h1>
+<p>Six ideas explain nearly everything in pgCellar. Read this chapter once; the rest of the manual gets easier.</p>
+<h2 id="barman-does-the-backups-pgcellar-drives-it">Barman does the backups, pgCellar drives it</h2>
+<p>Barman (by EnterpriseDB) is the tool that actually takes physical backups of PostgreSQL, keeps the WAL, applies retention and restores. It is excellent and it is a command line. pgCellar adds what the command line lacks: one screen that tells the truth, schedules, a restore form, alerts, and restore tests.</p>
+<p>pgCellar never imports, patches or links Barman. It runs the <code>barman</code> command, reads its JSON output and its files, and writes its configuration files. The Docker image installs Barman unchanged from the PostgreSQL project's own packages. Barman is GPL-3.0; pgCellar only drives it through its command line, and that boundary is a rule of the project.</p>
+<p>Consequence: everything pgCellar does you can do by hand with the <code>barman</code> command, and anything you do by hand shows up in pgCellar at the next refresh.</p>
+<h2 id="a-physical-backup-is-not-a-dump">A physical backup is not a dump</h2>
+<p>A dump (<code>pg_dump</code>) writes the content of the database as SQL. It brings you back to the moment the dump started, and nowhere else.</p>
+<p>A physical backup copies the files of the PostgreSQL cluster. Combined with the WAL, the write-ahead log that records every change, it lets you stop at any moment you choose. That is what lets you answer &quot;bring the database back as it was at 14:31, one minute before the bad query&quot;.</p>
+<p>Two things make that work:</p>
+<ul>
+<li><strong>Base backups.</strong> A full copy of the data directory, taken while the server runs. It is consistent only together with the WAL written during the copy.</li>
+<li><strong>WAL files.</strong> PostgreSQL writes its changes to 16 MB segments. Barman keeps every segment, from the first backup on, in an archive.</li>
+</ul>
+<p>A restore is &quot;start from a base backup, then replay WAL up to the point you want&quot;. Without the WAL between two backups you can restore to the backups themselves, nothing in between. So a backup system is only as good as its WAL chain, and pgCellar's Timeline page draws that chain and shows holes.</p>
+<h2 id="two-ways-for-the-wal-to-reach-barman">Two ways for the WAL to reach Barman</h2>
+<p><strong>Streaming.</strong> Barman connects to PostgreSQL like a replica and receives WAL as it is written, through <code>pg_receivewal</code>. No SSH, no setup on the PostgreSQL host beyond a role and a <code>pg_hba.conf</code> line. The data is nearly current: a crash loses almost nothing. Barman keeps a <strong>replication slot</strong> on the server so PostgreSQL does not throw away WAL that Barman has not received yet.</p>
+<p><strong>archive_command.</strong> PostgreSQL pushes each completed WAL file to Barman by running a command, here <code>barman-wal-archive</code> over SSH. It needs the <code>barman-cli</code> package and an SSH key on the PostgreSQL host, and the recovery point is the last <em>completed</em> 16 MB file (or <code>archive_timeout</code>). It works where a replication connection is impossible, and it is what the rsync backup method requires.</p>
+<p><strong>Both</strong> is allowed and is the most resilient: WAL arrives twice, and either path alone is enough to keep the chain whole.</p>
+<p>Chapter 4 shows how to choose, and the exact settings.</p>
+<h2 id="slots-and-why-they-are-both-a-gift-and-a-risk">Slots, and why they are both a gift and a risk</h2>
+<p>A replication slot is a promise from PostgreSQL: &quot;I will not delete WAL that this consumer has not read&quot;. It makes streaming reliable. The cost: if the backup host is down for a long time, PostgreSQL keeps all that WAL and its disk can fill up. The setting <code>max_slot_wal_keep_size</code> caps that risk. pgCellar's Server setup warns when it is not set (chapter 3).</p>
+<h2 id="point-in-time-recovery">Point-in-time recovery</h2>
+<p>PITR is &quot;base backup plus WAL replay up to a target&quot;. The target can be:</p>
+<ul>
+<li>the end of the backup (the moment the copy became consistent),</li>
+<li>a date and time,</li>
+<li>the latest moment Barman holds (replay everything).</li>
+</ul>
+<p>The earliest target is the end of the oldest backup whose WAL chain is unbroken. The latest is the last data received (streaming) or the last completed WAL file. The Timeline page works both out for you and shows them in a sentence.</p>
+<h2 id="what-pgcellar-adds-and-what-it-never-touches">What pgCellar adds, and what it never touches</h2>
+<p>pgCellar adds:</p>
+<ul>
+<li><strong>Status</strong>, one card per server, green, orange or red with the reason in a sentence.</li>
+<li><strong>Server forms</strong> that write Barman's configuration, and <strong>Server setup</strong>, which reads the PostgreSQL settings Barman depends on and tells you what to change.</li>
+<li><strong>A scheduler</strong> (no host cron), <strong>retention</strong> through Barman, <strong>backup deletion</strong>.</li>
+<li><strong>Restore to a directory</strong> with a target, and a <code>tar.gz</code> if you want.</li>
+<li><strong>Restore drills</strong>: every week, a real restore, started and checked, with a PDF report.</li>
+<li><strong>Alerts</strong>, a <strong>JSON API</strong>, <strong>Prometheus metrics</strong>, <strong>audit</strong>, and a git history of the configuration.</li>
+</ul>
+<p>pgCellar never:</p>
+<ul>
+<li>changes anything on your PostgreSQL server. Server setup only <em>says</em> what to change; you run the command. The only queries it sends are a read-only <code>SELECT</code> on <code>pg_settings</code> and what Barman itself runs;</li>
+<li>stores a secret in <code>pgcellar.yaml</code> or in git (passwords live in <code>~/.pgpass</code>, alert secrets in environment variables, SSH private keys in the barman user's <code>~/.ssh</code>);</li>
+<li>keeps the truth in its own database. SQLite holds run history, audit and sessions. You can delete it and lose history, not backups.</li>
+</ul>
+<h2 id="files-are-the-truth">Files are the truth</h2>
+<p>Barman's configuration stays in <code>/etc/barman.conf</code> and <code>/etc/barman.d/&lt;server&gt;.conf</code>. Everything pgCellar owns is one YAML file, <code>pgcellar.yaml</code>. The console and the API are forms over those files. Every change is validated, written, and committed to a local git repository of the configuration folder, with the name of the user as author.</p>
+<p>You can edit the files with a text editor; pgCellar re-reads <code>pgcellar.yaml</code> when its modification time changes. Read <code>git log</code> in the configuration folder to see who changed what, and the <strong>History</strong> page shows the same thing.</p>
+<h2 id="vocabulary">Vocabulary</h2>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Server</td>
+<td>One PostgreSQL instance backed up by Barman. A <code>[section]</code> in <code>barman.d</code>.</td>
+</tr>
+<tr>
+<td>Base backup</td>
+<td>A full physical copy of the data directory.</td>
+</tr>
+<tr>
+<td>WAL</td>
+<td>Write-ahead log, the stream of changes. Archived in 16 MB files.</td>
+</tr>
+<tr>
+<td>Slot</td>
+<td>A replication slot on the PostgreSQL side, holding WAL for Barman.</td>
+</tr>
+<tr>
+<td>Recovery window</td>
+<td>Retention rule: keep enough backups to restore to any point in the last N days.</td>
+</tr>
+<tr>
+<td>Run</td>
+<td>One command started from pgCellar (backup, restore, drill), with its output.</td>
+</tr>
+<tr>
+<td>Drill</td>
+<td>An automatic restore of a backup into a throwaway PostgreSQL, checked, then removed.</td>
+</tr>
+</tbody>
+</table>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/getting-started/"><small>Previous</small>Getting started</a>
+  <a class="next" href="/docs/preparing-postgresql/"><small>Next</small>Preparing a PostgreSQL server</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

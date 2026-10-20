@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Preparing a PostgreSQL server - pgCellar manual</title>
+<meta name="description" content="pgCellar never changes your PostgreSQL server. You prepare it once, with the commands in this chapter, and the Server setup section of the server page checks that you...">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/preparing-postgresql/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/" class="on" aria-current="page"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 3 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#two-roles">Two roles</a></li><li class="l2"><a href="#pg-hbaconf">pg_hba.conf</a></li><li class="l2"><a href="#passwords-pgpass">Passwords: ~/.pgpass</a></li><li class="l2"><a href="#the-settings-server-setup-checks">The settings Server setup checks</a></li><li class="l3"><a href="#the-fixes-one-by-one">The fixes, one by one</a></li><li class="l2"><a href="#quick-manual-test">Quick manual test</a></li></ul></nav>
+<article>
+<h1 id="preparing-a-postgresql-server">Preparing a PostgreSQL server</h1>
+<p>pgCellar never changes your PostgreSQL server. You prepare it once, with the commands in this chapter, and the <strong>Server setup</strong> section of the server page checks that you did it right and keeps checking. Every command below is the one pgCellar prints in its own fix column, so you can also copy it from the console.</p>
+<figure><img src="../images/setup.png" alt="Server setup" loading="lazy"><figcaption>Server setup</figcaption></figure>
+<h2 id="two-roles">Two roles</h2>
+<p>Barman uses two connections, so it uses two roles.</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Used for</th>
+<th>Needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>barman</code></td>
+<td>Checks, metadata, starting and stopping a backup, switching WAL</td>
+<td><code>LOGIN</code>, the grants below</td>
+</tr>
+<tr>
+<td><code>streaming_barman</code></td>
+<td><code>pg_basebackup</code> and the WAL stream</td>
+<td><code>LOGIN REPLICATION</code></td>
+</tr>
+</tbody>
+</table>
+<p>You can use other names. The names go in the two connection strings of the server (chapter 4).</p>
+<p>On PostgreSQL 15 and later, as a superuser:</p>
+<pre><code class="language-sql">CREATE ROLE barman LOGIN PASSWORD '...';
+CREATE ROLE streaming_barman LOGIN REPLICATION PASSWORD '...';
+
+GRANT pg_read_all_settings, pg_read_all_stats, pg_checkpoint TO barman;
+GRANT EXECUTE ON FUNCTION pg_backup_start(text, boolean) TO barman;
+GRANT EXECUTE ON FUNCTION pg_backup_stop(boolean) TO barman;
+GRANT EXECUTE ON FUNCTION pg_switch_wal() TO barman;
+GRANT EXECUTE ON FUNCTION pg_create_restore_point(text) TO barman;
+</code></pre>
+<p>In <code>psql</code>, use <code>\password barman</code> instead of typing the password in the statement, so it does not land in your shell history or the server log.</p>
+<p>On PostgreSQL 13 and 14 the predefined role <code>pg_checkpoint</code> does not exist and the backup functions have other names. Grant <code>pg_monitor</code> instead, and:</p>
+<pre><code class="language-sql">GRANT pg_monitor TO barman;
+GRANT EXECUTE ON FUNCTION pg_start_backup(text, boolean, boolean) TO barman;
+GRANT EXECUTE ON FUNCTION pg_stop_backup() TO barman;
+GRANT EXECUTE ON FUNCTION pg_stop_backup(boolean, boolean) TO barman;
+GRANT EXECUTE ON FUNCTION pg_switch_wal() TO barman;
+GRANT EXECUTE ON FUNCTION pg_create_restore_point(text) TO barman;
+</code></pre>
+<p>A superuser also works for <code>barman</code>. It is simpler and it is more power than the job needs; prefer the grants.</p>
+<p>The role must be allowed to read <code>archive_command</code>. <code>pg_read_all_settings</code> (or <code>pg_monitor</code>) does that. Without it PostgreSQL answers <code>&lt;insufficient privilege&gt;</code> and pgCellar shows an info line asking you to grant the role.</p>
+<h2 id="pg-hbaconf">pg_hba.conf</h2>
+<p><code>all</code> does not match replication connections, so the replication role needs a line of its own with the word <code>replication</code> as database:</p>
+<pre><code>host all         barman           10.0.0.5/32 scram-sha-256
+host replication streaming_barman 10.0.0.5/32 scram-sha-256
+</code></pre>
+<p>Replace the address with the one PostgreSQL sees. If a proxy or a relay sits between pgCellar and PostgreSQL, it is the proxy's address, not the address of the pgCellar host. When in doubt, try to connect and read the PostgreSQL log: the refusal names the exact address (<code>no pg_hba.conf entry for host &quot;172.27.0.4&quot;, user &quot;barman&quot;</code>).</p>
+<p>Put the lines before any broader rule that would match first (a <code>trust</code> line, for example), then reload:</p>
+<pre><code class="language-sql">SELECT pg_reload_conf();
+</code></pre>
+<p>Check how PostgreSQL parsed them:</p>
+<pre><code class="language-sql">SELECT line_number, type, database, user_name, address, auth_method, error
+  FROM pg_hba_file_rules
+ WHERE 'barman' = ANY (user_name) OR 'streaming_barman' = ANY (user_name);
+</code></pre>
+<p>The <code>error</code> column must be empty.</p>
+<h2 id="passwords-pgpass">Passwords: ~/.pgpass</h2>
+<p>pgCellar and Barman read passwords from <code>~/.pgpass</code> of the barman user (<code>/var/lib/barman/.pgpass</code> in the image), mode 0600, one line per connection:</p>
+<pre><code>pg-main.example.com:5432:*:barman:THE_BARMAN_PASSWORD
+pg-main.example.com:5432:*:streaming_barman:THE_STREAMING_PASSWORD
+</code></pre>
+<p>pgCellar drops any <code>password=</code> from a connection string before it runs <code>psql</code>, and never puts a password on a command line. Put the password in <code>.pgpass</code> and not in the connection string.</p>
+<h2 id="the-settings-server-setup-checks">The settings Server setup checks</h2>
+<p>pgCellar reads these settings with one read-only query on <code>pg_settings</code>, through <code>psql</code>, using the <code>conninfo</code> of the server. The first read happens after the first status refresh; then every <code>setup_interval</code> (30 minutes by default), and again each time you press <strong>Run check now</strong>.</p>
+<p>A check is <code>ok</code>, <code>info</code>, <code>warning</code> or <code>error</code>. An <strong>error</strong> means Barman will fail or a backup cannot be trusted, and it turns the server red or orange in Status. A <strong>warning</strong> is advice and never changes the colour of a server.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Wants</th>
+<th>Level when wrong</th>
+<th>Needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>wal_level</code></td>
+<td><code>replica</code> or <code>logical</code></td>
+<td>error</td>
+<td>restart</td>
+</tr>
+<tr>
+<td><code>max_wal_senders</code></td>
+<td>2 or more</td>
+<td>error</td>
+<td>restart</td>
+</tr>
+<tr>
+<td><code>max_replication_slots</code></td>
+<td>1 or more when the server has a <code>slot_name</code></td>
+<td>error</td>
+<td>restart</td>
+</tr>
+<tr>
+<td><code>archive_mode</code></td>
+<td><code>on</code> or <code>always</code>, only when WAL goes by <code>archive_command</code></td>
+<td>error</td>
+<td>restart</td>
+</tr>
+<tr>
+<td><code>archive_command</code></td>
+<td><code>barman-wal-archive ...</code>, only when WAL goes by <code>archive_command</code></td>
+<td>error</td>
+<td>reload</td>
+</tr>
+<tr>
+<td><code>archive_timeout</code></td>
+<td>more than 0, for example <code>1h</code></td>
+<td>warning</td>
+<td>reload</td>
+</tr>
+<tr>
+<td><code>max_slot_wal_keep_size</code></td>
+<td>not <code>-1</code> when a slot is used, for example <code>2GB</code></td>
+<td>warning</td>
+<td>reload</td>
+</tr>
+<tr>
+<td><code>full_page_writes</code></td>
+<td><code>on</code></td>
+<td>error</td>
+<td>reload</td>
+</tr>
+<tr>
+<td><code>data_checksums</code></td>
+<td><code>on</code></td>
+<td>warning</td>
+<td>not a setting, see below</td>
+</tr>
+<tr>
+<td>client tools version</td>
+<td><code>pg_basebackup</code> at least as recent as the server</td>
+<td>error</td>
+<td>image change</td>
+</tr>
+<tr>
+<td><code>wal_compression</code>, <code>summarize_wal</code></td>
+<td>information only</td>
+<td>info</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Settings that do not exist in the version of your server are skipped.</p>
+<p>Three more lines come from <code>barman check</code>, without any new query: <strong>Streaming access</strong>, <strong>Role privileges</strong> and <strong>Replication slot</strong>. When streaming access fails, the fix shows the <code>pg_hba.conf</code> line to add, with your streaming user in it. For servers using <code>archive_command</code>, Barman's own verdicts on <code>wal_archive</code>, <code>archive_command</code> and <code>archive_mode</code> are shown too.</p>
+<p>If pgCellar cannot read the settings at all (no network, no password in <code>.pgpass</code>), the section shows one error line: &quot;Could not read the server settings&quot;, with the reason. That line does not change the health of the server, because Barman's own checks already tell you whether the server is reachable.</p>
+<h3 id="the-fixes-one-by-one">The fixes, one by one</h3>
+<p>Each fix is plain SQL. A parameter that needs a restart says so; apply it in a maintenance window.</p>
+<p><strong>wal_level</strong> (restart):</p>
+<pre><code class="language-sql">ALTER SYSTEM SET wal_level = 'replica';
+</code></pre>
+<p><strong>max_wal_senders</strong> (restart). Barman streams WAL over one connection and takes the base backup over another:</p>
+<pre><code class="language-sql">ALTER SYSTEM SET max_wal_senders = 10;
+</code></pre>
+<p><strong>max_replication_slots</strong> (restart):</p>
+<pre><code class="language-sql">ALTER SYSTEM SET max_replication_slots = 10;
+</code></pre>
+<p><strong>archive_mode</strong> (restart), when WAL goes by <code>archive_command</code>:</p>
+<pre><code class="language-sql">ALTER SYSTEM SET archive_mode = 'on';
+</code></pre>
+<p><strong>archive_command</strong> (reload). The command comes from the <code>ssh_host</code> and <code>ssh_port</code> of <code>pgcellar.yaml</code> and the name of the server:</p>
+<pre><code class="language-sql">ALTER SYSTEM SET archive_command = 'barman-wal-archive --port 2222 backup.example.com pg-main %p';
+SELECT pg_reload_conf();
+</code></pre>
+<p><code>barman-wal-archive</code> comes from the <code>barman-cli</code> package on the PostgreSQL host. The postgres user must have an SSH key that pgCellar has authorised (chapter 4). pgCellar cannot test this command from its side. The proof is to press <strong>Switch WAL</strong> on the server page and look at the WAL archive check.</p>
+<p><strong>archive_timeout</strong> (reload). On a quiet database a 16 MB file fills rarely, so the recovery point can be hours old. Closing a file at least once an hour bounds it:</p>
+<pre><code class="language-sql">ALTER SYSTEM SET archive_timeout = '1h';
+SELECT pg_reload_conf();
+</code></pre>
+<p><strong>max_slot_wal_keep_size</strong> (reload). If the backup host is down for long, the slot holds WAL and the PostgreSQL disk can fill. Cap it:</p>
+<pre><code class="language-sql">ALTER SYSTEM SET max_slot_wal_keep_size = '2GB';
+SELECT pg_reload_conf();
+</code></pre>
+<p>Choose a value larger than the WAL your server writes during the longest outage you want to survive. If the cap is hit, PostgreSQL invalidates the slot and Barman loses the chain: you take a new backup. That is a better failure than a full production disk.</p>
+<p><strong>full_page_writes</strong> (reload). It should never be off for a server you back up:</p>
+<pre><code class="language-sql">ALTER SYSTEM SET full_page_writes = on;
+SELECT pg_reload_conf();
+</code></pre>
+<p><strong>data_checksums.</strong> This is not a parameter. Enable it when the cluster is created (<code>initdb --data-checksums</code>), or on a stopped cluster:</p>
+<pre><code>pg_checksums --enable -D /var/lib/postgresql/16/main
+</code></pre>
+<p>then start PostgreSQL again. Without checksums a damaged data page goes unnoticed, in the backup as well, and a restore drill cannot tell. The check is a warning, and a very good idea.</p>
+<p><strong>Client tools version.</strong> <code>pg_basebackup</code> must be at least as recent as the server. The image ships the PostgreSQL 18 client, which talks to 13 through 18. If you replace the client, point <code>path_prefix</code> in the server file to the directory with the right binaries.</p>
+<h2 id="quick-manual-test">Quick manual test</h2>
+<p>From the pgCellar host, before you add the server:</p>
+<pre><code>docker compose exec pgcellar psql &quot;host=pg-main.example.com user=barman dbname=postgres&quot; -c &quot;select 1&quot;
+docker compose exec pgcellar psql &quot;host=pg-main.example.com user=streaming_barman dbname=postgres replication=true&quot; -c &quot;IDENTIFY_SYSTEM&quot;
+</code></pre>
+<p>Both must answer without asking for a password. If they do, add the server in the console.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/concepts/"><small>Previous</small>Concepts</a>
+  <a class="next" href="/docs/servers-and-wal-methods/"><small>Next</small>Servers and WAL methods</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

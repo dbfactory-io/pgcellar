@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Servers and WAL methods - pgCellar manual</title>
+<meta name="description" content="A server in pgCellar is two things: a section in a Barman file (/etc/barman.d/&lt;name&gt;.conf) and, optionally, an entry in pgcellar.yaml for what Barman does not know...">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/servers-and-wal-methods/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/" class="on" aria-current="page"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 4 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#the-form">The form</a></li><li class="l2"><a href="#the-three-wal-methods">The three WAL methods</a></li><li class="l2"><a href="#the-ssh-companion">The SSH companion</a></li><li class="l3"><a href="#authorising-a-postgresql-server">Authorising a PostgreSQL server</a></li><li class="l3"><a href="#the-rsync-method-and-the-ssh-key-of-pgcellar">The rsync method and the SSH key of pgCellar</a></li><li class="l2"><a href="#editing-and-removing-a-server">Editing and removing a server</a></li></ul></nav>
+<article>
+<h1 id="servers-and-wal-methods">Servers and WAL methods</h1>
+<p>A server in pgCellar is two things: a section in a Barman file (<code>/etc/barman.d/&lt;name&gt;.conf</code>) and, optionally, an entry in <code>pgcellar.yaml</code> for what Barman does not know (label, schedule, drill schedule, tags). The <strong>Add a server</strong> form writes both and commits them to git.</p>
+<h2 id="the-form">The form</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>What it does</th>
+<th>Barman key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td>File name and section name. Lowercase letters, digits, <code>-</code>, <code>_</code>.</td>
+<td><code>[name]</code></td>
+</tr>
+<tr>
+<td>Label</td>
+<td>Free text shown in pgCellar.</td>
+<td>(pgcellar.yaml)</td>
+</tr>
+<tr>
+<td>Description</td>
+<td>Barman's description.</td>
+<td><code>description</code></td>
+</tr>
+<tr>
+<td>Backup method</td>
+<td><code>postgres</code> (streaming, no SSH) or <code>rsync</code> (over SSH).</td>
+<td><code>backup_method</code></td>
+</tr>
+<tr>
+<td>WAL method</td>
+<td><code>streaming</code>, <code>archive_command</code> or <code>both</code>.</td>
+<td><code>streaming_archiver</code>, <code>archiver</code></td>
+</tr>
+<tr>
+<td>Connection string (conninfo)</td>
+<td>How Barman and pgCellar query the server.</td>
+<td><code>conninfo</code></td>
+</tr>
+<tr>
+<td>Streaming connection string</td>
+<td>The replication connection.</td>
+<td><code>streaming_conninfo</code></td>
+</tr>
+<tr>
+<td>Replication slot</td>
+<td>Slot Barman creates and uses.</td>
+<td><code>slot_name</code>, <code>create_slot = auto</code></td>
+</tr>
+<tr>
+<td>SSH command</td>
+<td>rsync method only, for example <code>ssh postgres@db1</code>.</td>
+<td><code>ssh_command</code></td>
+</tr>
+<tr>
+<td>Retention</td>
+<td>Recovery window in days, or redundancy, plus a minimum redundancy.</td>
+<td><code>retention_policy</code>, <code>minimum_redundancy</code></td>
+</tr>
+<tr>
+<td>Backup schedule</td>
+<td>Schedule and on/off (chapter 5).</td>
+<td>(pgcellar.yaml)</td>
+</tr>
+</tbody>
+</table>
+<p>Keys the form does not know are left exactly as they are, in the same order. If you add <code>backup_compression = gzip</code>, <code>path_prefix</code>, <code>reuse_backup = link</code> or anything else by hand, saving the form keeps them.</p>
+<p>The form refuses combinations Barman would reject, with the reason in a sentence:</p>
+<ul>
+<li><code>postgres</code> method needs <code>conninfo</code> and <code>streaming_conninfo</code>, and WAL by streaming or by <code>archive_command</code>; a slot is needed when WAL is streamed.</li>
+<li><code>rsync</code> method needs <code>ssh_command</code>, <code>conninfo</code>, and <code>archiver = on</code> (so the WAL method is <code>archive_command</code> or <code>both</code>). With streaming it also needs <code>streaming_conninfo</code>.</li>
+</ul>
+<p>You can also write the file by hand and check it. This is <code>deploy/barman.d.example/pg-main.conf</code>:</p>
+<pre><code>[pg-main]
+description = &quot;Main application database&quot;
+
+conninfo = host=pg-main.example.com user=barman dbname=postgres port=5432
+streaming_conninfo = host=pg-main.example.com user=streaming_barman dbname=postgres port=5432
+
+backup_method = postgres
+streaming_archiver = on
+archiver = off
+slot_name = barman
+create_slot = auto
+
+retention_policy = RECOVERY WINDOW OF 14 DAYS
+minimum_redundancy = 2
+
+backup_compression = gzip
+</code></pre>
+<p>Run <code>pgcellar check --config /etc/pgcellar/pgcellar.yaml</code> to validate the configuration and the Barman files together (chapter 15).</p>
+<h2 id="the-three-wal-methods">The three WAL methods</h2>
+<p>The WAL method is a choice over two Barman switches. It is not stored anywhere: it is worked out from the two keys every time the file is read.</p>
+<table>
+<thead>
+<tr>
+<th>WAL method</th>
+<th><code>streaming_archiver</code></th>
+<th><code>archiver</code></th>
+<th>Default for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>streaming</code></td>
+<td>on</td>
+<td>off</td>
+<td><code>postgres</code> backups</td>
+</tr>
+<tr>
+<td><code>archive_command</code></td>
+<td>off</td>
+<td>on</td>
+<td><code>rsync</code> backups</td>
+</tr>
+<tr>
+<td><code>both</code></td>
+<td>on</td>
+<td>on</td>
+<td>nothing; the resilient choice</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Pick <code>streaming</code></strong> when pgCellar can open a replication connection to PostgreSQL. It is the simplest: no SSH, no package on the database host, almost no data lost on a crash.</p>
+<p><strong>Pick <code>archive_command</code></strong> when a replication connection is impossible (a managed service, a firewall, an old setup), or when you use the <code>rsync</code> backup method. PostgreSQL pushes each completed WAL file over SSH to the companion container.</p>
+<p><strong>Pick <code>both</code></strong> for a server you cannot afford to lose WAL from. If one path breaks, the other keeps the chain whole. It costs a slot, a role and an SSH key.</p>
+<p>Notes:</p>
+<ul>
+<li><code>backup_method = postgres</code> with <code>archiver = on</code> is valid: <code>pg_basebackup</code> takes the base backup and <code>archive_command</code> carries the WAL. No slot is needed, but <code>streaming_conninfo</code> is still required, because <code>pg_basebackup</code> uses it.</li>
+<li><code>create_slot = auto</code> is added only when streaming is on.</li>
+<li>pgCellar runs <code>barman cron</code> every <code>barman.cron_interval</code> (one minute) to start the WAL receivers. You never run it yourself.</li>
+</ul>
+<h2 id="the-ssh-companion">The SSH companion</h2>
+<p>WAL shipping needs an SSH server in front of Barman's data. The Compose file runs one as a second container, <code>pgcellar-ssh</code>, built from the same image with another entry point. Facts:</p>
+<ul>
+<li>It runs as the <code>barman</code> user, never as root. It shares the Barman volume.</li>
+<li>It listens on port 2222 inside and outside (<code>ports: &quot;2222:2222&quot;</code>). Bind it to a private address if you can (<code>&quot;10.0.0.5:2222:2222&quot;</code>); do not expose it to the internet.</li>
+<li>Login is by key only. No password, no terminal, no forwarding, no sftp.</li>
+<li>Its host key is generated on first start in <code>~barman/.ssh/host/</code> in the volume and kept.</li>
+<li>Each authorised key is restricted to a single command, <code>barman put-wal &lt;server&gt;</code>. A stolen key can push WAL of one server and run nothing else.</li>
+</ul>
+<p>The configuration is <code>deploy/sshd/sshd_config</code>, mounted read-only.</p>
+<h3 id="authorising-a-postgresql-server">Authorising a PostgreSQL server</h3>
+<ol>
+<li>
+<p>On the PostgreSQL host, install <code>barman-cli</code> (it provides <code>barman-wal-archive</code>) and make an SSH key for the <code>postgres</code> user, without a passphrase:</p>
+<pre><code>sudo -u postgres ssh-keygen -t ed25519 -N &quot;&quot; -f /var/lib/postgresql/.ssh/id_ed25519
+sudo cat /var/lib/postgresql/.ssh/id_ed25519.pub
+</code></pre>
+<p>The home of the <code>postgres</code> user differs between systems. Use the real path.</p>
+</li>
+<li>
+<p>In pgCellar, open <strong>SSH key</strong> (admin). In the section &quot;PostgreSQL servers allowed to push WAL&quot;, choose the server, paste the public key line, and press <strong>Authorise this key</strong>. pgCellar appends this to <code>~barman/.ssh/authorized_keys</code>:</p>
+<pre><code>restrict,command=&quot;barman put-wal pg-main&quot; ssh-ed25519 AAAA... pgcellar:pg-main
+</code></pre>
+<p>The comment you pasted is dropped. The same key cannot be added twice, for any server. <strong>Remove</strong> revokes it.</p>
+</li>
+<li>
+<p>Let the <code>postgres</code> user trust the companion's host key. Connect once by hand and answer <code>yes</code>:</p>
+<pre><code>sudo -u postgres ssh -p 2222 barman@backup.example.com true
+</code></pre>
+<p>The command itself does not do anything useful because of the restriction; it is the host key you want recorded in <code>known_hosts</code>.</p>
+</li>
+<li>
+<p>Tell PostgreSQL what to run. This is the command Server setup advises (chapter 3):</p>
+<pre><code class="language-sql">ALTER SYSTEM SET archive_mode = 'on';          -- restart needed
+ALTER SYSTEM SET archive_command = 'barman-wal-archive --port 2222 backup.example.com pg-main %p';
+SELECT pg_reload_conf();
+</code></pre>
+<p>The arguments are, in order: <code>--port</code> of the companion, the name by which PostgreSQL reaches the pgCellar host (<code>ssh_host</code>), the server name in Barman, and <code>%p</code>, the path of the WAL file.</p>
+</li>
+<li>
+<p>On the server page press <strong>Switch WAL</strong>, then <strong>Run check now</strong>. The WAL archive lines of the check must turn green.</p>
+</li>
+</ol>
+<p>Set <code>ssh_host</code> and <code>ssh_port</code> in <code>pgcellar.yaml</code>. If you leave <code>ssh_host</code> empty, pgCellar advises its own host name, which inside Docker is a container id nobody can reach. Always set it:</p>
+<pre><code class="language-yaml">ssh_host: backup.example.com
+ssh_port: 2222
+</code></pre>
+<p><code>barman-wal-archive --test</code> does not work with a restricted key (the forced command ignores the option). That is a price of the restriction. Use <strong>Switch WAL</strong> and the check instead.</p>
+<h3 id="the-rsync-method-and-the-ssh-key-of-pgcellar">The rsync method and the SSH key of pgCellar</h3>
+<p>The <code>rsync</code> backup method works the other way round: Barman connects to the PostgreSQL host over SSH, as the user in <code>ssh_command</code>. For that, pgCellar makes one ed25519 key pair for the barman user (<code>~/.ssh/id_ed25519</code>) the first time you open the <strong>SSH key</strong> page, or run an SSH test. It never replaces an existing key. The page shows the public line; put it in the <code>authorized_keys</code> of the user on the PostgreSQL host.</p>
+<p>The private key stays in <code>~barman/.ssh</code> with mode 0600, in the volume. It is never shown, never written to the API, the audit log or git.</p>
+<p>On a server page, <strong>Test SSH connection</strong> (admin) runs <code>ssh -o BatchMode=yes -o ConnectTimeout=10 ... true</code> and shows ssh's own answer. <code>BatchMode</code> means a host key unknown to <code>known_hosts</code> fails; connect once by hand to accept it.</p>
+<h2 id="editing-and-removing-a-server">Editing and removing a server</h2>
+<p><strong>Save changes</strong> on the server page rewrites the Barman file and the pgCellar entry, validates, and commits. The <strong>History</strong> page lists the commits; each one shows its patch.</p>
+<p>Removing a server is a manual action for now: delete its file in <code>etc-barman.d</code> and its entry in <code>pgcellar.yaml</code>. Its backups stay on disk under <code>/var/lib/barman/&lt;name&gt;</code>; deleting them is your decision. If the server used a slot, drop it on the PostgreSQL side:</p>
+<pre><code class="language-sql">SELECT pg_drop_replication_slot('barman');
+</code></pre>
+<p>A forgotten slot keeps WAL forever.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/preparing-postgresql/"><small>Previous</small>Preparing a PostgreSQL server</a>
+  <a class="next" href="/docs/backups-schedules-retention/"><small>Next</small>Backups, schedules and retention</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

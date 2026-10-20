@@ -2,4 +2,20 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url><loc>https://pgcellar.dbfactory.io/</loc><xhtml:link rel="alternate" hreflang="fr" href="https://pgcellar.dbfactory.io/"/><xhtml:link rel="alternate" hreflang="en" href="https://pgcellar.dbfactory.io/en/"/></url>
   <url><loc>https://pgcellar.dbfactory.io/en/</loc><xhtml:link rel="alternate" hreflang="fr" href="https://pgcellar.dbfactory.io/"/><xhtml:link rel="alternate" hreflang="en" href="https://pgcellar.dbfactory.io/en/"/></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/getting-started/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/concepts/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/preparing-postgresql/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/servers-and-wal-methods/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/backups-schedules-retention/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/restores-and-pitr/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/restore-drills-and-reports/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/alerts/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/users-roles-and-api/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/configuration-reference/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/operations/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/security-model/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/troubleshooting/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/licensing-and-editions/</loc></url>
+  <url><loc>https://pgcellar.dbfactory.io/docs/cli-reference/</loc></url>
 </urlset>

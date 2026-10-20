@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Security model - pgCellar manual</title>
+<meta name="description" content="pgCellar holds the keys to your backups, and a backup is a complete copy of your data. This chapter says what it does to protect them, and what you must do around it.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/security-model/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/" class="on" aria-current="page"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 12 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#principles">Principles</a></li><li class="l2"><a href="#roles">Roles</a></li><li class="l2"><a href="#passwords-and-sessions">Passwords and sessions</a></li><li class="l2"><a href="#sign-in-limiter">Sign-in limiter</a></li><li class="l2"><a href="#api-keys">API keys</a></li><li class="l2"><a href="#secrets-where-they-live">Secrets: where they live</a></li><li class="l2"><a href="#ssh-restricted">SSH, restricted</a></li><li class="l2"><a href="#container">Container</a></li><li class="l2"><a href="#network">Network</a></li><li class="l2"><a href="#demo-mode">Demo mode</a></li><li class="l2"><a href="#your-side-of-the-bargain">Your side of the bargain</a></li></ul></nav>
+<article>
+<h1 id="security-model">Security model</h1>
+<p>pgCellar holds the keys to your backups, and a backup is a complete copy of your data. This chapter says what it does to protect them, and what you must do around it.</p>
+<h2 id="principles">Principles</h2>
+<ul>
+<li><strong>Least surprise.</strong> pgCellar never writes to a production PostgreSQL server. It reads <code>pg_settings</code>, and Barman runs the backup. It tells you what to change; you change it.</li>
+<li><strong>One door to commands.</strong> Every command pgCellar runs on a server goes through one function that logs the exact command, its exit code and its duration to the audit log. There is no second code path, not even for <code>psql</code>.</li>
+<li><strong>No secret in files that travel.</strong> Not in <code>pgcellar.yaml</code>, not in git, not in the API.</li>
+<li><strong>Small surface.</strong> Server-rendered HTML, a few kilobytes of vendored JavaScript for HTMX, no framework, no build step. A system administrator can read the code that matters.</li>
+</ul>
+<h2 id="roles">Roles</h2>
+<p>Three roles: viewer, operator, admin (chapter 9). The check happens on the server, on every route, for the console and the API. The buttons you do not have are simply absent.</p>
+<p>The audit log is admin-only because it contains exact command lines. Downloading a restore archive is operator-only: it is a full copy of the database.</p>
+<h2 id="passwords-and-sessions">Passwords and sessions</h2>
+<ul>
+<li>Passwords are stored as bcrypt hashes in <code>pgcellar.yaml</code>. Minimum length at hash time: 8 characters.</li>
+<li>After sign-in the browser holds a random token in a cookie. The database stores only the SHA-256 of the token, so a copy of the database cannot be replayed as a session.</li>
+<li>The cookie is <code>HttpOnly</code> and <code>SameSite=Lax</code>, with <code>Secure</code> set when the request arrives over HTTPS. A session lasts 24 hours.</li>
+<li>Every state-changing request carries a CSRF token, derived with HMAC from the session id and a secret kept in the database. The sign-in form uses a stateless signed token valid for an hour.</li>
+<li>HTML pages are sent with <code>Cache-Control: no-store</code>, <code>X-Frame-Options: DENY</code>, <code>X-Content-Type-Options: nosniff</code>, <code>Referrer-Policy: same-origin</code> and a Content Security Policy that allows only the site itself (<code>default-src 'self'</code>, <code>form-action 'self'</code>, <code>frame-ancestors 'none'</code>).</li>
+<li>Static files are versioned by content (<code>app.css?v=&lt;hash&gt;</code>) and served <code>immutable</code>; the HTML is never cached. After an update, a browser never mixes new HTML with old CSS.</li>
+</ul>
+<h2 id="sign-in-limiter">Sign-in limiter</h2>
+<p>Guessing passwords is slowed down in two ways, for every mode:</p>
+<ul>
+<li>At most <strong>10 sign-in attempts a minute</strong> per address, successful or not. Above that: HTTP 429 with <code>Retry-After</code>.</li>
+<li>At most <strong>8 failures in 10 minutes</strong> per address.</li>
+</ul>
+<p>The address is the connection's. If pgCellar runs behind a reverse proxy, the proxy's address would be the same for everybody, so pgCellar believes the <code>X-Real-IP</code> header <strong>only</strong> when the connection comes from a loopback or private address (the proxy). A stranger on the internet cannot choose his own address. Make sure your proxy sets <code>X-Real-IP</code> and does not pass the client's own value through.</p>
+<h2 id="api-keys">API keys</h2>
+<p>An API key is 32 random bytes, shown once. Only the SHA-256 is stored. The comparison is against the hash. Keys carry a role, are revoked by deleting their entry, and every call made with one is audited under the key's name.</p>
+<h2 id="secrets-where-they-live">Secrets: where they live</h2>
+<table>
+<thead>
+<tr>
+<th>Secret</th>
+<th>Lives in</th>
+<th>Never in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PostgreSQL passwords</td>
+<td><code>~/.pgpass</code> of the barman user (mode 0600)</td>
+<td><code>pgcellar.yaml</code>, git, a command line</td>
+</tr>
+<tr>
+<td>SSH private key</td>
+<td><code>~barman/.ssh/</code> (mode 0600)</td>
+<td>The database, git, the API, the audit log</td>
+</tr>
+<tr>
+<td>Alert tokens, SMTP login, webhook secret</td>
+<td>Environment variables of the container, named by <code>*_env</code></td>
+<td><code>pgcellar.yaml</code>, git</td>
+</tr>
+<tr>
+<td>Password hashes, API key hashes</td>
+<td><code>pgcellar.yaml</code></td>
+<td>(only hashes, never the secret)</td>
+</tr>
+<tr>
+<td>Session tokens</td>
+<td>Browser cookie; SHA-256 in the database</td>
+<td></td>
+</tr>
+<tr>
+<td>Licence key</td>
+<td><code>pgcellar.yaml</code> or a file</td>
+<td>(it is not a secret key; it is signed and verified offline)</td>
+</tr>
+</tbody>
+</table>
+<p>A <code>password=</code> in a connection string is removed before <code>psql</code> runs, so it cannot show up in <code>ps</code>. The Telegram token is removed from error texts. A secret printed once (a new API key) is printed to your terminal and nowhere else.</p>
+<h2 id="ssh-restricted">SSH, restricted</h2>
+<p>The SSH companion that receives WAL files:</p>
+<ul>
+<li>runs as the <code>barman</code> user, not as root; <code>PermitRootLogin no</code>, <code>AllowUsers barman</code>, <code>UsePAM no</code>;</li>
+<li>accepts keys only (no password, no keyboard-interactive);</li>
+<li>gives no terminal, no X11, no TCP or agent forwarding, no sftp;</li>
+<li>writes each authorised key with <code>restrict,command=&quot;barman put-wal &lt;server&gt;&quot;</code>, so a stolen key of a database host pushes WAL files of its own server and can do nothing else;</li>
+<li>keeps its host key in the volume.</li>
+</ul>
+<p>Even so: do not publish port 2222 on the internet. Bind it to a private address, or a VPN.</p>
+<p>For the rsync method, pgCellar's own key pair lets the barman user log into your PostgreSQL hosts. Give it the account you would give Barman by hand, nothing more.</p>
+<h2 id="container">Container</h2>
+<ul>
+<li>The container runs as the <code>barman</code> user, uid 997 in the current image. There is no root process, no <code>sudo</code> binary and no SSH daemon in the application container.</li>
+<li>Bind-mounted folders must be owned by that uid. A volume created by an older root container must be fixed with <code>chown</code> (chapter 13).</li>
+<li>Only port 8080 (and 2222 on the companion) are exposed. You can go further with <code>cap_drop: [ALL]</code>, <code>security_opt: [no-new-privileges:true]</code>, memory and process limits; the demo's Compose file in <code>deploy/demo/</code> does exactly that.</li>
+</ul>
+<h2 id="network">Network</h2>
+<p>pgCellar speaks plain HTTP. Put it behind a reverse proxy that terminates TLS, and:</p>
+<ul>
+<li>restrict who can reach it: a VPN, an allow-list, or single sign-on in the proxy, in addition to pgCellar's own sign-in;</li>
+<li>block <code>/metrics</code> and <code>/healthz</code> from the internet. They need no authentication (they expose server names and ages, nothing more);</li>
+<li>let the proxy set <code>X-Real-IP</code>, as above, and pass <code>X-Forwarded-Proto</code> so the cookie gets the <code>Secure</code> flag.</li>
+</ul>
+<p>A sketch for nginx:</p>
+<pre><code>location / {
+    proxy_pass         http://127.0.0.1:8080;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Real-IP $remote_addr;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+}
+location = /metrics { allow 10.0.0.0/8; deny all; proxy_pass http://127.0.0.1:8080; }
+</code></pre>
+<h2 id="demo-mode">Demo mode</h2>
+<p><code>pgcellar serve --demo</code> is a public, read-only instance on fictional data (Northwind Logistics, five servers). It exists so that a visitor can click through the product without being one bug away from real backups.</p>
+<ul>
+<li>No configuration file is read. The Barman, <code>psql</code>, <code>pg_ctl</code> and <code>ssh</code> it runs are fakes embedded in the binary, extracted to a temporary directory at start. If they cannot run, pgCellar refuses to start rather than call the real ones.</li>
+<li>Every <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code>, except sign-in and sign-out, answers 403 before routing, before authentication and before CSRF. So do the two <code>GET</code> routes that start a command or hand out an archive. A test requests every mutating route registered in the code, so a new route cannot be forgotten.</li>
+<li>The user <code>demo</code> has the viewer role in effect and no API key. The scheduler and the alert loop are off. Nothing is sent anywhere.</li>
+<li>Disabled buttons in the page are cosmetic. The server is what refuses.</li>
+<li>Never put real data in a demo instance. Run it as a separate container, read-only, with no volume of your own (<code>deploy/demo/</code>).</li>
+</ul>
+<h2 id="your-side-of-the-bargain">Your side of the bargain</h2>
+<ul>
+<li>Use a strong admin password, and an <code>operator</code> or <code>viewer</code> account for daily work.</li>
+<li>Keep the <code>pgcellar-data</code> and <code>barman-data</code> volumes, and the backups, on encrypted storage if your data needs it. pgCellar does not encrypt backups.</li>
+<li>Copy the backups to a second place that a compromise of this one cannot reach.</li>
+<li>Restore drills prove that backups restore. They do not protect against someone deleting them. Limit who is <code>admin</code>.</li>
+</ul>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/operations/"><small>Previous</small>Operations</a>
+  <a class="next" href="/docs/troubleshooting/"><small>Next</small>Troubleshooting</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

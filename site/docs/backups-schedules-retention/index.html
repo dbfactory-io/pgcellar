@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Backups, schedules and retention - pgCellar manual</title>
+<meta name="description" content="On a server page, Backup now (operator role) starts a backup. The same thing from the API:">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/backups-schedules-retention/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/" class="on" aria-current="page"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 5 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#backup-now">Backup now</a></li><li class="l2"><a href="#schedules">Schedules</a></li><li class="l3"><a href="#syntax">Syntax</a></li><li class="l3"><a href="#the-scheduler">The scheduler</a></li><li class="l2"><a href="#retention">Retention</a></li><li class="l2"><a href="#deleting-a-backup">Deleting a backup</a></li><li class="l2"><a href="#reading-the-result">Reading the result</a></li></ul></nav>
+<article>
+<h1 id="backups-schedules-and-retention">Backups, schedules and retention</h1>
+<h2 id="backup-now">Backup now</h2>
+<p>On a server page, <strong>Backup now</strong> (operator role) starts a backup. The same thing from the API:</p>
+<pre><code>curl -X POST -H &quot;Authorization: Bearer $KEY&quot; http://localhost:8080/api/v1/servers/pg-main/backup
+</code></pre>
+<p>pgCellar runs two Barman commands, in this order:</p>
+<pre><code>barman backup pg-main
+barman switch-wal --force --archive pg-main
+</code></pre>
+<p>It never uses <code>barman backup --wait</code>. On a quiet database the end of the backup sits in a WAL segment that is still being written, and <code>--wait</code> blocks until 16 MB of WAL appear or someone forces a switch. A backup that took 11 seconds could then wait 15 minutes. The forced switch closes that segment so the backup is restorable at once (chapter 13).</p>
+<p>Everything runs in the background. The run appears on <strong>Runs</strong> with the output of each command, its exit code and its duration. A closed browser tab does not interrupt it. Only one backup per server runs at a time.</p>
+<p><strong>Runs lists only what was started from pgCellar</strong> (the console, the scheduler or the API). A backup taken with the <code>barman</code> command or with a host cron does not appear there; it does appear in the <strong>Backups</strong> list of the server page, which comes from Barman itself.</p>
+<figure><img src="../images/runs.png" alt="Runs" loading="lazy"><figcaption>Runs</figcaption></figure>
+<h2 id="schedules">Schedules</h2>
+<p>You do not need cron on the host. pgCellar runs the schedules itself. The schedule of a server is one line:</p>
+<pre><code class="language-yaml">servers:
+  - name: pg-main
+    schedule:
+      backup: &quot;daily 02:00&quot;
+      enabled: true
+</code></pre>
+<p>You can also set it in the server form (field <strong>Backup schedule</strong>, checkbox <strong>Enabled</strong>).</p>
+<h3 id="syntax">Syntax</h3>
+<table>
+<thead>
+<tr>
+<th>Text</th>
+<th>Means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>daily 02:00</code></td>
+<td>Every day at 02:00</td>
+</tr>
+<tr>
+<td><code>weekly sun 03:00</code></td>
+<td>Every Sunday at 03:00. Days: <code>mon tue wed thu fri sat sun</code></td>
+</tr>
+<tr>
+<td><code>hourly</code></td>
+<td>At minute 0 of every hour</td>
+</tr>
+<tr>
+<td><code>every 6 hours</code></td>
+<td>Every 6 hours, at minute 0 (N from 1 to 23)</td>
+</tr>
+<tr>
+<td><code>30 1 * * 1-5</code></td>
+<td>A 5-field cron expression: minute, hour, day of month, month, day of week</td>
+</tr>
+</tbody>
+</table>
+<p>Case and extra spaces do not matter. Times are 24 hours. A raw cron expression accepts lists (<code>1,15</code>), ranges (<code>1-5</code>) and steps (<code>*/10</code>). pgCellar checks it when you save; a typo is refused with a message.</p>
+<p><strong>Time zone.</strong> Schedules run in the time zone of the pgCellar process, which is the <code>TZ</code> environment variable of the container. The Compose file sets <code>TZ: Europe/Brussels</code>; change it to yours. The container default is UTC.</p>
+<p><code>schedule.enabled</code> absent means: on, as soon as a <code>backup</code> schedule is written. Set <code>enabled: false</code> to pause a server's schedule and keep the line.</p>
+<h3 id="the-scheduler">The scheduler</h3>
+<p>The block <code>scheduler:</code> governs all schedules:</p>
+<pre><code class="language-yaml">scheduler:
+  enabled: true     # false = pgCellar starts nothing by itself
+  catch_up: 6h      # a due time missed while pgCellar was stopped still runs if younger than this
+  parallel: 1       # backups running at once, all servers together
+</code></pre>
+<p>How it behaves:</p>
+<ul>
+<li>It wakes every 30 seconds and starts every backup whose due time has passed.</li>
+<li>A due time runs once. The result of the last handled due time is stored, so a restart neither replays nor forgets it.</li>
+<li><strong>Catch-up.</strong> If pgCellar was stopped at 02:00 and starts at 03:30, the 02:00 backup still runs, because it is younger than <code>catch_up</code> (6 hours). Older than that, it is dropped. Several missed due times collapse into the latest one. <code>catch_up: 0</code> turns catch-up off. A server you add later, or a schedule you just changed, counts from now: nothing is run for a past that was not missed.</li>
+<li><strong>Busy.</strong> If a manual backup is running on the same server when a due time arrives, the scheduled one is recorded as <em>skipped</em> and not retried. If all <code>parallel</code> slots are taken, the due time waits for the next tick and keeps its place.</li>
+<li><code>parallel</code> counts every backup in progress, manual ones included, because it protects the Barman host.</li>
+<li>A skipped run is announced by an alert (chapter 8).</li>
+</ul>
+<p>The server page shows <strong>Next backup</strong> and <strong>Last scheduled run</strong>.</p>
+<h2 id="retention">Retention</h2>
+<p>Retention decides how long backups and their WAL are kept. Barman applies it, not pgCellar: Barman deletes obsolete backups at the end of each backup and during <code>barman cron</code>. pgCellar never runs <code>barman delete</code> for retention.</p>
+<p>The server form has three fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Barman line</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Recovery window (days)</td>
+<td><code>retention_policy = RECOVERY WINDOW OF 14 DAYS</code></td>
+<td>Keep enough backups to restore to any moment in the last 14 days</td>
+</tr>
+<tr>
+<td>Redundancy (backups kept)</td>
+<td><code>retention_policy = REDUNDANCY 3</code></td>
+<td>Keep the 3 most recent backups</td>
+</tr>
+<tr>
+<td>Minimum redundancy</td>
+<td><code>minimum_redundancy = 2</code></td>
+<td>Never delete below 2 backups, whatever the policy says</td>
+</tr>
+</tbody>
+</table>
+<p>Use either a window or a redundancy, not both. The form and <code>pgcellar check</code> refuse both. 0 means &quot;not set&quot;.</p>
+<p>Advice:</p>
+<ul>
+<li>A <strong>recovery window</strong> matches how people think: &quot;I want to go back 14 days&quot;. Barman keeps the newest backup older than the window, so that the whole window is restorable.</li>
+<li>Always set a <strong>minimum redundancy</strong> of at least 2. If backups start failing, retention would otherwise happily delete the last good ones.</li>
+</ul>
+<p>The values are written to the Barman file when the form is saved. <code>retention_policy_mode</code> is left out, since Barman's default (<code>auto</code>) is what you want.</p>
+<p>The Timeline marks the retention window on its axis; the Storage section (chapter 11) shows what the retention costs on disk.</p>
+<figure><img src="../images/timeline.png" alt="Timeline" loading="lazy"><figcaption>Timeline</figcaption></figure>
+<h2 id="deleting-a-backup">Deleting a backup</h2>
+<p>On the server page, each complete backup has a <strong>Delete…</strong> button (admin). The row turns into a sentence with two buttons: <strong>Delete</strong> and <strong>Keep it</strong>. It runs:</p>
+<pre><code>barman delete pg-main 20261020T020001
+</code></pre>
+<p>pgCellar does not second-guess Barman. If the delete would go below <code>minimum_redundancy</code>, Barman refuses and its message comes back unchanged (HTTP 409 in the API). The backup id must look like <code>20261020T020001</code>. The command runs even if you close the tab, and it is audited as <code>backup.delete</code>.</p>
+<p>The API form:</p>
+<pre><code>curl -X DELETE -H &quot;Authorization: Bearer $KEY&quot; http://localhost:8080/api/v1/servers/pg-main/backups/20261020T020001
+</code></pre>
+<p>Deleting is final. Deleting a backup also lets Barman remove the WAL no remaining backup needs.</p>
+<h2 id="reading-the-result">Reading the result</h2>
+<p>A server is <strong>red</strong> when a check fails, there is no good backup, or the last backup is older than twice the limit; <strong>orange</strong> for any other problem (last attempt failed, backup older than <code>alerts.max_backup_age</code>, WAL not received for too long). The limits are in <code>alerts:</code> (26 hours for a backup, 24 hours for WAL, when you set nothing). Red means &quot;act now&quot;; orange means &quot;look at it today&quot;.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/servers-and-wal-methods/"><small>Previous</small>Servers and WAL methods</a>
+  <a class="next" href="/docs/restores-and-pitr/"><small>Next</small>Restores and point-in-time recovery</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

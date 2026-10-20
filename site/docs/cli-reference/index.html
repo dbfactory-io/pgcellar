@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CLI reference - pgCellar manual</title>
+<meta name="description" content="One binary, pgcellar, with a few subcommands. In the Docker image it is the entry point, so the arguments go straight after the image name or the service name:">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/cli-reference/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/" class="on" aria-current="page"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 15 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#serve">serve</a></li><li class="l2"><a href="#check">check</a></li><li class="l2"><a href="#apikey">apikey</a></li><li class="l2"><a href="#hash-password">hash-password</a></li><li class="l2"><a href="#license">license</a></li><li class="l2"><a href="#version">version</a></li><li class="l2"><a href="#help">help</a></li><li class="l2"><a href="#build-from-source">Build from source</a></li></ul></nav>
+<article>
+<h1 id="cli-reference">CLI reference</h1>
+<p>One binary, <code>pgcellar</code>, with a few subcommands. In the Docker image it is the entry point, so the arguments go straight after the image name or the service name:</p>
+<pre><code>docker compose run --rm pgcellar check --config /etc/pgcellar/pgcellar.yaml
+docker compose exec pgcellar pgcellar apikey list --config /etc/pgcellar/pgcellar.yaml
+docker run -i --rm pgcellar:dev hash-password
+</code></pre>
+<p><code>run</code> starts a new throwaway container; <code>exec</code> runs in the one that is up. The default command of the image is <code>serve --config /etc/pgcellar/pgcellar.yaml</code>.</p>
+<pre><code>pgcellar serve ...
+pgcellar check ...
+pgcellar apikey create|list ...
+pgcellar hash-password
+pgcellar license keygen|issue|verify|show ...
+pgcellar version
+pgcellar help
+</code></pre>
+<p>Exit codes: <code>0</code> success, <code>1</code> the command ran and failed (or <code>check</code> found problems), <code>2</code> wrong usage (a missing or unknown argument).</p>
+<h2 id="serve">serve</h2>
+<p>Runs the web console, the API, the scheduler, the alert loop and the background refreshes.</p>
+<pre><code>pgcellar serve --config FILE [--listen ADDR] [--cron-interval DURATION] [--dev]
+pgcellar serve --demo [--listen ADDR]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code></td>
+<td><code>/etc/pgcellar/pgcellar.yaml</code></td>
+<td>Path of <code>pgcellar.yaml</code>.</td>
+</tr>
+<tr>
+<td><code>--listen</code></td>
+<td><code>listen:</code> of the file</td>
+<td>Address to listen on, for example <code>127.0.0.1:8080</code> or <code>:8080</code>. Overrides the file.</td>
+</tr>
+<tr>
+<td><code>--cron-interval</code></td>
+<td><code>barman.cron_interval</code> of the file</td>
+<td>How often to run <code>barman cron</code>, for example <code>30s</code>. <code>0</code> disables it.</td>
+</tr>
+<tr>
+<td><code>--dev</code></td>
+<td>off</td>
+<td>Development mode: a fake Barman, temporary data, the clock frozen at the fixtures time, login <code>admin</code> / <code>admin</code>. Works on a temporary copy of the configuration. Never use it on real data.</td>
+</tr>
+<tr>
+<td><code>--demo</code></td>
+<td>off</td>
+<td>Public demonstration: fictional servers and data, read-only, login <code>demo</code> / <code>demo</code>, no configuration file. Cannot be combined with <code>--dev</code>. Links use <code>PGCELLAR_BASE_URL</code> (default <code>https://demo.pgcellar.dbfactory.io</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>On start it prints the version and the address:</p>
+<pre><code>pgcellar 0.1.0 listening on http://localhost:8080
+</code></pre>
+<p><code>SIGINT</code> and <code>SIGTERM</code> stop it cleanly: the HTTP server gets 10 seconds to finish its requests.</p>
+<h2 id="check">check</h2>
+<p>Validates <code>pgcellar.yaml</code> and the Barman server files, and lists the servers.</p>
+<pre><code>pgcellar check --config FILE [--barman-dir DIR]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code></td>
+<td><code>/etc/pgcellar/pgcellar.yaml</code></td>
+<td>The configuration to validate.</td>
+</tr>
+<tr>
+<td><code>--barman-dir</code></td>
+<td><code>barman.config_dir</code> of the file</td>
+<td>Read the Barman files from this folder instead.</td>
+</tr>
+</tbody>
+</table>
+<p>Typical output:</p>
+<pre><code>configuration deploy/pgcellar.example.yaml
+  ok
+
+servers in deploy/barman.d.example: 2
+  ok       pg-main              postgres         pg-main.conf
+  ok       pg-legacy            rsync            pg-legacy.conf
+
+all good
+</code></pre>
+<p>A problem line starts with <code>PROBLEM</code>, a warning with <code>WARNING</code> (for example <code>drills.enabled: false</code> with no drill schedule). The command lists a server that <code>pgcellar.yaml</code> mentions and <code>barman.d</code> does not. Exit code 1 if anything is a problem; warnings alone do not fail it.</p>
+<p>If the <code>barman.d</code> folder named in the file does not exist (a copy of the example, run on a laptop), <code>check</code> falls back to a <code>barman.d.example</code> folder next to the configuration and says so.</p>
+<p><code>check</code> does not talk to PostgreSQL or Barman. It checks files only.</p>
+<h2 id="apikey">apikey</h2>
+<p>Manages API keys. Keys live in <code>pgcellar.yaml</code> as a SHA-256 digest; a running server picks up a change by itself.</p>
+<pre><code>pgcellar apikey create --config FILE --name NAME --role viewer|operator|admin
+pgcellar apikey list   --config FILE
+</code></pre>
+<p><code>create</code> prints the new key (<code>pgc_...</code>) on standard output, once, and nothing else. It validates the configuration, writes the digest into <code>pgcellar.yaml</code>, and records the change in the configuration's git history under the name <code>cli</code>. <code>list</code> prints one line per key, <code>name&lt;TAB&gt;role</code>.</p>
+<p>Both flags <code>--name</code> and <code>--role</code> are required for <code>create</code>.</p>
+<h2 id="hash-password">hash-password</h2>
+<p>Reads one line (the password) from standard input and prints its bcrypt hash, for the <code>users:</code> list.</p>
+<pre><code>read -rs PW; printf '%s\n' &quot;$PW&quot; | pgcellar hash-password
+</code></pre>
+<p>The password needs at least 8 characters; at most 1024 bytes are read. A password on the command line would end up in your shell history, so the command takes none. With Docker, give <code>-i</code> so that standard input stays open.</p>
+<h2 id="license">license</h2>
+<pre><code>pgcellar license keygen --out DIR
+pgcellar license issue  --key FILE --edition free|pro|business --licensee NAME \
+                        --servers N --expires YYYY-MM-DD [--issued YYYY-MM-DD] [--id ID]
+pgcellar license verify KEY
+pgcellar license show   --config FILE
+</code></pre>
+<p><code>show</code> and <code>verify</code> are for everybody; <code>keygen</code> and <code>issue</code> are for the vendor (they need the private signing key, which is never in the repository).</p>
+<table>
+<thead>
+<tr>
+<th>Subcommand</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>show</code></td>
+<td>Reads the key from <code>license.key</code> or <code>license.file</code> in the configuration and prints state, edition, licensee, id, servers allowed, expiry and grace end, and the footer line. No key means the Free edition.</td>
+</tr>
+<tr>
+<td><code>verify KEY</code></td>
+<td>Checks the signature of a key against the public key built into the binary and prints its payload and state. Exit code 1 for an expired key. A bad signature prints <code>verdict: INVALID</code> with the reason.</td>
+</tr>
+<tr>
+<td><code>keygen --out DIR</code></td>
+<td>Makes an Ed25519 signing key pair in <code>DIR</code> (<code>license_signing.key</code>, mode 0600, and its <code>.pub</code>). Refuses to overwrite an existing private key.</td>
+</tr>
+<tr>
+<td><code>issue ...</code></td>
+<td>Signs a licence key. <code>--servers 0</code> means unlimited. <code>--id</code> defaults to a random <code>lic-xxxxxxxxxx</code>. <code>--issued</code> defaults to today (UTC).</td>
+</tr>
+</tbody>
+</table>
+<p>Chapter 14 explains editions and the grace period.</p>
+<h2 id="version">version</h2>
+<pre><code>$ pgcellar version
+pgcellar 0.1.0
+</code></pre>
+<p><code>--version</code> and <code>-v</code> do the same. The version is set at build time (<code>-X main.Version=...</code>); a plain <code>go build</code> prints <code>dev</code>. The Docker image takes it from the build argument <code>VERSION</code>.</p>
+<h2 id="help">help</h2>
+<p><code>pgcellar help</code>, <code>--help</code> and <code>-h</code> print the usage text and exit with 0. A missing or unknown subcommand prints it to standard error and exits with 2.</p>
+<h2 id="build-from-source">Build from source</h2>
+<pre><code>make build            # ./pgcellar
+make test             # go test -race ./...
+make lint             # gofmt, go vet, golangci-lint
+make run              # the --dev mode, on the example configuration
+make demo             # the --demo mode on 127.0.0.1:8080
+make docker           # build the image as pgcellar:dev
+make release-dry      # linux amd64/arm64 and macOS arm64 archives with checksums in dist/
+make docs             # this manual, as HTML, in site/docs/
+make docs-pdf         # this manual, as site/docs/pgcellar-manual.pdf
+</code></pre>
+<p>Go 1.25 or later. Barman is not needed to run the tests: a shell script that mimics its command line stands in for it.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/licensing-and-editions/"><small>Previous</small>Licensing and editions</a>
+  <span></span>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

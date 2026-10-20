@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pgCellar documentation</title>
+<meta name="description" content="The pgCellar manual: set up PostgreSQL backups with point-in-time recovery and automatic restore drills, on top of Barman.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<h1>pgCellar documentation</h1>
+<p>pgCellar is a control room for physical PostgreSQL backups with point-in-time recovery. It runs on top of Barman: one Go binary with a web console and a JSON API, shipped as a Docker image that also contains Barman. It tells you the truth about every backup, runs the schedules, restores to a point in time, and restores your backups on its own every week to prove they work.</p>
+<p>This manual follows the order in which you meet things: install it, understand the few concepts behind it, prepare PostgreSQL, then use each part. The last chapters are reference, and fixes for the traps people actually fall into.</p>
+<p>Three words you will see everywhere. A <strong>server</strong> is one PostgreSQL instance that Barman backs up. A <strong>drill</strong> is an automatic restore test. <strong>Files are the truth</strong>: Barman's own files stay Barman's, everything else is one <code>pgcellar.yaml</code>, and git keeps the history.</p>
+
+<ol class="dchapters">
+<li><a href="/docs/getting-started/"><span class="n">1</span><b>Getting started</b></a><span class="ds">Docker Compose in five minutes: first admin, first server, first backup.</span></li>
+<li><a href="/docs/concepts/"><span class="n">2</span><b>Concepts</b></a><span class="ds">Barman, base backups and WAL, streaming or archive_command, slots, point-in-time recovery.</span></li>
+<li><a href="/docs/preparing-postgresql/"><span class="n">3</span><b>Preparing a PostgreSQL server</b></a><span class="ds">Roles, pg_hba.conf and the settings that Server setup checks, with the exact commands.</span></li>
+<li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span><b>Servers and WAL methods</b></a><span class="ds">The server form, barman.d, the three WAL methods and the SSH companion.</span></li>
+<li><a href="/docs/backups-schedules-retention/"><span class="n">5</span><b>Backups, schedules and retention</b></a><span class="ds">Schedule syntax, the built-in scheduler, Barman retention, deleting a backup.</span></li>
+<li><a href="/docs/restores-and-pitr/"><span class="n">6</span><b>Restores and point-in-time recovery</b></a><span class="ds">The Restore page, targets, mapped folder, tar.gz, limits.</span></li>
+<li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span><b>Restore drills and reports</b></a><span class="ds">What a drill does step by step, the image requirements, the PDF report and its fingerprint.</span></li>
+<li><a href="/docs/alerts/"><span class="n">8</span><b>Alerts</b></a><span class="ds">Telegram, mail, webhook, anti-noise rules, daily summary, sample messages.</span></li>
+<li><a href="/docs/users-roles-and-api/"><span class="n">9</span><b>Users, roles, API keys and the API</b></a><span class="ds">Roles, API keys, Bearer authentication, the main routes.</span></li>
+<li><a href="/docs/configuration-reference/"><span class="n">10</span><b>Configuration reference</b></a><span class="ds">Every key of pgcellar.yaml with its default.</span></li>
+<li><a href="/docs/operations/"><span class="n">11</span><b>Operations</b></a><span class="ds">Updating, backing up pgCellar itself, metrics, logs, audit, storage and projection.</span></li>
+<li><a href="/docs/security-model/"><span class="n">12</span><b>Security model</b></a><span class="ds">Roles, sessions, CSRF, login limiter, secrets, restricted SSH, non-root container, demo mode.</span></li>
+<li><a href="/docs/troubleshooting/"><span class="n">13</span><b>Troubleshooting</b></a><span class="ds">The real traps, with the symptom, the cause and the fix.</span></li>
+<li><a href="/docs/licensing-and-editions/"><span class="n">14</span><b>Licensing and editions</b></a><span class="ds">FSL-1.1, what a licence blocks and what it never blocks.</span></li>
+<li><a href="/docs/cli-reference/"><span class="n">15</span><b>CLI reference</b></a><span class="ds">serve, check, apikey, hash-password, license, version.</span></li>
+
+</ol>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

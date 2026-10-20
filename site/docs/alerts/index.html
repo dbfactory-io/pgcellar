@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alerts - pgCellar manual</title>
+<meta name="description" content="pgCellar writes to you when something needs a human, and keeps quiet otherwise. Three channels: Telegram, mail and a signed webhook. Use one, two or all three.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/alerts/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/" class="on" aria-current="page"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 8 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#what-triggers-a-message">What triggers a message</a></li><li class="l2"><a href="#configure-the-channels">Configure the channels</a></li><li class="l3"><a href="#telegram">Telegram</a></li><li class="l3"><a href="#mail">Mail</a></li><li class="l3"><a href="#webhook">Webhook</a></li><li class="l2"><a href="#anti-noise-rules">Anti-noise rules</a></li><li class="l2"><a href="#daily-summary">Daily summary</a></li><li class="l2"><a href="#example-messages">Example messages</a></li><li class="l2"><a href="#test-and-journal">Test and journal</a></li><li class="l2"><a href="#thresholds">Thresholds</a></li></ul></nav>
+<article>
+<h1 id="alerts">Alerts</h1>
+<p>pgCellar writes to you when something needs a human, and keeps quiet otherwise. Three channels: Telegram, mail and a signed webhook. Use one, two or all three.</p>
+<figure><img src="../images/alerts.png" alt="Alerts" loading="lazy"><figcaption>Alerts</figcaption></figure>
+<h2 id="what-triggers-a-message">What triggers a message</h2>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>When</th>
+<th>Example title</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Level change</td>
+<td>A server goes from healthy to attention or failing, or from attention to failing and back</td>
+<td><code>pg-main is failing</code>, <code>pg-main needs attention</code></td>
+</tr>
+<tr>
+<td>Resolved</td>
+<td>A server is healthy again (one message)</td>
+<td><code>pg-main is healthy again</code></td>
+</tr>
+<tr>
+<td>Reminder</td>
+<td>A problem that lasts, after <code>repeat_every</code></td>
+<td><code>pg-main is still failing (for 2 days)</code></td>
+</tr>
+<tr>
+<td>Backup failed</td>
+<td>A backup run ended with an exit code other than 0, scheduled or manual</td>
+<td><code>Backup of pg-main failed</code></td>
+</tr>
+<tr>
+<td>Drill failed</td>
+<td>A restore drill failed</td>
+<td><code>Restore drill of pg-main failed</code></td>
+</tr>
+<tr>
+<td>Drill passed</td>
+<td>Only with <code>on_drill_success: true</code></td>
+<td><code>Restore drill of pg-main passed</code></td>
+</tr>
+<tr>
+<td>Skipped</td>
+<td>A scheduled backup or drill could not start</td>
+<td><code>Scheduled backup of pg-main did not run</code></td>
+</tr>
+<tr>
+<td>Daily summary</td>
+<td>Once a day, if you ask for it</td>
+<td><code>Everything is fine</code></td>
+</tr>
+</tbody>
+</table>
+<p>The level of a server is the one the Status page shows. Storage thresholds, old backups, a stopped WAL receiver, a failed or too-old drill all change it, so they need no message of their own: the level change covers them.</p>
+<h2 id="configure-the-channels">Configure the channels</h2>
+<p>Secrets never go in <code>pgcellar.yaml</code>. The file names the <strong>environment variables</strong> that hold them; you set those variables in the container.</p>
+<pre><code class="language-yaml">alerts:
+  max_backup_age: 26h
+  repeat_every: 24h
+  on_drill_success: false
+  daily_summary: &quot;08:30&quot;
+  telegram:
+    token_env: PGCELLAR_TELEGRAM_TOKEN
+    chat_id: &quot;-1001234567890&quot;
+  mail:
+    host: smtp.example.com
+    port: 587
+    starttls: true
+    from: pgcellar@example.com
+    to: [dba@example.com]
+    user_env: PGCELLAR_SMTP_USER
+    password_env: PGCELLAR_SMTP_PASSWORD
+  webhook:
+    url: https://hooks.example.com/pgcellar
+    secret_env: PGCELLAR_WEBHOOK_SECRET
+</code></pre>
+<p>In <code>docker-compose.yml</code>, under <code>environment:</code> of the <code>pgcellar</code> service:</p>
+<pre><code class="language-yaml">    environment:
+      TZ: Europe/Brussels
+      PGCELLAR_TELEGRAM_TOKEN: &quot;123456:ABC...&quot;
+      PGCELLAR_SMTP_USER: &quot;pgcellar@example.com&quot;
+      PGCELLAR_SMTP_PASSWORD: &quot;...&quot;
+      PGCELLAR_WEBHOOK_SECRET: &quot;a long random string&quot;
+</code></pre>
+<p>Better: keep them in a <code>.env</code> file next to the Compose file (mode 0600, not in git) and reference them as <code>${PGCELLAR_TELEGRAM_TOKEN}</code>.</p>
+<p>pgCellar reads <code>pgcellar.yaml</code> again when it changes, so a new channel needs no restart. A changed environment variable needs a container restart, because the environment is fixed when a process starts.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Used by</th>
+<th>Needed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PGCELLAR_TELEGRAM_TOKEN</code> (any name you choose in <code>token_env</code>)</td>
+<td>Telegram</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>PGCELLAR_SMTP_USER</code>, <code>PGCELLAR_SMTP_PASSWORD</code> (names from <code>user_env</code>, <code>password_env</code>)</td>
+<td>Mail</td>
+<td>only if the SMTP server needs a login</td>
+</tr>
+<tr>
+<td><code>PGCELLAR_WEBHOOK_SECRET</code> (name from <code>secret_env</code>)</td>
+<td>Webhook</td>
+<td>only to sign the body</td>
+</tr>
+</tbody>
+</table>
+<p>The names are yours. The ones above are the ones used in the examples.</p>
+<h3 id="telegram">Telegram</h3>
+<p>Create a bot with BotFather, copy its token into the variable. Add the bot to the chat or channel and use that chat's id (for a group, a negative number like <code>-1001234567890</code>). The message is sent in Telegram's HTML subset; a link opens the server in pgCellar.</p>
+<h3 id="mail">Mail</h3>
+<p><code>host</code>, <code>from</code> and at least one address in <code>to</code> are required. Port 587 with <code>starttls: true</code> (the default) upgrades the connection with STARTTLS, which is required; port 465 means implicit TLS. <code>starttls: false</code> sends in clear: use it only for a relay on a trusted network. AUTH PLAIN is used only when <code>user_env</code> is set. Messages go as plain text.</p>
+<h3 id="webhook">Webhook</h3>
+<p>pgCellar POSTs JSON to <code>url</code>. With <code>secret_env</code> set, the exact body is signed with HMAC-SHA256 and the result is in a header:</p>
+<pre><code>X-PgCellar-Signature: sha256=&lt;hex&gt;
+</code></pre>
+<p>To verify, compute the HMAC-SHA256 of the raw body with the same secret and compare in constant time. The body:</p>
+<pre><code class="language-json">{
+  &quot;kind&quot;: &quot;backup_failed&quot;,
+  &quot;server&quot;: &quot;pg-main&quot;,
+  &quot;level&quot;: &quot;fail&quot;,
+  &quot;title&quot;: &quot;Backup of pg-main failed&quot;,
+  &quot;lines&quot;: [&quot;The backup (scheduled, run #212) ended with exit code 1.&quot;],
+  &quot;action&quot;: &quot;Open the server page, read the problems listed there and start with the first one.&quot;,
+  &quot;url&quot;: &quot;https://backup.example.com/servers/pg-main&quot;,
+  &quot;at&quot;: &quot;2026-10-21T02:03:14+02:00&quot;,
+  &quot;text&quot;: &quot;❌ Backup of pg-main failed\n\n- The backup (scheduled, run #212) ended with exit code 1.\n\nWhat to do: ...\n\nhttps://backup.example.com/servers/pg-main&quot;
+}
+</code></pre>
+<p><code>level</code> is <code>ok</code>, <code>warn</code> or <code>fail</code>. <code>text</code> is ready to show in a chat tool. Any answer other than 2xx counts as a failure in the journal.</p>
+<p>Set <code>base_url</code> in <code>pgcellar.yaml</code>: links in messages are built from it.</p>
+<h2 id="anti-noise-rules">Anti-noise rules</h2>
+<p>Nobody reads a channel that cries wolf. pgCellar follows these rules:</p>
+<ul>
+<li><strong>One message per change.</strong> A server that stays red is not announced at every refresh. It is announced when it turns red, repeated after <code>repeat_every</code> (24 hours by default; <code>0</code> = never repeat), and a single &quot;healthy again&quot; follows when it recovers.</li>
+<li><strong>Orange to red and back</strong> are announced at once.</li>
+<li><strong>The first two minutes after a start are silent.</strong> A server can look red for a minute while the status is rebuilt. Nothing is sent either while the status shown is the one reloaded from the database and not yet refreshed.</li>
+<li><strong>A restart neither repeats nor forgets.</strong> The last level announced for each server, since when, and when it was said, are stored in the database.</li>
+<li><strong>History is not news.</strong> The first look after the database is created only records a baseline for runs and drills.</li>
+<li><strong>No channel, no state.</strong> With no channel configured, the alert engine does nothing at all. A channel added later does not replay old events; it announces the servers that are red at that moment.</li>
+<li><strong>A skipped scheduled run is announced once per due time.</strong></li>
+</ul>
+<p>Alerts are decided by one pass every 30 seconds over the state pgCellar already keeps. There is no separate monitoring.</p>
+<h2 id="daily-summary">Daily summary</h2>
+<p><code>daily_summary: &quot;08:30&quot;</code> sends one message a day at that time: the headline of the Status page, then one line per server. It goes out at most 12 hours late (so a restart at night does not send yesterday's), only with at least one server, and only with a fresh status. Empty = no summary.</p>
+<pre><code>⚠️ 1 server needs attention
+
+- erp-prod ✅ · last backup 2 h ago · streaming live · restore verified 3 d ago · 1.8 TB free (57% used)
+- analytics ⚠️ · last backup 31 h ago · streaming live · restore verified 5 d ago · 1.8 TB free (57% used)
+
+What to do: Open pgCellar and start with the servers marked ❌, then the ones marked ⚠️.
+</code></pre>
+<h2 id="example-messages">Example messages</h2>
+<p>A server fails:</p>
+<pre><code>❌ analytics is failing
+
+• The last backup is 53 hours old, the limit is 26.
+• WAL receiver is not running.
+
+What to do: WAL streaming: Start the receiver with &quot;barman cron&quot;, then check that the slot exists on PostgreSQL.
+Open in pgCellar
+</code></pre>
+<p>A restore drill fails:</p>
+<pre><code>❌ Restore drill of pg-main failed
+
+• It failed at the step &quot;Start PostgreSQL&quot;: the backups of this server are not proven restorable.
+
+What to do: Open the server page, read the last restore drill and fix its failing step, then run the drill again.
+</code></pre>
+<p>Recovered:</p>
+<pre><code>✅ pg-main is healthy again
+
+• The problem lasted 3 h 12 min.
+</code></pre>
+<p>These examples are illustrative: the exact lines depend on the problem found. The wording is dry on purpose; errors say what to do.</p>
+<h2 id="test-and-journal">Test and journal</h2>
+<p>The <strong>Alerts</strong> page (admin) shows which channels are configured, whether each environment variable is set (never its value), a <strong>Send a test message</strong> button per channel, and the latest 2000 messages sent, with the outcome of each. Over the API: <code>GET /api/v1/alerts</code> and <code>POST /api/v1/alerts/test</code> (body <code>{&quot;channel&quot;: &quot;telegram&quot;}</code>, or empty for all). The metric <code>pgcellar_alerts_sent_total{channel,outcome}</code> counts the sends.</p>
+<p>A send has a 10-second limit. A failure is logged and written to the journal, never fatal, and the Telegram token is removed from error texts.</p>
+<h2 id="thresholds">Thresholds</h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_backup_age</code></td>
+<td>26h</td>
+<td>The last good backup is older than this: the server is orange (red at twice the limit)</td>
+</tr>
+<tr>
+<td><code>max_wal_age</code></td>
+<td>24h</td>
+<td>No WAL received for this long: orange. A quiet database closes a 16 MB file rarely; with streaming live, an old completed file is only a note</td>
+</tr>
+<tr>
+<td><code>min_free_percent</code></td>
+<td>10</td>
+<td>The file system holding the backups has less free space: its servers go orange, red under half. <code>0</code> = off</td>
+</tr>
+<tr>
+<td><code>min_free_bytes</code></td>
+<td>0 (off)</td>
+<td>Same, in bytes, for example <code>50000000000</code> for 50 GB</td>
+</tr>
+<tr>
+<td><code>repeat_every</code></td>
+<td>24h</td>
+<td>Repeat a lasting problem after this delay. <code>0</code> = never</td>
+</tr>
+<tr>
+<td><code>on_drill_success</code></td>
+<td>false</td>
+<td>Also announce a passing drill</td>
+</tr>
+<tr>
+<td><code>daily_summary</code></td>
+<td>empty</td>
+<td>Time of day, <code>&quot;08:30&quot;</code></td>
+</tr>
+</tbody>
+</table>
+<p>The full list is in chapter 10.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/restore-drills-and-reports/"><small>Previous</small>Restore drills and reports</a>
+  <a class="next" href="/docs/users-roles-and-api/"><small>Next</small>Users, roles, API keys and the API</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

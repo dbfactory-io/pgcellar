@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Users, roles, API keys and the API - pgCellar manual</title>
+<meta name="description" content="People sign in to the console with a user. Programs call the API with an API key. Both have one of three roles.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/users-roles-and-api/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/" class="on" aria-current="page"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 9 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#roles">Roles</a></li><li class="l2"><a href="#users">Users</a></li><li class="l2"><a href="#sessions-and-sign-in">Sessions and sign-in</a></li><li class="l2"><a href="#api-keys">API keys</a></li><li class="l2"><a href="#calling-the-api">Calling the API</a></li><li class="l3"><a href="#the-main-routes">The main routes</a></li><li class="l3"><a href="#examples">Examples</a></li></ul></nav>
+<article>
+<h1 id="users-roles-api-keys-and-the-api">Users, roles, API keys and the API</h1>
+<p>People sign in to the console with a user. Programs call the API with an API key. Both have one of three roles.</p>
+<h2 id="roles">Roles</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>viewer</strong></td>
+<td>Read everything except secrets and the audit log: Status, Servers, Timeline, Server setup, Runs, History, restores and drills lists, the license.</td>
+</tr>
+<tr>
+<td><strong>operator</strong></td>
+<td>Everything a viewer can, plus: run a check, backup now, switch WAL, start a restore, download a restore archive, start a drill, download a drill report.</td>
+</tr>
+<tr>
+<td><strong>admin</strong></td>
+<td>Everything an operator can, plus: add and edit servers, delete a backup, delete a restore, test SSH, manage SSH keys, read the Alerts page and send test messages, read the audit log.</td>
+</tr>
+</tbody>
+</table>
+<p>The audit log is admin-only because it contains the exact command lines that were run. A restore archive is a full copy of the database, so downloading it needs the operator role.</p>
+<p>At least one user must have the admin role, or pgCellar refuses to load the file.</p>
+<h2 id="users">Users</h2>
+<p>Users live in <code>pgcellar.yaml</code>. There is no user screen: you edit the file, and pgCellar picks the change up.</p>
+<pre><code class="language-yaml">users:
+  - name: admin
+    role: admin
+    password_hash: &quot;$2a$10$...&quot;
+  - name: alice
+    role: operator
+    password_hash: &quot;$2a$10$...&quot;
+  - name: bob
+    role: viewer
+    password_hash: &quot;$2a$10$...&quot;
+</code></pre>
+<p>Create a hash with:</p>
+<pre><code>read -rs PW; printf '%s\n' &quot;$PW&quot; | docker compose run --rm -T pgcellar hash-password
+</code></pre>
+<p>Minimum 8 characters. The hash is bcrypt; the password itself is never stored. Paste the hash into <code>password_hash</code>.</p>
+<p>To remove a user, delete the entry; their access ends at the next request, because the role is read from the file on every request.</p>
+<h2 id="sessions-and-sign-in">Sessions and sign-in</h2>
+<p>The console uses a cookie session valid for 24 hours. The login form is protected against password guessing (chapter 12). Each state-changing request carries a CSRF token. Log out with <strong>Log out</strong> in the top bar.</p>
+<figure><img src="../images/login.png" alt="Sign in" loading="lazy"><figcaption>Sign in</figcaption></figure>
+<h2 id="api-keys">API keys</h2>
+<p>An API key is a long random string starting with <code>pgc_</code>. pgCellar stores only its SHA-256, in <code>pgcellar.yaml</code>. The key itself is shown once, when you create it.</p>
+<pre><code>docker compose exec pgcellar pgcellar apikey create --config /etc/pgcellar/pgcellar.yaml --name grafana --role viewer
+</code></pre>
+<p>The command prints the key and nothing else. Save it at once; there is no way to read it again. It writes the hash into <code>pgcellar.yaml</code> and commits the change to the configuration history, and the running server picks it up by itself. List the names and roles:</p>
+<pre><code>docker compose exec pgcellar pgcellar apikey list --config /etc/pgcellar/pgcellar.yaml
+</code></pre>
+<p>To revoke a key, delete its entry in <code>api_keys:</code>.</p>
+<p>Give each program its own key and the smallest role that works: a monitoring tool needs <code>viewer</code>, a script that triggers backups needs <code>operator</code>.</p>
+<h2 id="calling-the-api">Calling the API</h2>
+<p>The base path is <code>/api/v1</code>. Authenticate with a header:</p>
+<pre><code>curl -H &quot;Authorization: Bearer pgc_...&quot; http://localhost:8080/api/v1/status
+</code></pre>
+<p>Every answer is JSON, either <code>{&quot;data&quot;: ...}</code> or <code>{&quot;error&quot;: &quot;...&quot;}</code>. A request body is JSON, limited to 64 KB, and unknown fields are refused.</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>200, 201, 202, 204</td>
+<td>Done; 202 means started in the background, follow <code>run_id</code></td>
+</tr>
+<tr>
+<td>401</td>
+<td>Missing or invalid key (<code>WWW-Authenticate: Bearer</code>)</td>
+</tr>
+<tr>
+<td>403</td>
+<td>The key's role is too low</td>
+</tr>
+<tr>
+<td>404</td>
+<td>No such server, run, backup or restore</td>
+</tr>
+<tr>
+<td>409</td>
+<td>Conflict: another job is running, Barman refused a delete, the archive does not exist</td>
+</tr>
+<tr>
+<td>413</td>
+<td>The archive is larger than <code>recoveries.max_download_bytes</code></td>
+</tr>
+<tr>
+<td>422</td>
+<td>The input is invalid; <code>problems</code> lists each reason</td>
+</tr>
+<tr>
+<td>502</td>
+<td>Barman or the command failed; its message is in <code>error</code></td>
+</tr>
+<tr>
+<td>503</td>
+<td>The first status refresh is not done yet; retry after the <code>Retry-After</code> delay</td>
+</tr>
+</tbody>
+</table>
+<p>Reading never runs Barman. <code>GET</code> routes answer from the status cache (refreshed every <code>status_interval</code>) and from Barman's files. Only an explicit <code>POST</code> calls Barman.</p>
+<h3 id="the-main-routes">The main routes</h3>
+<pre><code>GET    /api/v1/status                           cached state of every server
+GET    /api/v1/servers                          list
+POST   /api/v1/servers                          create (admin)
+GET    /api/v1/servers/{name}                   one server with its state
+PUT    /api/v1/servers/{name}                   update (admin)
+GET    /api/v1/servers/{name}/setup             Server setup checks
+GET    /api/v1/servers/{name}/timeline          what you can restore to
+POST   /api/v1/servers/{name}/check             run barman check now (operator)
+POST   /api/v1/servers/{name}/backup            run a backup now (operator)
+POST   /api/v1/servers/{name}/switch-wal        force a WAL switch (operator)
+GET    /api/v1/servers/{name}/backups           list backups
+DELETE /api/v1/servers/{name}/backups/{id}      delete a backup (admin)
+POST   /api/v1/servers/{name}/recoveries        restore to a directory (operator)
+GET    /api/v1/servers/{name}/recoveries        restores of a server
+GET    /api/v1/recoveries/{id}                  one restore
+GET    /api/v1/recoveries/{id}/download         the .tar.gz (operator)
+DELETE /api/v1/recoveries/{id}                  delete a restore (admin)
+POST   /api/v1/servers/{name}/drills            run a drill now (operator)
+GET    /api/v1/servers/{name}/drills            drills of a server
+GET    /api/v1/drills                           drills of all servers (?server=, ?limit=)
+GET    /api/v1/drills/{id}                      one drill with its steps
+GET    /api/v1/drills/{id}/report               the PDF report (operator)
+GET    /api/v1/runs                             recent runs (?server=, ?limit=)
+GET    /api/v1/runs/{id}                        one run with its output
+GET    /api/v1/history                          git history of the configuration
+GET    /api/v1/audit                            audit log (admin)
+GET    /api/v1/alerts                           channels and journal (admin)
+POST   /api/v1/alerts/test                      send a test message (admin)
+GET    /api/v1/license                          edition, servers allowed and used
+GET    /api/v1/ssh/authorized-keys              keys allowed to push WAL (admin)
+POST   /api/v1/ssh/authorized-keys              authorise a key (admin)
+DELETE /api/v1/ssh/authorized-keys              revoke a key (admin)
+</code></pre>
+<p>The complete description, with parameters, bodies, schemas and the role each route needs, is served by pgCellar itself, as OpenAPI 3:</p>
+<pre><code>GET /api/v1/openapi.json
+</code></pre>
+<p>That route needs no key. Load it in Swagger UI, Postman or your generator of choice. It is always the description of the version you are running.</p>
+<h3 id="examples">Examples</h3>
+<p>Is everything fine?</p>
+<pre><code>curl -s -H &quot;Authorization: Bearer $KEY&quot; http://localhost:8080/api/v1/status | jq '.data.servers[] | {name, level}'
+</code></pre>
+<p>Back up now and follow the run:</p>
+<pre><code>RUN=$(curl -s -X POST -H &quot;Authorization: Bearer $KEY&quot; http://localhost:8080/api/v1/servers/pg-main/backup | jq -r .data.run_id)
+curl -s -H &quot;Authorization: Bearer $KEY&quot; http://localhost:8080/api/v1/runs/$RUN | jq '.data | {status, exit_code}'
+</code></pre>
+<p>Create a server:</p>
+<pre><code>curl -s -X POST -H &quot;Authorization: Bearer $KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  http://localhost:8080/api/v1/servers -d '{
+    &quot;name&quot;: &quot;pg-main&quot;,
+    &quot;backup_method&quot;: &quot;postgres&quot;,
+    &quot;wal_method&quot;: &quot;streaming&quot;,
+    &quot;conninfo&quot;: &quot;host=pg-main.example.com user=barman dbname=postgres&quot;,
+    &quot;streaming_conninfo&quot;: &quot;host=pg-main.example.com user=streaming_barman dbname=postgres&quot;,
+    &quot;slot_name&quot;: &quot;barman&quot;
+  }'
+</code></pre>
+<p>Whatever the console does, the API does: both are thin layers over the same code. An automation tool can configure and operate pgCellar without a browser.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/alerts/"><small>Previous</small>Alerts</a>
+  <a class="next" href="/docs/configuration-reference/"><small>Next</small>Configuration reference</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

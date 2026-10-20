@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Restores and point-in-time recovery - pgCellar manual</title>
+<meta name="description" content="A restore in pgCellar writes a ready-to-start PostgreSQL data directory from a backup, replaying archived WAL up to the target you choose. Nothing is touched on the...">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/restores-and-pitr/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/" class="on" aria-current="page"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 6 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#before-you-restore-read-the-timeline">Before you restore: read the Timeline</a></li><li class="l2"><a href="#starting-a-restore">Starting a restore</a></li><li class="l2"><a href="#where-the-restore-goes">Where the restore goes</a></li><li class="l2"><a href="#the-targz">The .tar.gz</a></li><li class="l2"><a href="#using-the-restored-directory">Using the restored directory</a></li><li class="l2"><a href="#retention-of-restores">Retention of restores</a></li><li class="l2"><a href="#limits">Limits</a></li></ul></nav>
+<article>
+<h1 id="restores-and-point-in-time-recovery">Restores and point-in-time recovery</h1>
+<p>A restore in pgCellar writes a ready-to-start PostgreSQL data directory from a backup, replaying archived WAL up to the target you choose. <strong>Nothing is touched on the production server.</strong> The data directory lands in a folder on the pgCellar host. What you do with it next, you decide: inspect it, copy a table out of it, or replace the broken production directory.</p>
+<figure><img src="../images/restore-run.png" alt="Restore" loading="lazy"><figcaption>Restore</figcaption></figure>
+<h2 id="before-you-restore-read-the-timeline">Before you restore: read the Timeline</h2>
+<p>The <strong>Timeline</strong> section of the server page draws what you can restore to: the full backups, the WAL that links them, the retention window, the holes. Two sentences matter:</p>
+<ul>
+<li><strong>You can go back to</strong>: the earliest point in time. It is the end of the oldest backup whose WAL chain is unbroken, segment by segment, up to the newest archived WAL.</li>
+<li><strong>Latest</strong>: the last data received when streaming is live, otherwise the arrival time of the last completed WAL file.</li>
+</ul>
+<p>A hole in the WAL (a missing segment number between two files of the same timeline) is drawn in red, with the number of files missing. A backup before a hole cannot be used for a target after the hole.</p>
+<p>The Timeline is read from Barman's own files, in a few milliseconds. No Barman command runs to draw it. The same data is at <code>GET /api/v1/servers/{name}/timeline</code>.</p>
+<h2 id="starting-a-restore">Starting a restore</h2>
+<p>On the server page, next to a complete backup, press <strong>Restore…</strong> (operator role). The Restore page asks for:</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backup</td>
+<td>A backup with status DONE. Failed or running backups cannot be restored.</td>
+</tr>
+<tr>
+<td>Target: <strong>Latest possible</strong></td>
+<td>Replay all the WAL Barman holds.</td>
+</tr>
+<tr>
+<td>Target: <strong>End of this backup</strong></td>
+<td>Stop as soon as the data is consistent. No WAL after that.</td>
+</tr>
+<tr>
+<td>Target: <strong>Point in time</strong></td>
+<td>Stop at the date and time you give.</td>
+</tr>
+<tr>
+<td>Also build a <code>.tar.gz</code> I can download</td>
+<td>Packs the directory after the restore. Slower, needs room for a second copy.</td>
+</tr>
+</tbody>
+</table>
+<p>For a point in time, type a date and time. Without a zone it is read in the time zone of the server. With a zone, it is exact:</p>
+<pre><code>2026-10-20 14:30:00+02:00
+</code></pre>
+<p>RFC 3339 (<code>2026-10-20T14:30:00+02:00</code>) works too. The target must not be before the end of the chosen backup; the form says so in a sentence. The other way, a target after the last WAL, is not checked: Barman reports the missing WAL.</p>
+<p>The &quot;End of this backup&quot; target uses <code>--target-immediate</code> and not a target time equal to the end of the backup. A target time needs a WAL record dated after it, and a quiet database may never produce one.</p>
+<p>The same operation from the API (the call returns at once; follow the run):</p>
+<pre><code>curl -X POST -H &quot;Authorization: Bearer $KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;backup_id&quot;:&quot;20261020T020001&quot;,&quot;target&quot;:&quot;time&quot;,&quot;target_time&quot;:&quot;2026-10-20 14:30:00+02:00&quot;,&quot;archive&quot;:true}' \
+  http://localhost:8080/api/v1/servers/pg-main/recoveries
+</code></pre>
+<p>The answer is <code>202</code> with a <code>run_id</code>. <code>GET /api/v1/runs/{run_id}</code> shows the progress and the Barman output; <code>GET /api/v1/servers/pg-main/recoveries</code> lists the results.</p>
+<h2 id="where-the-restore-goes">Where the restore goes</h2>
+<pre><code>&lt;recoveries.dir&gt;/&lt;server&gt;/&lt;backup id&gt;-&lt;timestamp&gt;
+</code></pre>
+<p>for example <code>/var/lib/pgcellar/recoveries/pg-main/20261020T020001-20261020T153012</code>. The default <code>recoveries.dir</code> is <code>/var/lib/pgcellar/recoveries</code>. This folder is inside the container. <strong>Map it to the Docker host</strong> or you will not be able to read what you restored. In <code>docker-compose.yml</code>, replace the named volume with a bind mount owned by the barman uid:</p>
+<pre><code class="language-yaml">    volumes:
+      - /srv/pgcellar/recoveries:/var/lib/pgcellar/recoveries
+</code></pre>
+<pre><code>sudo mkdir -p /srv/pgcellar/recoveries &amp;&amp; sudo chown 997:997 /srv/pgcellar/recoveries
+</code></pre>
+<p>A restore is as big as the database, so put it on a disk with room. The Storage section counts restores in what it reports.</p>
+<p>Rules about that path, which protect your disks: it is always two levels deep under <code>recoveries.dir</code>, built only from a validated server name and a backup id, and checked again before every delete, purge and download. A database row that points elsewhere is refused, not followed.</p>
+<h2 id="the-targz">The <code>.tar.gz</code></h2>
+<p>If you ticked the box, pgCellar builds <code>&lt;directory&gt;.tar.gz</code> next to the directory after the restore, streaming (no file loaded in memory), written as <code>.partial</code> and renamed when complete. The <strong>Download .tar.gz</strong> button (operator role) serves it with byte ranges, so a download can resume.</p>
+<p>Limits:</p>
+<ul>
+<li>Above <code>recoveries.max_download_bytes</code> (2 GiB by default; <code>0</code> = no limit) there is no download link, only the path: read it on the host.</li>
+<li>If the restore succeeded but the archive failed, the directory is kept and the run is marked failed with the reason.</li>
+<li>A failed <code>barman recover</code> removes its half-written directory.</li>
+</ul>
+<h2 id="using-the-restored-directory">Using the restored directory</h2>
+<p>The result is a PostgreSQL data directory, not a running server. Start a server <strong>of the same major version</strong> on it:</p>
+<pre><code>cd /srv/pgcellar/recoveries/pg-main/20261020T020001-20261020T153012
+ls                    # PG_VERSION, base, pg_wal, postgresql.auto.conf, recovery.signal ...
+cat PG_VERSION
+</code></pre>
+<p>Barman wrote the recovery settings (the target) into <code>postgresql.auto.conf</code> and created <code>recovery.signal</code>; the WAL it needs is copied into <code>pg_wal</code>. Start PostgreSQL on that directory, on a free port, and let it replay. When it reaches the target it promotes itself and accepts connections. Typical way to inspect it:</p>
+<pre><code>docker run --rm -v &quot;$PWD&quot;:/var/lib/postgresql/data -p 55432:5432 postgres:16
+</code></pre>
+<p>Use the image of your own major version, and check that the user in the container owns the files.</p>
+<p>To restore <em>over</em> production, stop production, keep the damaged directory aside, put the restored one in its place, fix ownership and permissions, and start. That step is yours: pgCellar deliberately never writes to a production host.</p>
+<h2 id="retention-of-restores">Retention of restores</h2>
+<p>Restores older than <code>recoveries.keep_days</code> (7 by default; <code>0</code> keeps everything) are removed by a daily pass: directory, archive and record. An admin can also delete one by hand (<strong>Delete</strong> in the Recoveries list, or <code>DELETE /api/v1/recoveries/{id}</code>). Deletion is audited.</p>
+<p>Roles: an operator starts a restore and downloads the archive; an admin deletes. A viewer sees the list and the paths but cannot download, because the archive is a full copy of the database and more sensitive than a backup list. Every download, start, delete and purge is audited (<code>recover.start</code>, <code>recovery.download</code>, <code>recovery.delete</code>, <code>recovery.purge</code>).</p>
+<h2 id="limits">Limits</h2>
+<ul>
+<li>Restore is <strong>local</strong>: <code>barman recover</code> writes to a folder on the pgCellar host. There is no &quot;restore to a remote host&quot; here. Copy the directory yourself.</li>
+<li>One restore per server at a time.</li>
+<li>Only a backup with status DONE can be restored.</li>
+<li>Timeline switches (after a failover) are followed when the history file is present. Without a <code>.history</code> file the fork point is unknown, and the chain is treated as broken.</li>
+<li>A backup of an old major version cannot start on a newer PostgreSQL. Use the same major version as the source.</li>
+<li>Restoring does not prove that a <em>whole system</em> works (extensions, configuration files outside the data directory, roles). A restore drill does the next best thing, automatically (chapter 7).</li>
+</ul>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/backups-schedules-retention/"><small>Previous</small>Backups, schedules and retention</a>
+  <a class="next" href="/docs/restore-drills-and-reports/"><small>Next</small>Restore drills and reports</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

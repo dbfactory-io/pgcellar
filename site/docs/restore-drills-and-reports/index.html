@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Restore drills and reports - pgCellar manual</title>
+<meta name="description" content="A backup you have not restored is a hope. A restore drill is pgCellar restoring one of your backups for real, every week, on its own, starting the copy, looking...">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/restore-drills-and-reports/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/" class="on" aria-current="page"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 7 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#what-a-drill-does-step-by-step">What a drill does, step by step</a></li><li class="l2"><a href="#switching-drills-on">Switching drills on</a></li><li class="l2"><a href="#what-the-image-must-contain">What the image must contain</a></li><li class="l3"><a href="#locales">Locales</a></li><li class="l2"><a href="#disk-and-memory">Disk and memory</a></li><li class="l2"><a href="#the-pdf-report">The PDF report</a></li><li class="l3"><a href="#the-fingerprint">The fingerprint</a></li><li class="l2"><a href="#reading-a-failed-drill">Reading a failed drill</a></li></ul></nav>
+<article>
+<h1 id="restore-drills-and-reports">Restore drills and reports</h1>
+<p>A backup you have not restored is a hope. A restore drill is pgCellar restoring one of your backups for real, every week, on its own, starting the copy, looking inside it, and writing a dated PDF that you can hand to an auditor.</p>
+<figure><img src="../images/drills.png" alt="Restore drills" loading="lazy"><figcaption>Restore drills</figcaption></figure>
+<h2 id="what-a-drill-does-step-by-step">What a drill does, step by step</h2>
+<p>A drill never touches the production server. It works on a copy of a backup, under <code>recoveries.dir</code>. One drill at a time, never during a backup of the same server (a backup of that server waits while its drill runs).</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. Restore the backup</td>
+<td><code>barman recover</code> into <code>&lt;recoveries.dir&gt;/&lt;server&gt;/drill-&lt;timestamp&gt;/</code>. The latest backup with status DONE, target latest.</td>
+</tr>
+<tr>
+<td>2. Find the PostgreSQL version</td>
+<td>Reads <code>PG_VERSION</code> of the restored directory to choose the binaries of the same major version.</td>
+</tr>
+<tr>
+<td>3. Prepare the throwaway copy</td>
+<td>Appends a few settings to the <code>postgresql.auto.conf</code> Barman wrote (see below).</td>
+</tr>
+<tr>
+<td>4. Start PostgreSQL</td>
+<td><code>pg_ctl start -w -t 300</code> from <code>/usr/lib/postgresql/&lt;major&gt;/bin</code>, on a free port between 54400 and 54499.</td>
+</tr>
+<tr>
+<td>5. Wait for the end of the recovery</td>
+<td><code>pg_isready</code> until the copy accepts connections, then <code>SELECT pg_is_in_recovery()</code> must answer <code>f</code>. Limit: <code>drills.recovery_timeout</code>.</td>
+</tr>
+<tr>
+<td>6. Look inside the databases</td>
+<td>Runs queries: <code>version()</code>, the replay LSN, every non-template database with its size and its number of tables.</td>
+</tr>
+<tr>
+<td>7. Stop PostgreSQL</td>
+<td><code>pg_ctl stop</code>, fast, then immediate if needed.</td>
+</tr>
+<tr>
+<td>8. Verify the data checksums</td>
+<td><code>pg_checksums --check</code> on the stopped copy, only if the cluster uses checksums. Skipped, with the reason, if not.</td>
+</tr>
+<tr>
+<td>9. Clean up</td>
+<td>Removes the directory, unless it is the last good drill and <code>keep_last</code> is on.</td>
+</tr>
+</tbody>
+</table>
+<p>Why checksums come after the stop: <code>pg_checksums --check</code> refuses a cluster that was not shut down cleanly, and the control file of a restored base backup says &quot;in production&quot; until PostgreSQL has stopped once.</p>
+<p><strong>What the throwaway copy is configured with.</strong> It listens on <code>127.0.0.1</code> only, with a trust rule on its own socket and TCP rejected. It runs with <code>archive_mode = off</code>, <code>max_connections = 10</code>, <code>shared_buffers = 64MB</code>, <code>max_wal_senders = 0</code>, <code>autovacuum = off</code>, <code>logging_collector = off</code>, <code>ssl = off</code>, <code>jit = off</code>, <code>hot_standby = off</code>, an empty <code>shared_preload_libraries</code> (so an extension library missing from the image cannot stop the check), and the locale messages set to <code>C</code>. None of this changes your data; it only lets a small copy start anywhere.</p>
+<p><strong>What the check proves, and what it does not.</strong> It proves that the backup restores, the WAL replays, PostgreSQL starts on it, the databases are there, their tables can be counted, and, when checksums are on, no page is damaged. With <code>drills.verify_tables: true</code> it also runs <code>SELECT count(*)</code> on every table (slow on large databases) and sums the rows per database. It does not compare the data with the source, and it does not test your application. A source that needs an extension library to replay WAL is started without it and is not tested for it. Configuration files outside the data directory (Debian's <code>/etc/postgresql</code>) are not handled.</p>
+<p>When a step fails, the report keeps the earlier steps, the error text and the last 25 lines of the PostgreSQL log of the copy. pgCellar still stops the copy and removes the directory.</p>
+<h2 id="switching-drills-on">Switching drills on</h2>
+<p>Drills are scheduled per server, in <code>pgcellar.yaml</code>:</p>
+<pre><code class="language-yaml">servers:
+  - name: pg-main
+    drills:
+      schedule: &quot;weekly sun 04:30&quot;   # same syntax as the backup schedule; empty = none
+
+drills:
+  enabled: true          # false stops the scheduled drills; manual ones stay possible. Absent = true
+  timeout: 30m           # a whole drill, restore included
+  recovery_timeout: 10m  # wait for the copy to finish replaying WAL
+  keep_last: true        # keep the data directory of the last good drill. Absent = true
+  verify_tables: false   # true = SELECT count(*) on every table
+  max_age: 192h          # the server turns orange when the last good drill is older (8 days)
+  bin_dir: /usr/lib/postgresql
+</code></pre>
+<p>Do not write <code>enabled: false</code> unless you mean it; the absent key already means &quot;on&quot;. A drill schedule only takes effect when the server has one.</p>
+<p>Choose a time after the nightly backup. The schedule uses the same syntax as backups (chapter 5). The drill schedule is edited in <code>pgcellar.yaml</code>, not in the server form; the form keeps it when you save.</p>
+<p>To run one now: <strong>Run a drill now</strong> in the Restore drills section (operator), or:</p>
+<pre><code>curl -X POST -H &quot;Authorization: Bearer $KEY&quot; http://localhost:8080/api/v1/servers/pg-main/drills
+</code></pre>
+<p>The body is optional. By default the drill uses the latest DONE backup and target <code>latest</code>. You can give <code>backup_id</code>, <code>target</code> (<code>latest</code>, <code>backup_end</code>, <code>time</code>) and <code>target_time</code>. The call answers <code>202</code> with a <code>run_id</code>; the run output lists every command with its answer. It returns <code>409</code> while another drill or a backup of the same server runs.</p>
+<p>A server turns <strong>orange</strong> in Status when its last drill failed, or when no drill has passed for <code>max_age</code>. A server that never had a drill is not orange: its first due time is not late. Metrics: <code>pgcellar_last_drill_ok{server}</code> and <code>pgcellar_last_drill_age_seconds{server}</code>.</p>
+<h2 id="what-the-image-must-contain">What the image must contain</h2>
+<p>A drill starts the restored copy with the PostgreSQL <strong>server</strong> binaries of the same major version as the source. The Docker image installs them for the versions in the build argument <code>PG_MAJORS</code> (default <code>16 17 18</code>), as binaries only: no cluster, no service. If the source's major version is not there, the drill fails at step 2 with &quot;PostgreSQL <!-- raw HTML omitted --> binaries are not in this image&quot;. Rebuild:</p>
+<pre><code>docker build -f deploy/Dockerfile -t pgcellar:dev --build-arg PG_MAJORS=&quot;15 16 17&quot; .
+</code></pre>
+<p>Sizes, measured on arm64 (uncompressed): 312 MB without the server binaries, 639 MB with <code>16 17 18</code>. A single version is about 170 MB more than none. Fewer versions, smaller image.</p>
+<h3 id="locales">Locales</h3>
+<p>A restored data directory keeps the collation and ctype locale of its source, and PostgreSQL refuses to start on a locale the system does not have. A source cluster created in a <code>postgres:16-alpine</code> or <code>postgres:16</code> container is typically <code>en_US.utf8</code>.</p>
+<p>The image generates a fixed list from the build argument <code>PG_LOCALES</code>: <code>C.UTF-8 en_US.UTF-8 en_GB.UTF-8 fr_FR.UTF-8 fr_BE.UTF-8 nl_NL.UTF-8 nl_BE.UTF-8 de_DE.UTF-8 es_ES.UTF-8 it_IT.UTF-8 pt_BR.UTF-8</code>. That adds about 23 MB. If your cluster uses another one, add it (name as in <code>/usr/share/i18n/SUPPORTED</code>) and rebuild:</p>
+<pre><code>docker build -f deploy/Dockerfile -t pgcellar:dev \
+  --build-arg PG_LOCALES=&quot;C.UTF-8 en_US.UTF-8 pl_PL.UTF-8&quot; .
+</code></pre>
+<p>A start that fails on a locale is reported as: &quot;The cluster uses locale X, which this image does not have. Rebuild with PG_LOCALES including Y (see deploy/Dockerfile).&quot; Find your cluster's locale with <code>SELECT datcollate, datctype FROM pg_database;</code>.</p>
+<h2 id="disk-and-memory">Disk and memory</h2>
+<p>A drill needs room for the database plus its WAL under <code>recoveries.dir</code>. With <code>keep_last: true</code> the last good copy of each server stays there, so you can look at it; <code>du -sh &lt;recoveries.dir&gt;/*/drill-*</code> tells what it costs. Set <code>keep_last: false</code> if the disk is tight.</p>
+<p>RAM: a drill adds some tens of MB (the copy runs with <code>shared_buffers = 64MB</code>). Drills never overlap.</p>
+<p>Only the last <strong>successful</strong> copy is ever kept: the previous kept copy is removed when a new drill passes, and a failed drill never touches it. A <code>drill-*</code> directory that no record points to and that is older than a day (a restart during a drill) is removed by the daily purge. Records and reports are never purged; they weigh a few KB each.</p>
+<h2 id="the-pdf-report">The PDF report</h2>
+<p>Every drill writes a PDF, passed or failed:</p>
+<pre><code>&lt;recoveries.dir&gt;/&lt;server&gt;/reports/drill-&lt;timestamp&gt;.pdf
+</code></pre>
+<p>It opens from the server page (<strong>Report (PDF)</strong>, operator role), from <code>GET /api/v1/drills/{id}/report</code>, and it is on the host if you mapped the folder. It contains:</p>
+<ul>
+<li>a banner, <strong>RESTORE VERIFIED</strong> or <strong>FAILED</strong>, and the verdict in one sentence;</li>
+<li>the drill in a table: server, source backup, recovery target, date, duration, PostgreSQL version, WAL position reached (LSN), restored size, data checksums, who started it, and the run number;</li>
+<li>the steps, with the result and the duration of each, and a note (the failing step and the error text when there is one);</li>
+<li>the databases found in the copy, with size and number of tables, and the rows counted when <code>verify_tables</code> is on;</li>
+<li>for a failed drill, &quot;What went wrong&quot;: the error and the end of the PostgreSQL log of the copy;</li>
+<li>a closing paragraph that says what the report records, and a footer with the fingerprint.</li>
+</ul>
+<p>The report is written by pgCellar's own small PDF writer, with no dependency. Each file is read back the way a viewer would start it (header, cross-reference table, every offset and stream length) before it is stored.</p>
+<h3 id="the-fingerprint">The fingerprint</h3>
+<p>The footer carries <strong>SHA-256 of the report content</strong>: the hash of the text of the body, in the order it is drawn. It is also stored with the drill record, and returned by the API (<code>details.fingerprint</code>). To check a report, compute the hash of its text and compare it with the record. This detects a <em>changed text</em>. It does not detect a changed layout, and it is not a digital signature: anyone with write access to the report folder could produce a new file and a new hash. If you need non-repudiation, copy the PDF and the fingerprint to a system you do not control, and sign them there.</p>
+<h2 id="reading-a-failed-drill">Reading a failed drill</h2>
+<p>The server page shows the last result large (&quot;Restore verified&quot; or &quot;Restore drill failed&quot;), the history, and the failing step. The run behind it holds the whole journal: each command with its output, step by step. Chapter 13 lists the usual causes: a missing locale, a missing major version, a <code>noexec</code> temporary directory, a source that needs an extension.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/restores-and-pitr/"><small>Previous</small>Restores and point-in-time recovery</a>
+  <a class="next" href="/docs/alerts/"><small>Next</small>Alerts</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

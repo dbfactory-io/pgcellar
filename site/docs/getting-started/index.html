@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Getting started - pgCellar manual</title>
+<meta name="description" content="By the end of this chapter you have pgCellar running in Docker, one PostgreSQL server added, a green barman check, and a first backup. Count five minutes if...">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/getting-started/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/" class="on" aria-current="page"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 1 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#get-the-files-and-build-the-image">Get the files and build the image</a></li><li class="l2"><a href="#create-the-first-admin">Create the first admin</a></li><li class="l2"><a href="#start">Start</a></li><li class="l2"><a href="#prepare-postgresql">Prepare PostgreSQL</a></li><li class="l2"><a href="#add-the-first-server">Add the first server</a></li><li class="l2"><a href="#first-barman-check">First barman check</a></li><li class="l2"><a href="#first-backup">First backup</a></li><li class="l2"><a href="#where-to-go-next">Where to go next</a></li></ul></nav>
+<article>
+<h1 id="getting-started">Getting started</h1>
+<p>By the end of this chapter you have pgCellar running in Docker, one PostgreSQL server added, a green <code>barman check</code>, and a first backup. Count five minutes if PostgreSQL is already prepared. If you still have to create the roles, chapter 3 has the commands.</p>
+<p>You need:</p>
+<ul>
+<li>Docker (or Podman) with Compose, on a machine that can reach your PostgreSQL server over the network.</li>
+<li>A PostgreSQL server, version 13 to 18, where you can create two roles and edit <code>pg_hba.conf</code>.</li>
+<li>Disk space for the backups. Rule of thumb: one full copy of the database, plus the WAL of the retention period.</li>
+</ul>
+<h2 id="get-the-files-and-build-the-image">Get the files and build the image</h2>
+<pre><code>git clone https://github.com/stranix79/pgcellar.git
+cd pgcellar/deploy
+mkdir etc-pgcellar etc-barman.d
+cp pgcellar.example.yaml etc-pgcellar/pgcellar.yaml
+docker compose build
+</code></pre>
+<p>The image is called <code>pgcellar:dev</code>. It contains pgCellar, an unmodified Barman from the PGDG packages, the PostgreSQL client tools, and the PostgreSQL server binaries that restore drills use (chapter 7).</p>
+<p>Two folders are bind-mounted from the host: <code>etc-pgcellar</code> (your <code>pgcellar.yaml</code>) and <code>etc-barman.d</code> (one Barman file per server, written by the console). The container runs as the <code>barman</code> user, not as root, so these folders must be writable by that user. Find its uid and set the owner:</p>
+<pre><code>docker run --rm --entrypoint id pgcellar:dev barman
+sudo chown -R 997:997 etc-pgcellar etc-barman.d
+</code></pre>
+<p>Use the uid the first command prints (997 in the current image). If you skip this step, pgCellar cannot save its configuration.</p>
+<h2 id="create-the-first-admin">Create the first admin</h2>
+<p>pgCellar stores a bcrypt hash, never a password. Type the password once and keep the hash:</p>
+<pre><code>read -rs PW; printf '%s\n' &quot;$PW&quot; | docker run -i --rm pgcellar:dev hash-password
+</code></pre>
+<p>The password needs at least 8 characters. The command prints one line that starts with <code>$2a$</code> or <code>$2b$</code>.</p>
+<p>Edit <code>etc-pgcellar/pgcellar.yaml</code>:</p>
+<ul>
+<li>In <code>users:</code>, replace the fake <code>password_hash</code> of <code>admin</code> with your hash.</li>
+<li>Set <code>base_url</code> to the address people will type, for example <code>http://backup.example.com:8080</code>. It is used in links inside alerts and reports.</li>
+<li>Delete the two example entries in <code>servers:</code>. You add yours from the console.</li>
+<li>Delete the fake entry in <code>api_keys:</code> unless you want it.</li>
+</ul>
+<p>Check the file:</p>
+<pre><code>docker run --rm -v &quot;$PWD/etc-pgcellar:/etc/pgcellar&quot; pgcellar:dev check --config /etc/pgcellar/pgcellar.yaml
+</code></pre>
+<p>You want to read <code>all good</code> at the end.</p>
+<h2 id="start">Start</h2>
+<pre><code>docker compose up -d
+</code></pre>
+<p>Open <code>http://localhost:8080</code> and sign in as <code>admin</code>.</p>
+<figure><img src="../images/login.png" alt="The sign-in page" loading="lazy"><figcaption>The sign-in page</figcaption></figure>
+<p>The Status page is empty: no server yet. Compose also started a second container, <code>pgcellar-ssh</code>. It only matters when a server ships its WAL files with <code>archive_command</code> (chapter 4). For streaming you can ignore it.</p>
+<h2 id="prepare-postgresql">Prepare PostgreSQL</h2>
+<p>pgCellar needs two roles on the PostgreSQL side and two lines in <code>pg_hba.conf</code>. Chapter 3 explains each one. Short version, as a superuser on the PostgreSQL server (PostgreSQL 15 or later):</p>
+<pre><code class="language-sql">CREATE ROLE barman LOGIN PASSWORD '...';
+CREATE ROLE streaming_barman LOGIN REPLICATION PASSWORD '...';
+GRANT pg_read_all_settings, pg_read_all_stats, pg_checkpoint TO barman;
+GRANT EXECUTE ON FUNCTION pg_backup_start(text, boolean) TO barman;
+GRANT EXECUTE ON FUNCTION pg_backup_stop(boolean) TO barman;
+GRANT EXECUTE ON FUNCTION pg_switch_wal() TO barman;
+GRANT EXECUTE ON FUNCTION pg_create_restore_point(text) TO barman;
+</code></pre>
+<p>In <code>pg_hba.conf</code>, with the address pgCellar connects from:</p>
+<pre><code>host all         barman           10.0.0.5/32 scram-sha-256
+host replication streaming_barman 10.0.0.5/32 scram-sha-256
+</code></pre>
+<p>Reload PostgreSQL (<code>SELECT pg_reload_conf();</code>). Then give the two passwords to the barman user inside the container, in <code>~/.pgpass</code>. Barman and pgCellar both read this file, so no password ever sits in a config file:</p>
+<pre><code>docker compose exec -T pgcellar sh -c 'umask 077; cat &gt;&gt; ~/.pgpass' &lt;&lt;'EOF'
+pg-main.example.com:5432:*:barman:THE_BARMAN_PASSWORD
+pg-main.example.com:5432:*:streaming_barman:THE_STREAMING_PASSWORD
+EOF
+</code></pre>
+<p>The file lives in <code>/var/lib/barman</code>, which is a volume, so it survives restarts.</p>
+<h2 id="add-the-first-server">Add the first server</h2>
+<p>In the console, open <strong>Servers</strong>, then <strong>Add a server</strong>. For a PostgreSQL server reachable over the network:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td><code>pg-main</code> (lowercase letters, digits, <code>-</code>, <code>_</code>)</td>
+</tr>
+<tr>
+<td>Backup method</td>
+<td><code>postgres (streaming, no SSH)</code></td>
+</tr>
+<tr>
+<td>WAL method</td>
+<td><code>streaming</code></td>
+</tr>
+<tr>
+<td>Connection string (conninfo)</td>
+<td><code>host=pg-main.example.com user=barman dbname=postgres port=5432</code></td>
+</tr>
+<tr>
+<td>Streaming connection string</td>
+<td><code>host=pg-main.example.com user=streaming_barman dbname=postgres port=5432</code></td>
+</tr>
+<tr>
+<td>Replication slot</td>
+<td><code>barman</code></td>
+</tr>
+<tr>
+<td>Retention</td>
+<td>Recovery window 14 days, minimum redundancy 2</td>
+</tr>
+<tr>
+<td>Backup schedule</td>
+<td><code>daily 02:00</code></td>
+</tr>
+</tbody>
+</table>
+<p>Press <strong>Create server</strong>. pgCellar writes <code>/etc/barman.d/pg-main.conf</code>, adds the server to <code>pgcellar.yaml</code>, and commits both to git. The WAL method and the slot are explained in chapters 2 and 4.</p>
+<figure><img src="../images/server-overview.png" alt="The server page" loading="lazy"><figcaption>The server page</figcaption></figure>
+<h2 id="first-barman-check">First barman check</h2>
+<p>On the server page, press <strong>Run check now</strong>. Barman runs its checks and pgCellar explains every line in plain words, with what to do when one fails. Typical first failures: a password missing in <code>.pgpass</code>, a missing <code>pg_hba.conf</code> line, <code>wal_level = minimal</code>. The <strong>Server setup</strong> section reads the PostgreSQL settings and gives the exact <code>ALTER SYSTEM</code> commands (chapter 3).</p>
+<p>Barman starts its WAL receiver by itself (pgCellar runs <code>barman cron</code> every minute). Once every line is green, the server is ready. A new server may say that no WAL has arrived yet; the first backup closes a WAL file and clears that.</p>
+<h2 id="first-backup">First backup</h2>
+<p>Press <strong>Backup now</strong>. pgCellar runs <code>barman backup pg-main</code>, then forces a WAL switch so the backup can be restored right away. Follow it on the <strong>Runs</strong> page: it shows every command with its output and duration.</p>
+<figure><img src="../images/runs.png" alt="The runs page" loading="lazy"><figcaption>The runs page</figcaption></figure>
+<p>When it is done, the server is green on Status and the Timeline shows the first point in time you can restore to.</p>
+<figure><img src="../images/status.png" alt="Status" loading="lazy"><figcaption>Status</figcaption></figure>
+<h2 id="where-to-go-next">Where to go next</h2>
+<ul>
+<li>Put the schedule in place: <a href="../backups-schedules-retention/">Backups, schedules and retention</a>.</li>
+<li>Plan the first drill, so the backup is proven: <a href="../restore-drills-and-reports/">Restore drills and reports</a>.</li>
+<li>Set up alerts so you hear about problems: <a href="../alerts/">Alerts</a>.</li>
+<li>Try pgCellar without any PostgreSQL: <code>make demo</code> in the repository starts it on fictional data (login <code>demo</code> / <code>demo</code>). A public demo runs at https://demo.pgcellar.dbfactory.io.</li>
+</ul>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <span></span>
+  <a class="next" href="/docs/concepts/"><small>Next</small>Concepts</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

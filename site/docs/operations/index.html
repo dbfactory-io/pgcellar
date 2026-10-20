@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Operations - pgCellar manual</title>
+<meta name="description" content="Day-two work: updating, backing up pgCellar itself, watching it, and keeping an eye on the disk.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/operations/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/" class="on" aria-current="page"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 11 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#updating-the-image">Updating the image</a></li><li class="l2"><a href="#backing-up-pgcellar-itself">Backing up pgCellar itself</a></li><li class="l2"><a href="#metrics">Metrics</a></li><li class="l2"><a href="#logs">Logs</a></li><li class="l2"><a href="#audit">Audit</a></li><li class="l2"><a href="#history">History</a></li><li class="l2"><a href="#storage-and-projection">Storage and projection</a></li><li class="l2"><a href="#a-short-weekly-routine">A short weekly routine</a></li></ul></nav>
+<article>
+<h1 id="operations">Operations</h1>
+<p>Day-two work: updating, backing up pgCellar itself, watching it, and keeping an eye on the disk.</p>
+<h2 id="updating-the-image">Updating the image</h2>
+<p>The state is in volumes and bind mounts, not in the image. Updating is a rebuild and a restart:</p>
+<pre><code>cd pgcellar/deploy
+git pull
+docker compose build
+docker compose up -d
+</code></pre>
+<p>Compose recreates both containers (<code>pgcellar</code> and <code>pgcellar-ssh</code>) with the new image. Backups in progress are interrupted: a backup that was running is recorded as interrupted, and the scheduler catches up a missed due time if it is younger than <code>scheduler.catch_up</code> (6 hours by default). Choose a quiet moment.</p>
+<p>After the start:</p>
+<ul>
+<li><code>pgcellar version</code> inside the container, the startup log line and the metric <code>pgcellar_build_info</code> tell the version.</li>
+<li>The pages are full right away: the status cache is kept in SQLite and shown marked as stale (&quot;as of 08:12, refreshing&quot;) until the first refresh completes.</li>
+<li>Alerts are silent for the first two minutes.</li>
+<li><code>docker compose logs --tail 50 pgcellar</code> shows <code>pgcellar &lt;version&gt; listening on ...</code>.</li>
+</ul>
+<p>If you run the binary without Docker, replace it and restart the service (<code>deploy/pgcellar.service</code> is a systemd unit that runs as the <code>barman</code> user).</p>
+<p><strong>Pin what you can.</strong> The image takes Barman from the PGDG repository at build time. Rebuilding on another day may bring a newer Barman. Read its release notes before a rebuild on a production backup host, and keep the previous image (<code>docker tag pgcellar:dev pgcellar:previous</code>) so you can go back.</p>
+<p>Migrations of the SQLite database are applied automatically at start. Back up before updating anyway (below).</p>
+<h2 id="backing-up-pgcellar-itself">Backing up pgCellar itself</h2>
+<p>pgCellar is a control room, and its state is small. Back up three things, plus Barman's own data.</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where (in the container)</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Configuration</td>
+<td><code>/etc/pgcellar</code> (host: <code>etc-pgcellar/</code>)</td>
+<td><code>pgcellar.yaml</code> <strong>and</strong> its <code>.git</code> folder, the history of every change</td>
+</tr>
+<tr>
+<td>Barman files</td>
+<td><code>/etc/barman.d</code> (host: <code>etc-barman.d/</code>), and <code>/etc/barman.conf</code> if you changed it</td>
+<td>One file per server, and its own <code>.git</code> history</td>
+</tr>
+<tr>
+<td>Database</td>
+<td><code>/var/lib/pgcellar/pgcellar.db</code></td>
+<td>Run history, audit log, alert journal, drill records. Not critical: pgCellar starts without it.</td>
+</tr>
+<tr>
+<td>SSH keys and <code>.pgpass</code></td>
+<td><code>/var/lib/barman/.ssh/</code>, <code>/var/lib/barman/.pgpass</code></td>
+<td>The key pair, the authorised WAL keys, the host key of the companion, the passwords. <strong>Secrets.</strong> Store them encrypted.</td>
+</tr>
+<tr>
+<td>The backups</td>
+<td><code>/var/lib/barman</code> (volume <code>barman-data</code>)</td>
+<td>The reason pgCellar exists</td>
+</tr>
+</tbody>
+</table>
+<p>Notes:</p>
+<ul>
+<li><code>pgcellar.yaml</code> and <code>etc-barman.d</code> are small text files with a git history. A copy of the folder is a complete backup of the configuration. Because every change is a commit, you can also push the repositories to a private remote.</li>
+<li>For a clean copy of the SQLite file, stop the container first (<code>docker compose stop pgcellar</code>), or copy <code>pgcellar.db</code> together with any <code>-wal</code> and <code>-shm</code> file next to it. If you lose it, you lose history, not backups.</li>
+<li><strong>Back up the backups too.</strong> If the volume or the machine goes, the backups go with it. Copy <code>/var/lib/barman</code> to another machine (rsync, a snapshot of the volume, object storage is outside the scope of this version). A backup system on a single disk is a single disk.</li>
+<li><code>~/.pgpass</code> and the private key are what let Barman talk to your servers. Treat them like any credential.</li>
+</ul>
+<p>To restore pgCellar on a new host: install Docker, put back the configuration folders, the volumes (<code>.ssh</code>, <code>.pgpass</code>, <code>barman-data</code>), build the image, <code>docker compose up -d</code>. The status, the schedule and the servers are all back. Drill and run history come back only if you restored <code>pgcellar.db</code>.</p>
+<h2 id="metrics">Metrics</h2>
+<p>Prometheus text format on <code>/metrics</code>. A scrape never runs Barman: it reads the status cache. Example scrape configuration:</p>
+<pre><code class="language-yaml">scrape_configs:
+  - job_name: pgcellar
+    metrics_path: /metrics
+    static_configs:
+      - targets: [&quot;backup.example.com:8080&quot;]
+</code></pre>
+<p><code>/metrics</code> and <code>/healthz</code> need no authentication. Do not publish them to the internet; restrict them in your proxy (chapter 12).</p>
+<p>Per server (label <code>server</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pgcellar_last_backup_age_seconds</code></td>
+<td>Seconds since the last successful backup ended</td>
+</tr>
+<tr>
+<td><code>pgcellar_last_wal_age_seconds</code></td>
+<td>Age of the last completed WAL file</td>
+</tr>
+<tr>
+<td><code>pgcellar_last_wal_received_age_seconds</code></td>
+<td>Age of the last data received by the WAL receiver</td>
+</tr>
+<tr>
+<td><code>pgcellar_wal_streaming_live</code></td>
+<td>1 if the Barman WAL receiver runs</td>
+</tr>
+<tr>
+<td><code>pgcellar_backups_total</code></td>
+<td>Number of backups</td>
+</tr>
+<tr>
+<td><code>pgcellar_check_ok</code></td>
+<td>1 if the cached <code>barman check</code> is fully OK</td>
+</tr>
+<tr>
+<td><code>pgcellar_setup_level</code></td>
+<td>Server setup: 0 ok, 1 warning, 2 error</td>
+</tr>
+<tr>
+<td><code>pgcellar_backup_bytes</code>, <code>pgcellar_wal_bytes</code>, <code>pgcellar_recoveries_bytes</code></td>
+<td>Space taken by backups, WAL and restores</td>
+</tr>
+<tr>
+<td><code>pgcellar_last_drill_ok</code></td>
+<td>1 or 0, absent until a drill ran</td>
+</tr>
+<tr>
+<td><code>pgcellar_last_drill_age_seconds</code></td>
+<td>Age of the last drill, whatever its result</td>
+</tr>
+<tr>
+<td><code>pgcellar_recoveries_total</code></td>
+<td>Successful restores</td>
+</tr>
+</tbody>
+</table>
+<p>Global:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pgcellar_fs_free_bytes</code>, <code>pgcellar_fs_size_bytes</code> (label <code>path</code>)</td>
+<td>File system holding backups and restores</td>
+</tr>
+<tr>
+<td><code>pgcellar_alerts_sent_total</code></td>
+<td>Messages sent, by channel and outcome</td>
+</tr>
+<tr>
+<td><code>pgcellar_license_servers_max</code>, <code>pgcellar_license_servers_used</code></td>
+<td>Licence quota and use</td>
+</tr>
+<tr>
+<td><code>pgcellar_build_info</code></td>
+<td>Version</td>
+</tr>
+</tbody>
+</table>
+<p>Useful alerts in Prometheus: <code>pgcellar_last_backup_age_seconds &gt; 90000</code>, <code>pgcellar_check_ok == 0</code>, <code>pgcellar_last_drill_ok == 0</code>, <code>pgcellar_setup_level == 2</code>.</p>
+<p><code>GET /healthz</code> answers <code>ok</code> when the database is reachable, <code>503</code> otherwise. Use it as the container health check.</p>
+<h2 id="logs">Logs</h2>
+<p>pgCellar logs to standard output:</p>
+<pre><code>docker compose logs -f pgcellar
+docker compose logs --since 1h pgcellar-ssh
+</code></pre>
+<p>You see the version at start, each failed alert send, config reload problems, and errors from API calls that ended in a 502. Barman's own log file is the one named by <code>log_file</code> in <code>barman.conf</code>. The SSH companion logs at VERBOSE, so a refused key shows up there.</p>
+<p>For the commands pgCellar ran, you do not need the logs: the <strong>Runs</strong> page keeps the output, and the audit log keeps the command line.</p>
+<h2 id="audit">Audit</h2>
+<p>The <strong>Audit</strong> page (admin) and <code>GET /api/v1/audit</code> list every command pgCellar ran on behalf of a person or an API key: backup, check, switch-wal, restore, delete, psql, ssh, configuration writes. Each line has the time, the actor, the exact command, the exit code and the duration. Background commands (<code>barman cron</code>, the status refresh, actor <code>system</code>) are written only when they fail, and an identical failing command is logged at most once an hour, otherwise there would be a line per minute.</p>
+<p>Audit lines older than <code>audit_retention_days</code> (90 by default) are purged daily. <code>0</code> keeps everything.</p>
+<p>Every run goes through one function that writes this line. There is no other path from pgCellar to a command on your servers.</p>
+<h2 id="history">History</h2>
+<p>The <strong>History</strong> page shows the git log of the configuration folders, with the patch of each commit and the author. It answers &quot;who changed the retention, and when&quot;. <code>git log -p</code> in <code>etc-pgcellar/</code> shows the same. A hand-written configuration with no commit gets one &quot;Import the existing configuration&quot; commit at the first start.</p>
+<h2 id="storage-and-projection">Storage and projection</h2>
+<p>The <strong>Storage</strong> block of a server page and the Status page tell what is on the disk and what is left. Everything is measured at each status refresh, from Barman's own files and the file system, never by running a command.</p>
+<p>Per server:</p>
+<ul>
+<li><strong>Backups</strong>: the sum of the sizes of the complete backups (on disk, with Barman's deduplication where it applies).</li>
+<li><strong>WAL</strong>: the sum of the sizes in the WAL catalogue.</li>
+<li><strong>Restores</strong>: what the restores of the server take under <code>recoveries.dir</code>.</li>
+<li><strong>Total</strong>: the three added.</li>
+</ul>
+<p>For the file system: free space, total, percent used, the path. The folder of the server is shown when it is a mount of its own, otherwise Barman's home. If <code>recoveries.dir</code> is on another device, it is shown too.</p>
+<p><strong>Thresholds.</strong> Under <code>alerts.min_free_percent</code> (10 by default) or <code>alerts.min_free_bytes</code>, every server on that file system turns orange; under half of the threshold, red. Alerts follow (chapter 8).</p>
+<p><strong>Projection.</strong> pgCellar computes how much is added per day: the WAL archived plus the backups finished in the last 7 days (backups at their size on disk), divided by the days covered. The window is cut to the age of the oldest data, between 1 and 7 days, so a young server is not divided by 7. When the file system would be full in under 90 days, the page says &quot;At this pace the disk is full in N days&quot;.</p>
+<p>The projection is a ceiling for a server in steady state. It does not predict that retention will delete old backups, nor that compression will change. Read it as &quot;if nothing changes, and nothing is deleted&quot;. Not counted: Barman's <code>streaming</code> and <code>incoming</code> directories and files kept outside <code>base/</code> and <code>wals/</code>.</p>
+<h2 id="a-short-weekly-routine">A short weekly routine</h2>
+<ul>
+<li>Open Status. Everything green? Done.</li>
+<li>Look at the last drill of each server. Did it pass this week?</li>
+<li>Look at the Storage line: how many days left?</li>
+<li>Once a quarter, restore something by hand and read the result. A drill is a good guard; it is not you.</li>
+</ul>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/configuration-reference/"><small>Previous</small>Configuration reference</a>
+  <a class="next" href="/docs/security-model/"><small>Next</small>Security model</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

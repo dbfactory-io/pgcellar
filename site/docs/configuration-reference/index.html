@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configuration reference - pgCellar manual</title>
+<meta name="description" content="Everything that belongs to pgCellar lives in one file, pgcellar.yaml. Barman&#39;s own settings stay in /etc/barman.conf and /etc/barman.d/*.conf. Secrets never go in...">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/configuration-reference/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/" class="on" aria-current="page"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 10 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#the-rule-an-absent-key-is-the-default">The rule: an absent key is the default</a></li><li class="l2"><a href="#top-level">Top level</a></li><li class="l2"><a href="#barman">barman</a></li><li class="l2"><a href="#scheduler">scheduler</a></li><li class="l2"><a href="#servers">servers</a></li><li class="l2"><a href="#alerts">alerts</a></li><li class="l2"><a href="#license">license</a></li><li class="l2"><a href="#users-and-api-keys">users and api_keys</a></li><li class="l2"><a href="#recoveries">recoveries</a></li><li class="l2"><a href="#drills">drills</a></li><li class="l2"><a href="#environment-variables">Environment variables</a></li><li class="l2"><a href="#validation-errors">Validation errors</a></li></ul></nav>
+<article>
+<h1 id="configuration-reference">Configuration reference</h1>
+<p>Everything that belongs to pgCellar lives in one file, <code>pgcellar.yaml</code>. Barman's own settings stay in <code>/etc/barman.conf</code> and <code>/etc/barman.d/*.conf</code>. Secrets never go in this file: use the <code>*_env</code> keys, which name an environment variable, and hashes.</p>
+<p>The example in <code>deploy/pgcellar.example.yaml</code> is commented line by line. Validate any file with:</p>
+<pre><code>pgcellar check --config /etc/pgcellar/pgcellar.yaml
+</code></pre>
+<h2 id="the-rule-an-absent-key-is-the-default">The rule: an absent key is the default</h2>
+<p>If a key is not in the file, pgCellar uses its default. Nothing else. This matters for the settings where the default is not the &quot;zero&quot; value of the language, such as <code>drills.enabled</code> (default <strong>on</strong>) or <code>alerts.repeat_every</code> (default <strong>24h</strong>, where <code>0</code> means <em>never</em>).</p>
+<p>What follows from it:</p>
+<ul>
+<li>Do not write a key just to write its default. A line <code>drills: {enabled: false}</code> is a decision (no scheduled drills), not a placeholder.</li>
+<li>When pgCellar saves the file (a new API key, an edited server), it does not write defaults you never chose. An absent key stays absent. A value you wrote, including an explicit <code>0</code>, is kept.</li>
+<li><code>pgcellar check</code> warns about a line that looks like a leftover: <code>drills.enabled: false</code> with no drill schedule on any server. Files are never rewritten automatically.</li>
+</ul>
+<p>This rule exists because of a real bug: a version once wrote <code>drills: {enabled: false}</code> from the zero value when it saved the file, and later versions read that <code>false</code> as a choice and silently turned off every drill.</p>
+<p><strong>Durations</strong> are written in the Go style: <code>30s</code>, <code>5m</code>, <code>26h</code>, <code>192h</code>. There is no day unit; 8 days is <code>192h</code>.</p>
+<p><strong>Reload.</strong> pgCellar re-reads the file when its modification time changes, if the new content is valid. A change made in the console reloads the file first, so a hand edit is never overwritten.</p>
+<h2 id="top-level">Top level</h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>listen</code></td>
+<td><code>&quot;:8080&quot;</code></td>
+<td>Address and port of the console and the API. Plain HTTP; put a proxy in front for TLS (chapter 12).</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td>empty</td>
+<td>Public address, used in links inside alerts and reports, for example <code>https://backup.example.com</code>.</td>
+</tr>
+<tr>
+<td><code>data_dir</code></td>
+<td><code>/var/lib/pgcellar</code></td>
+<td>SQLite database (<code>pgcellar.db</code>) and runtime files.</td>
+</tr>
+<tr>
+<td><code>status_interval</code></td>
+<td><code>1m</code></td>
+<td>How often the cached status of every server is refreshed. Minimum <code>30s</code>. Each refresh runs about three Barman commands per server (2 to 4 seconds each on a small machine), so on a small host with many servers, raise it.</td>
+</tr>
+<tr>
+<td><code>setup_interval</code></td>
+<td><code>30m</code></td>
+<td>How often the PostgreSQL settings are read again for Server setup. Minimum <code>1m</code>. One read-only <code>psql</code> query per server. A server whose settings could not be read is tried again after 5 minutes.</td>
+</tr>
+<tr>
+<td><code>ssh_host</code></td>
+<td>empty</td>
+<td>How PostgreSQL servers reach this host over SSH. Used in the advised <code>archive_command</code>. Empty means this machine's host name, which in Docker is a container id: set it.</td>
+</tr>
+<tr>
+<td><code>ssh_port</code></td>
+<td><code>2222</code></td>
+<td>Port of the SSH companion container, written as <code>--port</code> in the advised <code>archive_command</code>.</td>
+</tr>
+<tr>
+<td><code>audit_retention_days</code></td>
+<td><code>90</code></td>
+<td>Audit lines older than this are purged daily. <code>0</code> keeps everything.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="barman"><code>barman</code></h2>
+<p>Where Barman lives and how to call it.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>binary</code></td>
+<td><code>barman</code></td>
+<td>On <code>PATH</code>, or an absolute path.</td>
+</tr>
+<tr>
+<td><code>config_file</code></td>
+<td><code>/etc/barman.conf</code></td>
+<td>Barman's global file.</td>
+</tr>
+<tr>
+<td><code>config_dir</code></td>
+<td><code>/etc/barman.d</code></td>
+<td>One <code>&lt;server&gt;.conf</code> per server. A separate git repository tracks this folder when it is not under the pgCellar one.</td>
+</tr>
+<tr>
+<td><code>user</code></td>
+<td><code>barman</code></td>
+<td>Commands run as this user when pgCellar runs as root. In the image pgCellar already runs as <code>barman</code> and no <code>sudo</code> is used.</td>
+</tr>
+<tr>
+<td><code>host</code></td>
+<td>empty</td>
+<td>Reserved for a remote Barman host. Leave empty (local Barman).</td>
+</tr>
+<tr>
+<td><code>cron_interval</code></td>
+<td><code>1m</code></td>
+<td>How often pgCellar runs <code>barman cron</code>. <code>0</code> = never. <code>pgcellar serve --cron-interval</code> overrides it.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="scheduler"><code>scheduler</code></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td><code>false</code> = pgCellar starts nothing by itself. The schedule fields keep showing.</td>
+</tr>
+<tr>
+<td><code>catch_up</code></td>
+<td><code>6h</code></td>
+<td>A due time missed while pgCellar was stopped still runs if it is not older than this. <code>0</code> = never catch up.</td>
+</tr>
+<tr>
+<td><code>parallel</code></td>
+<td><code>1</code></td>
+<td>Backups running at once, all servers together. Must be at least 1.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="servers"><code>servers</code></h2>
+<p>A list. What pgCellar adds to a Barman section; <code>name</code> must match a <code>[section]</code> in <code>barman.d</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>required</td>
+<td>Lowercase letters, digits, <code>-</code> and <code>_</code>. Unique.</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>empty</td>
+<td>Free text shown in the console.</td>
+</tr>
+<tr>
+<td><code>schedule.backup</code></td>
+<td>empty</td>
+<td><code>daily 02:00</code>, <code>weekly sun 03:00</code>, <code>hourly</code>, <code>every 6 hours</code>, or a 5-field cron expression.</td>
+</tr>
+<tr>
+<td><code>schedule.enabled</code></td>
+<td>on when <code>backup</code> is set, off otherwise</td>
+<td>Pause the schedule without deleting it.</td>
+</tr>
+<tr>
+<td><code>retention.recovery_window_days</code></td>
+<td><code>0</code> (not set)</td>
+<td>Barman <code>RECOVERY WINDOW OF n DAYS</code>.</td>
+</tr>
+<tr>
+<td><code>retention.redundancy</code></td>
+<td><code>0</code> (not set)</td>
+<td>Barman <code>REDUNDANCY n</code>. Do not combine with a window.</td>
+</tr>
+<tr>
+<td><code>retention.minimum_redundancy</code></td>
+<td><code>0</code></td>
+<td>Never delete below this number of backups. Cannot exceed <code>redundancy</code>.</td>
+</tr>
+<tr>
+<td><code>drills.schedule</code></td>
+<td>empty</td>
+<td>Schedule of the automatic restore drill, same syntax. Empty = none.</td>
+</tr>
+<tr>
+<td><code>tags</code></td>
+<td>empty</td>
+<td>Free labels for your own use.</td>
+</tr>
+</tbody>
+</table>
+<p>The retention values are written to the Barman file when the server form is saved; pgCellar does not apply retention itself.</p>
+<h2 id="alerts"><code>alerts</code></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_backup_age</code></td>
+<td><code>26h</code></td>
+<td>Orange when the last good backup is older than this; red at twice the limit.</td>
+</tr>
+<tr>
+<td><code>max_wal_age</code></td>
+<td><code>24h</code></td>
+<td>Orange when WAL has not been received for this long.</td>
+</tr>
+<tr>
+<td><code>min_free_percent</code></td>
+<td><code>10</code></td>
+<td>Orange when the file system holding the backups has less free space (percent); red under half of it. <code>0</code> = off.</td>
+</tr>
+<tr>
+<td><code>min_free_bytes</code></td>
+<td><code>0</code> (off)</td>
+<td>Same, in bytes. Either threshold alone is enough.</td>
+</tr>
+<tr>
+<td><code>repeat_every</code></td>
+<td><code>24h</code></td>
+<td>A lasting problem is announced again after this delay. <code>0</code> = never repeat.</td>
+</tr>
+<tr>
+<td><code>on_drill_success</code></td>
+<td><code>false</code></td>
+<td>Also send a message when a drill passes.</td>
+</tr>
+<tr>
+<td><code>daily_summary</code></td>
+<td>empty</td>
+<td>Time of day, <code>&quot;08:30&quot;</code>. Empty = no summary.</td>
+</tr>
+<tr>
+<td><code>telegram.token_env</code></td>
+<td></td>
+<td>Name of the environment variable holding the bot token.</td>
+</tr>
+<tr>
+<td><code>telegram.chat_id</code></td>
+<td></td>
+<td>Chat or channel id, as a string.</td>
+</tr>
+<tr>
+<td><code>mail.host</code>, <code>mail.port</code></td>
+<td></td>
+<td>SMTP server. <code>host</code>, <code>from</code> and <code>to</code> are required; the port must be valid.</td>
+</tr>
+<tr>
+<td><code>mail.starttls</code></td>
+<td><code>true</code></td>
+<td>Upgrade the connection with STARTTLS. <code>false</code> sends in clear.</td>
+</tr>
+<tr>
+<td><code>mail.from</code>, <code>mail.to</code></td>
+<td></td>
+<td>Sender, and a list of recipients.</td>
+</tr>
+<tr>
+<td><code>mail.user_env</code>, <code>mail.password_env</code></td>
+<td></td>
+<td>Names of the variables for the SMTP login. Optional.</td>
+</tr>
+<tr>
+<td><code>webhook.url</code></td>
+<td></td>
+<td><code>http://</code> or <code>https://</code>.</td>
+</tr>
+<tr>
+<td><code>webhook.secret_env</code></td>
+<td></td>
+<td>Name of the variable holding the secret that signs the body. Optional.</td>
+</tr>
+</tbody>
+</table>
+<p>No channel configured means no message is ever sent.</p>
+<h2 id="license"><code>license</code></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>key</code></td>
+<td>empty</td>
+<td>A licence key, <code>PGC1.xxxx.yyyy</code>.</td>
+</tr>
+<tr>
+<td><code>file</code></td>
+<td>empty</td>
+<td>A file that holds the key.</td>
+</tr>
+</tbody>
+</table>
+<p>Neither set means the Free edition (chapter 14).</p>
+<h2 id="users-and-api-keys"><code>users</code> and <code>api_keys</code></h2>
+<pre><code class="language-yaml">users:
+  - name: admin
+    role: admin                 # admin, operator or viewer
+    password_hash: &quot;$2a$10$...&quot; # bcrypt, from &quot;pgcellar hash-password&quot;
+
+api_keys:
+  - name: grafana
+    role: viewer
+    key_hash: &quot;9f86d0...&quot;       # SHA-256 hex, written by &quot;pgcellar apikey create&quot;
+</code></pre>
+<p>At least one user must be <code>admin</code>. Names are unique inside each list.</p>
+<h2 id="recoveries"><code>recoveries</code></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dir</code></td>
+<td><code>/var/lib/pgcellar/recoveries</code></td>
+<td>Where restores go: <code>&lt;dir&gt;/&lt;server&gt;/&lt;backup id&gt;-&lt;timestamp&gt;</code>. Absolute path, not <code>/</code>. Map it on the Docker host.</td>
+</tr>
+<tr>
+<td><code>max_download_bytes</code></td>
+<td><code>2147483648</code> (2 GiB)</td>
+<td>An archive above this has no download link, only its path. <code>0</code> = no limit.</td>
+</tr>
+<tr>
+<td><code>keep_days</code></td>
+<td><code>7</code></td>
+<td>Restores older than this are removed daily. <code>0</code> = keep forever.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="drills"><code>drills</code></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td><code>false</code> stops the scheduled drills; manual ones stay possible.</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
+<td><code>30m</code></td>
+<td>A whole drill, restore included.</td>
+</tr>
+<tr>
+<td><code>recovery_timeout</code></td>
+<td><code>10m</code></td>
+<td>Wait for the copy to finish replaying WAL.</td>
+</tr>
+<tr>
+<td><code>keep_last</code></td>
+<td><code>true</code></td>
+<td>Keep the data directory of the last good drill of each server.</td>
+</tr>
+<tr>
+<td><code>verify_tables</code></td>
+<td><code>false</code></td>
+<td><code>SELECT count(*)</code> on every table. Slow on big databases.</td>
+</tr>
+<tr>
+<td><code>max_age</code></td>
+<td><code>192h</code> (8 days)</td>
+<td>A server with a drill schedule turns orange when its last good drill is older.</td>
+</tr>
+<tr>
+<td><code>bin_dir</code></td>
+<td><code>/usr/lib/postgresql</code></td>
+<td>Holds one directory per PostgreSQL major version, each with a <code>bin/</code>. Absolute path.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="environment-variables">Environment variables</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Used for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TZ</code></td>
+<td>Time zone of schedules, the daily summary and displayed times.</td>
+</tr>
+<tr>
+<td>The ones you name in <code>*_env</code></td>
+<td>Alert secrets (chapter 8).</td>
+</tr>
+<tr>
+<td><code>PGCELLAR_BASE_URL</code></td>
+<td>Only in <code>--demo</code> mode: base URL of links.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="validation-errors">Validation errors</h2>
+<p><code>pgcellar check</code> and the console say what is wrong in a sentence, for example:</p>
+<pre><code>PROBLEM  server &quot;pg-main&quot;: set either recovery_window_days or redundancy, not both
+PROBLEM  status_interval must be at least 30s (for example &quot;1m&quot; or &quot;5m&quot;); leave it out for the default
+PROBLEM  there must be at least one user with the admin role
+PROBLEM  alerts.daily_summary &quot;8h30&quot; is not a time of day (use &quot;08:30&quot;, or leave it empty for no summary)
+</code></pre>
+<p>Fix the line and save the file again; pgCellar picks the change up.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/users-roles-and-api/"><small>Previous</small>Users, roles, API keys and the API</a>
+  <a class="next" href="/docs/operations/"><small>Next</small>Operations</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

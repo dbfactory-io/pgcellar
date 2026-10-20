@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Licensing and editions - pgCellar manual</title>
+<meta name="description" content="Two separate things: the licence of the source code (what you may do with pgCellar), and the licence key (how many servers you may add). This chapter explains both....">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/licensing-and-editions/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/">pg<span>Cellar</span></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0 (not released yet)</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/" class="on" aria-current="page"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 14 of 15</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#the-source-licence-fsl-11-apache-20">The source licence: FSL-1.1-Apache-2.0</a></li><li class="l2"><a href="#editions">Editions</a></li><li class="l2"><a href="#what-a-licence-blocks-and-what-it-never-blocks">What a licence blocks, and what it never blocks</a></li><li class="l3"><a href="#expiry-and-grace">Expiry and grace</a></li><li class="l2"><a href="#putting-a-key-in-place">Putting a key in place</a></li><li class="l2"><a href="#which-servers-are-counted">Which servers are counted</a></li></ul></nav>
+<article>
+<h1 id="licensing-and-editions">Licensing and editions</h1>
+<p>Two separate things: the licence of the <strong>source code</strong> (what you may do with pgCellar), and the <strong>licence key</strong> (how many servers you may add). This chapter explains both. It is a summary: the text of the file <code>LICENSE</code> is what counts.</p>
+<h2 id="the-source-licence-fsl-11-apache-20">The source licence: FSL-1.1-Apache-2.0</h2>
+<p>pgCellar is released under the Functional Source License, version 1.1, with the Apache License 2.0 as its future licence (SPDX: <code>FSL-1.1-ALv2</code>). In plain words:</p>
+<ul>
+<li>The source is public. You can read it, build it, modify it and redistribute it.</li>
+<li>You can use it for any purpose except a <strong>Competing Use</strong>. Using it to back up your own databases, or your employer's, or your customers' as part of a professional service, is a permitted purpose. So are non-commercial education and research.</li>
+<li>A Competing Use is making the software available to others in a commercial product or service that substitutes for pgCellar or offers the same or substantially similar functionality. In practice: you cannot take pgCellar and sell a hosted &quot;backup console&quot; service built on it.</li>
+<li><strong>Each version becomes Apache-2.0 two years after its release.</strong> After that date, that version is under a permissive licence with no such restriction.</li>
+</ul>
+<p>If you are in doubt about a specific use (a managed-service offering, an integration in a product), ask before you build it: the author prefers a conversation to a surprise.</p>
+<p>Barman is a separate program under GPL-3.0. The image contains it unmodified; pgCellar runs its command line and never imports, links or patches it. The two programs keep their own licences. The Docker image is an aggregation of them.</p>
+<h2 id="editions">Editions</h2>
+<table>
+<thead>
+<tr>
+<th>Edition</th>
+<th>Servers</th>
+<th>Price</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Free</td>
+<td>up to 2</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Pro</td>
+<td>up to 10</td>
+<td>490 EUR per year</td>
+</tr>
+<tr>
+<td>Business</td>
+<td>unlimited</td>
+<td>1 490 EUR per year</td>
+</tr>
+</tbody>
+</table>
+<p>Prices are the ones on the project page at the time of writing; see https://dbfactory.io/pgcellar for the current ones. Early access is free during the beta.</p>
+<p>Free is not a trial. There is no expiry and no feature locked away: the Free edition simply holds two servers.</p>
+<h2 id="what-a-licence-blocks-and-what-it-never-blocks">What a licence blocks, and what it never blocks</h2>
+<p><strong>A licence never blocks a backup, a restore or a drill.</strong> That is a product rule, in the code, tested. Whatever the state of your licence:</p>
+<ul>
+<li>scheduled and manual backups keep running;</li>
+<li>restores, point-in-time recovery and downloads keep working;</li>
+<li>restore drills keep running and reports keep being written;</li>
+<li>alerts, the API, metrics and the console keep working.</li>
+</ul>
+<p>What a licence limits is <strong>adding a server</strong> beyond the quota. The check is made in one place only, where a server is created, so the form and the API behave the same. Beyond the quota the answer is a message that says what keeps working and where to get a licence.</p>
+<p>A server that already exists is never removed or paused because of the licence.</p>
+<h3 id="expiry-and-grace">Expiry and grace</h3>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+<th>Quota</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>free</code></td>
+<td>No key</td>
+<td>2 servers</td>
+</tr>
+<tr>
+<td><code>valid</code></td>
+<td>Signed key, not expired</td>
+<td>What the key says</td>
+</tr>
+<tr>
+<td><code>grace</code></td>
+<td>Expired for less than 30 days</td>
+<td>Still what the key says</td>
+</tr>
+<tr>
+<td><code>expired</code></td>
+<td>Expired for 30 days or more</td>
+<td>Free rules: 2 servers, for new additions</td>
+</tr>
+<tr>
+<td><code>invalid</code></td>
+<td>The key does not verify</td>
+<td>Free rules, and the reason in a banner</td>
+</tr>
+</tbody>
+</table>
+<p>A key is valid through the end of its expiry day (UTC). After expiry you get 30 days of grace. After that, the Free rules apply to <strong>additions</strong> only; the servers you already have keep running and nothing is deleted.</p>
+<p>A key of edition &quot;free&quot; never raises the quota.</p>
+<p>The footer of every page shows the edition and the count (&quot;Free edition · 2 of 2 servers&quot;). The Status page shows a banner only when you are over quota, in grace, or expired.</p>
+<h2 id="putting-a-key-in-place">Putting a key in place</h2>
+<p>A key looks like <code>PGC1.&lt;payload&gt;.&lt;signature&gt;</code>. It is Ed25519 signed and verified <strong>offline</strong> against a public key built into the binary: no account, no network call, nothing phones home.</p>
+<p>Put it in <code>pgcellar.yaml</code>:</p>
+<pre><code class="language-yaml">license:
+  key: &quot;PGC1.eyJpZCI6....&quot;
+</code></pre>
+<p>or keep it in a file and point to it:</p>
+<pre><code class="language-yaml">license:
+  file: /etc/pgcellar/license.key
+</code></pre>
+<p>Check what the application sees:</p>
+<pre><code>docker compose exec pgcellar pgcellar license show --config /etc/pgcellar/pgcellar.yaml
+</code></pre>
+<pre><code>state:    valid
+edition:  Pro
+licensee: Example Ltd
+id:       ...
+servers:  10 allowed
+expires:  2027-10-20 (grace until 2027-11-19)
+footer:   Pro edition · Example Ltd · 3 of 10 servers
+</code></pre>
+<p>To read what a key says, without a configuration file:</p>
+<pre><code>pgcellar license verify PGC1.eyJ...
+</code></pre>
+<p>It prints the payload (id, edition, licensee, servers, issue and expiry dates), the state, and a verdict: <code>signature OK</code>, or <code>INVALID</code> with the reason. It exits with a non-zero status for an expired key.</p>
+<p><code>GET /api/v1/license</code> (viewer) returns the edition, the licensee, the servers allowed and used, the expiry and the state. The metrics <code>pgcellar_license_servers_max</code> and <code>pgcellar_license_servers_used</code> expose the quota.</p>
+<p><code>pgcellar license keygen</code> and <code>pgcellar license issue</code> are for the vendor: they create the signing key and sign licence keys. You never need them. The private key is never in the repository.</p>
+<p>Get a key at https://dbfactory.io/pgcellar.</p>
+<h2 id="which-servers-are-counted">Which servers are counted</h2>
+<p>Servers are counted as the Servers page lists them: the sections of <code>barman.d</code>, the entries of <code>pgcellar.yaml</code> and the servers in the status cache, each name once. <code>pgcellar license show</code> counts only the entries of <code>pgcellar.yaml</code>, so its footer line can differ from the one in the console.</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/troubleshooting/"><small>Previous</small>Troubleshooting</a>
+  <a class="next" href="/docs/cli-reference/"><small>Next</small>CLI reference</a>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>
