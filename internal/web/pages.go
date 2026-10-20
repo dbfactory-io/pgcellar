@@ -65,7 +65,7 @@ type formData struct {
 }
 
 func (s *Server) serverNewForm(w http.ResponseWriter, r *http.Request, u *userCtx) {
-	in := app.ServerInput{BackupMethod: "postgres", WALMethod: app.WALStreaming, Schedule: config.Schedule{Backup: "daily 02:00", Enabled: true}, Retention: config.Retention{RecoveryWindowDays: 14, MinimumRedundancy: 2}}
+	in := app.ServerInput{BackupMethod: "postgres", WALMethod: app.WALStreaming, Schedule: config.Schedule{Backup: "daily 02:00", Enabled: config.Ptr(true)}, Retention: config.Retention{RecoveryWindowDays: 14, MinimumRedundancy: 2}}
 	s.render(w, http.StatusOK, "server_new", s.newPage(r, u, tr("servers.new"), "servers", formData{In: in, Action: "/servers", CSRF: u.CSRF, New: true}))
 }
 
@@ -91,7 +91,7 @@ func parseServerForm(r *http.Request) (app.ServerInput, []string) {
 		Name: f("name"), Label: f("label"), Description: f("description"),
 		BackupMethod: f("backup_method"), ConnInfo: f("conninfo"), StreamingConnInfo: f("streaming_conninfo"),
 		Slot: f("slot_name"), SSHCommand: f("ssh_command"), WALMethod: f("wal_method"),
-		Schedule: config.Schedule{Backup: f("schedule_backup"), Enabled: f("schedule_enabled") != ""},
+		Schedule: config.Schedule{Backup: f("schedule_backup"), Enabled: config.Ptr(f("schedule_enabled") != "")},
 	}
 	in.Retention.RecoveryWindowDays = atoi(r, "recovery_window_days", &problems)
 	in.Retention.Redundancy = atoi(r, "redundancy", &problems)
@@ -459,7 +459,7 @@ func (s *Server) restoreData(r *http.Request, u *userCtx, name string) (restoreD
 		return restoreData{}, err
 	}
 	cfg := s.app.Config().Recoveries
-	d := restoreData{Server: name, Dir: cfg.Dir, MaxDL: cfg.MaxDownloadBytes, KeepDays: cfg.KeepDays, Target: app.TargetLatest}
+	d := restoreData{Server: name, Dir: cfg.Dir, MaxDL: cfg.MaxDownloadBytes, KeepDays: cfg.EffectiveKeepDays(), Target: app.TargetLatest}
 	d.Zone = time.Now().Format("MST (UTC-07:00)")
 	switch backups, err := s.app.Backups(r.Context(), u.Name, name); {
 	case errors.Is(err, app.ErrRefreshPending):

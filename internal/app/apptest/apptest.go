@@ -142,7 +142,7 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 	}
 	cfg.Alerts.MaxBackupAge = 26 * time.Hour
 	cfg.Alerts.MaxWALAge = time.Hour
-	cfg.Servers = []config.Server{{Name: "pg-main", Label: "Main", Schedule: config.Schedule{Backup: "daily 02:00", Enabled: true}}}
+	cfg.Servers = []config.Server{{Name: "pg-main", Label: "Main", Schedule: config.Schedule{Backup: "daily 02:00", Enabled: config.Ptr(true)}}}
 	keys := map[string]string{}
 	for _, role := range []string{"admin", "operator", "viewer"} {
 		cfg.Users = append(cfg.Users, config.User{Name: role + "-user", Role: role, PasswordHash: hash})

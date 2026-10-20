@@ -204,6 +204,9 @@ func check(args []string, stdout, stderr io.Writer) int {
 	} else {
 		_, _ = fmt.Fprintln(stdout, "  ok")
 	}
+	for _, w := range config.Warnings(cfg) {
+		_, _ = fmt.Fprintf(stdout, "  WARNING  %s\n", w)
+	}
 
 	barmanDir := *dir
 	if barmanDir == "" {

@@ -48,17 +48,20 @@ func Defaults() *Config {
 			User:         "barman",
 			CronInterval: time.Minute,
 		},
-		Drills: Drills{Enabled: true, Timeout: DefaultDrillTimeout, RecoveryTimeout: DefaultDrillRecoveryTimeout,
-			KeepLast: true, MaxAge: DefaultDrillMaxAge, BinDir: DefaultPGBinDir},
-		Scheduler:          Scheduler{Enabled: true, CatchUp: DefaultCatchUp, Parallel: 1},
-		StatusInterval:     time.Minute,
-		Alerts:             Alerts{MinFreePercent: DefaultMinFreePercent, RepeatEvery: DefaultRepeatEvery},
-		SetupInterval:      DefaultSetupInterval,
-		AuditRetentionDays: 90,
+		// Settings where the zero value means something else than the default
+		// (enabled, keep_last, catch_up, repeat_every, keep_days,
+		// audit_retention_days) are left nil on purpose: nil = the key is
+		// absent = the default, resolved by the accessors. Save then never
+		// writes them unless somebody chose a value.
+		Drills: Drills{Timeout: DefaultDrillTimeout, RecoveryTimeout: DefaultDrillRecoveryTimeout,
+			MaxAge: DefaultDrillMaxAge, BinDir: DefaultPGBinDir},
+		Scheduler:      Scheduler{Parallel: 1},
+		StatusInterval: time.Minute,
+		Alerts:         Alerts{MinFreePercent: DefaultMinFreePercent},
+		SetupInterval:  DefaultSetupInterval,
 		Recoveries: Recoveries{
 			Dir:              DefaultRecoveriesDir,
 			MaxDownloadBytes: 2 << 30,
-			KeepDays:         7,
 		},
 	}
 }
@@ -122,6 +125,25 @@ func Save(path string, cfg *Config) error {
 	return nil
 }
 
+// Warnings returns what is worth a look in a valid configuration but does not
+// stop pgCellar: shown by `pgcellar check` and written to the journal at
+// startup.
+func Warnings(cfg *Config) []string {
+	var w []string
+	if cfg.Drills.Enabled != nil && !*cfg.Drills.Enabled {
+		scheduled := false
+		for _, s := range cfg.Servers {
+			if strings.TrimSpace(s.Drills.Schedule) != "" {
+				scheduled = true
+			}
+		}
+		if !scheduled {
+			w = append(w, "drills.enabled is false; delete the line to get the default (on). Older versions wrote it by themselves, and it switches off every scheduled restore drill")
+		}
+	}
+	return w
+}
+
 var serverNameRe = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
 var validRoles = map[string]bool{"admin": true, "operator": true, "viewer": true}
@@ -149,13 +171,13 @@ func Validate(cfg *Config) []string {
 	if cfg.SetupInterval != 0 && cfg.SetupInterval < MinSetupInterval {
 		add("setup_interval must be at least %s (for example \"30m\"); leave it out for the default", MinSetupInterval)
 	}
-	if cfg.Scheduler.CatchUp < 0 {
+	if c := cfg.Scheduler.CatchUp; c != nil && *c < 0 {
 		add("scheduler.catch_up cannot be negative (0 disables the catch-up)")
 	}
 	if cfg.Scheduler.Parallel < 1 {
 		add("scheduler.parallel must be at least 1")
 	}
-	if cfg.AuditRetentionDays < 0 {
+	if cfg.EffectiveAuditRetentionDays() < 0 {
 		add("audit_retention_days cannot be negative (0 keeps everything)")
 	}
 	if strings.TrimSpace(cfg.Recoveries.Dir) == "" || !filepath.IsAbs(cfg.Recoveries.Dir) {
@@ -166,7 +188,7 @@ func Validate(cfg *Config) []string {
 	if cfg.Recoveries.MaxDownloadBytes < 0 {
 		add("recoveries.max_download_bytes cannot be negative (0 means no limit)")
 	}
-	if cfg.Recoveries.KeepDays < 0 {
+	if cfg.Recoveries.EffectiveKeepDays() < 0 {
 		add("recoveries.keep_days cannot be negative (0 keeps everything)")
 	}
 
@@ -183,7 +205,7 @@ func Validate(cfg *Config) []string {
 			add("server name %q is used more than once", s.Name)
 		}
 		seen[s.Name] = true
-		if s.Schedule.Enabled {
+		if s.Schedule.IsEnabled() {
 			if _, _, err := ParseSchedule(s.Schedule.Backup); err != nil {
 				add("server %q: %v", s.Name, err)
 			}
@@ -263,7 +285,7 @@ func Validate(cfg *Config) []string {
 			add("alerts.mail.port %d is not a valid port", m.Port)
 		}
 	}
-	if cfg.Alerts.RepeatEvery < 0 {
+	if cfg.Alerts.EffectiveRepeatEvery() < 0 {
 		add("alerts.repeat_every cannot be negative")
 	}
 	if d := strings.TrimSpace(cfg.Alerts.DailySummary); d != "" {

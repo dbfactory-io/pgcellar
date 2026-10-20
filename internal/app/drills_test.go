@@ -297,7 +297,7 @@ func TestDrillKeepLast(t *testing.T) {
 }
 
 func TestDrillNoKeep(t *testing.T) {
-	e := apptest.NewWith(t, func(c *config.Config) { c.Drills.KeepLast = false })
+	e := apptest.NewWith(t, func(c *config.Config) { c.Drills.KeepLast = config.Ptr(false) })
 	_, d := startDrill(t, e, app.DrillInput{})
 	if !d.OK || d.Details.DataDir != "" {
 		t.Fatalf("%+v", d)
@@ -464,7 +464,7 @@ func scheduledDrillRuns(t *testing.T, a *app.App, server string) int {
 
 func drillScheduleEnv(t *testing.T, mutate func(*config.Config)) *apptest.Env {
 	return apptest.NewWith(t, func(c *config.Config) {
-		c.Servers[0].Schedule.Enabled = false
+		c.Servers[0].Schedule.Enabled = config.Ptr(false)
 		c.Servers[0].Drills.Schedule = "daily 03:10"
 		if mutate != nil {
 			mutate(c)
@@ -561,7 +561,7 @@ func TestSchedulerDrillsOneAtATime(t *testing.T) {
 }
 
 func TestSchedulerDrillsSwitchedOff(t *testing.T) {
-	e := drillScheduleEnv(t, func(c *config.Config) { c.Drills.Enabled = false })
+	e := drillScheduleEnv(t, func(c *config.Config) { c.Drills.Enabled = config.Ptr(false) })
 	a := e.App
 	a.SchedulerTick(context.Background(), at(20, 2, 30, 0))
 	a.SchedulerTick(context.Background(), at(20, 3, 10, 5))

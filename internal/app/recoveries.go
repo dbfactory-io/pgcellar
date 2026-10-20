@@ -539,10 +539,10 @@ func (a *App) DeleteRecovery(actor string, id int64) error {
 func (a *App) PurgeRecoveries() int {
 	a.purgeOrphanDrillCopies()
 	cfg := a.Config().Recoveries
-	if cfg.KeepDays <= 0 {
+	if cfg.EffectiveKeepDays() <= 0 {
 		return 0
 	}
-	old, err := a.Store.RecoveriesOlderThan(time.Now().AddDate(0, 0, -cfg.KeepDays))
+	old, err := a.Store.RecoveriesOlderThan(time.Now().AddDate(0, 0, -cfg.EffectiveKeepDays()))
 	if err != nil {
 		a.Logf("recoveries purge failed: %v", err)
 		return 0
@@ -557,11 +557,11 @@ func (a *App) PurgeRecoveries() int {
 			a.Logf("recoveries purge: %v", err)
 			continue
 		}
-		_ = a.Store.AddAudit(systemActor, "recovery.purge", r.Server+"/"+filepath.Base(r.Path), fmt.Sprintf("recovery #%d older than %d days", r.ID, cfg.KeepDays))
+		_ = a.Store.AddAudit(systemActor, "recovery.purge", r.Server+"/"+filepath.Base(r.Path), fmt.Sprintf("recovery #%d older than %d days", r.ID, cfg.EffectiveKeepDays()))
 		n++
 	}
 	if n > 0 {
-		a.Logf("recoveries purge: removed %d restore(s) older than %d days", n, cfg.KeepDays)
+		a.Logf("recoveries purge: removed %d restore(s) older than %d days", n, cfg.EffectiveKeepDays())
 	}
 	return n
 }

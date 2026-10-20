@@ -40,7 +40,7 @@ func (m *mailer) port() int {
 	return 25
 }
 
-func (m *mailer) startTLS() bool { return m.cfg.StartTLS == nil || *m.cfg.StartTLS }
+func (m *mailer) startTLS() bool { return m.cfg.UsesStartTLS() }
 
 // plainAuth is AUTH PLAIN without net/smtp's refusal to run unencrypted:
 // the administrator turned starttls off on purpose.

@@ -21,7 +21,7 @@ barman:
 
 # pgCellar starts the backups of every server whose schedule is enabled; no host cron needed.
 scheduler:
-  enabled: true                        # false = nothing is started by pgCellar
+  enabled: true                        # false = nothing is started by pgCellar; absent = true
   catch_up: 6h                         # a backup missed while pgCellar was stopped still runs if it is not older than this; 0 = never
   parallel: 1                          # backups running at once, all servers together
 
@@ -109,9 +109,9 @@ recoveries:
 # (<recoveries.dir>/<server>/reports/). One drill at a time, never during a backup
 # of the same server.
 drills:
-  enabled: true                        # false stops the scheduled drills (manual ones stay possible)
+  enabled: true                        # false stops the scheduled drills (manual ones stay possible); absent = true
   timeout: 30m                         # a whole drill, restore included
   recovery_timeout: 10m                # wait for the copy to finish replaying WAL
-  keep_last: true                      # keep the data directory of the last good drill
+  keep_last: true                      # keep the data directory of the last good drill; absent = true
   verify_tables: false                 # true = SELECT count(*) on every table (slow)
   max_age: 192h                        # orange when the last good drill is older (8 days)

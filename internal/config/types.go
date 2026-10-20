@@ -3,7 +3,15 @@
 // and the local git history of the configuration directory.
 package config
 
-import "time"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
+
+// Ptr returns a pointer to v: how a setting is given an explicit value in a
+// Go struct (nil = the key is absent = the default applies).
+func Ptr[T any](v T) *T { return &v }
 
 // Config is the whole pgcellar.yaml. Keep it boring: strings, lists, maps.
 // A sysadmin, an automation agent or git must be able to edit it by hand.
@@ -24,10 +32,10 @@ type Config struct {
 	License    License    `yaml:"license" json:"license"`
 	// StatusInterval is how often the cached status of every server is
 	// refreshed. Each refresh runs several Barman commands per server.
-	StatusInterval time.Duration `yaml:"status_interval" json:"status_interval"`
+	StatusInterval time.Duration `yaml:"status_interval,omitempty" json:"status_interval"`
 	// SetupInterval is how often the PostgreSQL settings of every server are
 	// read again for the "Server setup" section (one psql query per server).
-	SetupInterval time.Duration `yaml:"setup_interval" json:"setup_interval"`
+	SetupInterval time.Duration `yaml:"setup_interval,omitempty" json:"setup_interval"`
 	// SSHHost is the name PostgreSQL servers use to reach this host over SSH,
 	// shown in the archive_command pgCellar advises (barman-wal-archive
 	// <ssh_host> <server> %p). Empty = the host name of this machine.
@@ -37,7 +45,28 @@ type Config struct {
 	// (barman-wal-archive --port <ssh_port> ...). 0 = 2222.
 	SSHPort int `yaml:"ssh_port" json:"ssh_port"`
 	// AuditRetentionDays: audit lines older than this are purged daily. 0 = keep forever.
-	AuditRetentionDays int `yaml:"audit_retention_days" json:"audit_retention_days"`
+	// nil = absent = 90 days.
+	AuditRetentionDays *int `yaml:"audit_retention_days,omitempty" json:"audit_retention_days"`
+}
+
+// DefaultAuditRetentionDays is audit_retention_days when the key is absent.
+const DefaultAuditRetentionDays = 90
+
+// EffectiveAuditRetentionDays resolves audit_retention_days (0 = keep forever).
+func (c Config) EffectiveAuditRetentionDays() int {
+	if c.AuditRetentionDays == nil {
+		return DefaultAuditRetentionDays
+	}
+	return *c.AuditRetentionDays
+}
+
+// MarshalJSON shows the resolved audit retention, never a null.
+func (c Config) MarshalJSON() ([]byte, error) {
+	type plain Config
+	return json.Marshal(struct {
+		plain
+		AuditRetentionDays int `json:"audit_retention_days"`
+	}{plain(c), c.EffectiveAuditRetentionDays()})
 }
 
 // Barman says where Barman lives and how to call it.
@@ -54,13 +83,36 @@ type Barman struct {
 // Scheduler configures the built-in scheduler: pgCellar starts the backups of
 // every server whose schedule is enabled, no host cron needed.
 type Scheduler struct {
-	Enabled bool `yaml:"enabled" json:"enabled"` // default true
+	// Enabled: nil = absent = true (see Config rules in docs/DECISIONS.md).
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled"`
 	// CatchUp: a due time missed while pgCellar was stopped is still run at
-	// startup when it is not older than this. 0 = never catch up. Default 6h.
-	CatchUp time.Duration `yaml:"catch_up" json:"catch_up"`
+	// startup when it is not older than this. 0 = never catch up; nil = absent
+	// = 6h.
+	CatchUp *time.Duration `yaml:"catch_up,omitempty" json:"catch_up"`
 	// Parallel is the most backups running at once, all servers together.
-	// Default 1.
-	Parallel int `yaml:"parallel" json:"parallel"`
+	// Default 1 (0 or absent).
+	Parallel int `yaml:"parallel,omitempty" json:"parallel"`
+}
+
+// IsEnabled resolves scheduler.enabled (absent = true).
+func (s Scheduler) IsEnabled() bool { return s.Enabled == nil || *s.Enabled }
+
+// EffectiveCatchUp resolves scheduler.catch_up (absent = DefaultCatchUp, 0 = never).
+func (s Scheduler) EffectiveCatchUp() time.Duration {
+	if s.CatchUp == nil {
+		return DefaultCatchUp
+	}
+	return *s.CatchUp
+}
+
+// MarshalJSON shows resolved values, never a pointer or a null.
+func (s Scheduler) MarshalJSON() ([]byte, error) {
+	type plain Scheduler
+	return json.Marshal(struct {
+		plain
+		Enabled bool          `json:"enabled"`
+		CatchUp time.Duration `json:"catch_up"`
+	}{plain(s), s.IsEnabled(), s.EffectiveCatchUp()})
 }
 
 // DefaultCatchUp is the default scheduler.catch_up.
@@ -80,8 +132,28 @@ type Server struct {
 // Schedule is human-readable and rendered into a crontab line for `barman cron`
 // plus one `barman backup` entry.
 type Schedule struct {
-	Backup  string `yaml:"backup" json:"backup"` // "daily 02:00", "weekly sun 03:00", or a raw cron expression
-	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Backup string `yaml:"backup" json:"backup"` // "daily 02:00", "weekly sun 03:00", or a raw cron expression
+	// Enabled: nil = absent = on when a backup schedule is given, off when
+	// there is none.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled"`
+}
+
+// IsEnabled resolves schedule.enabled: absent means on as soon as a backup
+// schedule is written.
+func (s Schedule) IsEnabled() bool {
+	if s.Enabled == nil {
+		return strings.TrimSpace(s.Backup) != ""
+	}
+	return *s.Enabled
+}
+
+// MarshalJSON shows the resolved boolean, never a null.
+func (s Schedule) MarshalJSON() ([]byte, error) {
+	type plain Schedule
+	return json.Marshal(struct {
+		plain
+		Enabled bool `json:"enabled"`
+	}{plain(s), s.IsEnabled()})
 }
 
 // Retention mirrors Barman's retention_policy and minimum_redundancy.
@@ -106,8 +178,8 @@ type Alerts struct {
 	// MinFreeBytes: same, in bytes. 0 = off.
 	MinFreeBytes int64 `yaml:"min_free_bytes" json:"min_free_bytes"`
 	// RepeatEvery: a condition that lasts is announced again only after this
-	// delay. Default 24h.
-	RepeatEvery time.Duration `yaml:"repeat_every" json:"repeat_every"`
+	// delay. 0 = never repeat; nil = absent = 24h.
+	RepeatEvery *time.Duration `yaml:"repeat_every,omitempty" json:"repeat_every"`
 	// OnDrillSuccess also sends a message when a restore drill passes.
 	OnDrillSuccess bool `yaml:"on_drill_success" json:"on_drill_success"`
 	// DailySummary is a time of day ("08:30") at which one message sums up
@@ -117,6 +189,26 @@ type Alerts struct {
 
 // DefaultRepeatEvery is alerts.repeat_every when it is not set.
 const DefaultRepeatEvery = 24 * time.Hour
+
+// EffectiveRepeatEvery resolves alerts.repeat_every (absent = 24h, 0 = never).
+func (a Alerts) EffectiveRepeatEvery() time.Duration {
+	if a.RepeatEvery == nil {
+		return DefaultRepeatEvery
+	}
+	return *a.RepeatEvery
+}
+
+// MarshalJSON shows the resolved delay, never a null.
+func (a Alerts) MarshalJSON() ([]byte, error) {
+	type plain Alerts
+	return json.Marshal(struct {
+		plain
+		RepeatEvery time.Duration `json:"repeat_every"`
+	}{plain(a), a.EffectiveRepeatEvery()})
+}
+
+// UsesStartTLS resolves alerts.mail.starttls (absent = true).
+func (m MailAlert) UsesStartTLS() bool { return m.StartTLS == nil || *m.StartTLS }
 
 type MailAlert struct {
 	Host string `yaml:"host" json:"host"`
@@ -167,23 +259,41 @@ type APIKey struct {
 // started as a throwaway PostgreSQL and checked, with a dated PDF report. What
 // is global lives here; the schedule of each server is Server.Drills.
 type Drills struct {
-	Enabled bool `yaml:"enabled" json:"enabled"` // default true; false stops the scheduled drills only
+	// Enabled: nil = absent = true; false stops the scheduled drills only.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled"`
 	// Timeout bounds a whole drill (restore included). Default 30m.
-	Timeout time.Duration `yaml:"timeout" json:"timeout"`
+	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout"`
 	// RecoveryTimeout bounds the wait for the restored copy to finish its
 	// recovery (WAL replay) once it is started. Default 10m.
-	RecoveryTimeout time.Duration `yaml:"recovery_timeout" json:"recovery_timeout"`
+	RecoveryTimeout time.Duration `yaml:"recovery_timeout,omitempty" json:"recovery_timeout"`
 	// KeepLast keeps the data directory of the last successful drill of each
-	// server and removes the previous one. Default true; false removes it at once.
-	KeepLast bool `yaml:"keep_last" json:"keep_last"`
+	// server and removes the previous one. nil = absent = true; false removes
+	// it at once.
+	KeepLast *bool `yaml:"keep_last,omitempty" json:"keep_last"`
 	// VerifyTables adds a SELECT count(*) on every table: slow on big databases.
 	VerifyTables bool `yaml:"verify_tables" json:"verify_tables"`
 	// MaxAge: a server with a drill schedule turns orange when its last
 	// successful drill is older than this. Default 192h (8 days).
-	MaxAge time.Duration `yaml:"max_age" json:"max_age"`
+	MaxAge time.Duration `yaml:"max_age,omitempty" json:"max_age"`
 	// BinDir holds one directory per PostgreSQL major version, each with a
 	// bin/ (pg_ctl, psql...). Default /usr/lib/postgresql.
-	BinDir string `yaml:"bin_dir" json:"bin_dir"`
+	BinDir string `yaml:"bin_dir,omitempty" json:"bin_dir"`
+}
+
+// IsEnabled resolves drills.enabled (absent = true).
+func (d Drills) IsEnabled() bool { return d.Enabled == nil || *d.Enabled }
+
+// KeepsLast resolves drills.keep_last (absent = true).
+func (d Drills) KeepsLast() bool { return d.KeepLast == nil || *d.KeepLast }
+
+// MarshalJSON shows resolved booleans, never a pointer or a null.
+func (d Drills) MarshalJSON() ([]byte, error) {
+	type plain Drills
+	return json.Marshal(struct {
+		plain
+		Enabled  bool `json:"enabled"`
+		KeepLast bool `json:"keep_last"`
+	}{plain(d), d.IsEnabled(), d.KeepsLast()})
 }
 
 // ServerDrills is the drill setting of one server.
@@ -208,6 +318,27 @@ type Recoveries struct {
 	// MaxDownloadBytes: an archive bigger than this has no download link, only
 	// its path. 0 = no limit.
 	MaxDownloadBytes int64 `yaml:"max_download_bytes" json:"max_download_bytes"`
-	// KeepDays: restores older than this are removed daily. 0 = keep forever.
-	KeepDays int `yaml:"keep_days" json:"keep_days"`
+	// KeepDays: restores older than this are removed daily. 0 = keep forever;
+	// nil = absent = 7.
+	KeepDays *int `yaml:"keep_days,omitempty" json:"keep_days"`
+}
+
+// DefaultRecoveriesKeepDays is recoveries.keep_days when the key is absent.
+const DefaultRecoveriesKeepDays = 7
+
+// EffectiveKeepDays resolves recoveries.keep_days (0 = keep forever).
+func (r Recoveries) EffectiveKeepDays() int {
+	if r.KeepDays == nil {
+		return DefaultRecoveriesKeepDays
+	}
+	return *r.KeepDays
+}
+
+// MarshalJSON shows the resolved number of days, never a null.
+func (r Recoveries) MarshalJSON() ([]byte, error) {
+	type plain Recoveries
+	return json.Marshal(struct {
+		plain
+		KeepDays int `json:"keep_days"`
+	}{plain(r), r.EffectiveKeepDays()})
 }

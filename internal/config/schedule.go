@@ -136,7 +136,7 @@ func RenderCrontab(cfg *Config) string {
 	}
 	fmt.Fprintf(&b, "* * * * * %s %s cron\n", user, bin)
 	for _, s := range cfg.Servers {
-		if !s.Schedule.Enabled {
+		if !s.Schedule.IsEnabled() {
 			continue
 		}
 		cron, _, err := ParseSchedule(s.Schedule.Backup)

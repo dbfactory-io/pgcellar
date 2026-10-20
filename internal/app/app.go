@@ -147,6 +147,9 @@ func Load(configPath string, dev bool) (*App, error) {
 	a.ConfigPath = abs
 	a.ConfigDir = filepath.Dir(abs)
 	a.cfg = cfg
+	for _, w := range config.Warnings(cfg) {
+		a.Logf("warning: %s", w)
+	}
 	a.CronInterval = cfg.Barman.CronInterval
 	if cfg.StatusInterval > 0 {
 		a.StatusInterval = cfg.StatusInterval
@@ -294,7 +297,7 @@ func (a *App) Start(ctx context.Context) {
 	} else {
 		close(a.firstCron)
 	}
-	if a.Config().Scheduler.Enabled {
+	if a.Config().Scheduler.IsEnabled() {
 		a.wg.Add(1)
 		go func() {
 			defer a.wg.Done()
@@ -340,7 +343,7 @@ func (a *App) Start(ctx context.Context) {
 // everything) and returns how many were removed. The background loop calls it
 // once a day, and once at startup.
 func (a *App) PurgeAudit() int64 {
-	days := a.Config().AuditRetentionDays
+	days := a.Config().EffectiveAuditRetentionDays()
 	if days <= 0 {
 		return 0
 	}

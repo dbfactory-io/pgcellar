@@ -129,7 +129,7 @@
   <fieldset{{if .ReadOnly}} disabled{{end}}>
     <legend>Schedule</legend>
     <label>Backup schedule <input type="text" name="schedule_backup" value="{{.In.Schedule.Backup}}" placeholder="daily 02:00"><small>daily 02:00, weekly sun 03:00, hourly, every 6 hours, or a cron expression.</small></label>
-    <label class="chk"><input type="checkbox" name="schedule_enabled" value="1"{{if .In.Schedule.Enabled}} checked{{end}}> Enabled</label>
+    <label class="chk"><input type="checkbox" name="schedule_enabled" value="1"{{if .In.Schedule.IsEnabled}} checked{{end}}> Enabled</label>
   </fieldset>
   {{if not .ReadOnly}}<div class="actions"><button class="btn" type="submit">{{if .New}}{{t "btn.create"}}{{else}}{{t "btn.save"}}{{end}}</button></div>{{end}}
 </form>

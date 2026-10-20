@@ -432,7 +432,7 @@ func (a *App) alertSkipped(st *alertState, cfg *config.Config) []alerts.Message 
 
 func (a *App) alertLevels(st *alertState, cfg *config.Config, states []ServerState, now time.Time) []alerts.Message {
 	var out []alerts.Message
-	repeat := cfg.Alerts.RepeatEvery
+	repeat := cfg.Alerts.EffectiveRepeatEvery()
 	seen := map[string]bool{}
 	for _, s := range states {
 		seen[s.Name] = true

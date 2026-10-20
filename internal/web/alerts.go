@@ -26,8 +26,8 @@ func (s *Server) alertsData() (alertsData, error) {
 	cfg := s.app.Config()
 	d := alertsData{Channels: s.app.AlertChannels(), Journal: j, OnDrillSuccess: cfg.Alerts.OnDrillSuccess,
 		DailySummary: strings.TrimSpace(cfg.Alerts.DailySummary), BaseURLSet: strings.TrimSpace(cfg.BaseURL) != ""}
-	if cfg.Alerts.RepeatEvery > 0 {
-		d.RepeatEvery = app.HumanDuration(cfg.Alerts.RepeatEvery)
+	if cfg.Alerts.EffectiveRepeatEvery() > 0 {
+		d.RepeatEvery = app.HumanDuration(cfg.Alerts.EffectiveRepeatEvery())
 	}
 	return d, nil
 }

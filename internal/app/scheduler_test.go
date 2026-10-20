@@ -22,7 +22,7 @@ func setSchedule(t *testing.T, e *apptest.Env, name, backup string, enabled bool
 	if err != nil {
 		t.Fatal(err)
 	}
-	in.Schedule = config.Schedule{Backup: backup, Enabled: enabled}
+	in.Schedule = config.Schedule{Backup: backup, Enabled: config.Ptr(enabled)}
 	if _, err := e.App.UpdateServer("tester", name, in); err != nil {
 		t.Fatalf("update %s: %v", name, err)
 	}
@@ -67,15 +67,15 @@ func TestNextDue(t *testing.T) {
 		{"*/20 * * * *", at(20, 2, 40, 0)},
 	}
 	for _, c := range cases {
-		got, ok := app.NextDue(config.Schedule{Backup: c.spec, Enabled: true}, from)
+		got, ok := app.NextDue(config.Schedule{Backup: c.spec, Enabled: config.Ptr(true)}, from)
 		if !ok || !got.Equal(c.want) {
 			t.Errorf("%q: got %v (%v), want %v", c.spec, got, ok, c.want)
 		}
 	}
-	if _, ok := app.NextDue(config.Schedule{Backup: "daily 03:10"}, from); ok {
+	if _, ok := app.NextDue(config.Schedule{Backup: "daily 03:10", Enabled: config.Ptr(false)}, from); ok {
 		t.Error("a disabled schedule has no next due time")
 	}
-	if _, ok := app.NextDue(config.Schedule{Backup: "whenever", Enabled: true}, from); ok {
+	if _, ok := app.NextDue(config.Schedule{Backup: "whenever", Enabled: config.Ptr(true)}, from); ok {
 		t.Error("an invalid schedule has no next due time")
 	}
 }
@@ -161,7 +161,7 @@ func TestSchedulerCatchUp(t *testing.T) {
 		e := apptest.New(t)
 		a := e.App
 		setSchedule(t, e, "pg-main", "daily 03:10", true)
-		a.Config().Scheduler.CatchUp = 0
+		a.Config().Scheduler.CatchUp = config.Ptr(time.Duration(0))
 		a.SchedulerTick(ctx, at(20, 2, 30, 0))
 		a.SchedulerRestart()
 		a.SchedulerTick(ctx, at(20, 3, 20, 0))
@@ -245,7 +245,7 @@ func TestSchedulerDisabled(t *testing.T) {
 	e := apptest.New(t)
 	a := e.App
 	setSchedule(t, e, "pg-main", "daily 03:10", true)
-	a.Config().Scheduler.Enabled = false
+	a.Config().Scheduler.Enabled = config.Ptr(false)
 	a.SchedulerTick(ctx, at(20, 2, 30, 0))
 	a.SchedulerTick(ctx, at(20, 3, 20, 0))
 	if n := scheduledRuns(t, a, "pg-main"); n != 0 {

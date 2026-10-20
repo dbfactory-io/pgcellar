@@ -29,7 +29,7 @@ func sampleConfig(t *testing.T) *Config {
 	cfg.APIKeys = []APIKey{} // YAML loads an empty list as non-nil
 	cfg.Servers = []Server{{
 		Name: "pg-main", Label: "Main", Tags: []string{"prod"},
-		Schedule:  Schedule{Backup: "daily 02:00", Enabled: true},
+		Schedule:  Schedule{Backup: "daily 02:00", Enabled: Ptr(true)},
 		Retention: Retention{RecoveryWindowDays: 7, MinimumRedundancy: 2},
 	}}
 	cfg.Users = []User{{Name: "gilles", Role: "admin", PasswordHash: hash}}
@@ -146,8 +146,8 @@ func TestParseSchedule(t *testing.T) {
 func TestRenderCrontab(t *testing.T) {
 	cfg := sampleConfig(t)
 	cfg.Servers = append(cfg.Servers,
-		Server{Name: "off", Schedule: Schedule{Backup: "hourly", Enabled: false}},
-		Server{Name: "wk", Schedule: Schedule{Backup: "weekly sun 03:00", Enabled: true}})
+		Server{Name: "off", Schedule: Schedule{Backup: "hourly", Enabled: Ptr(false)}},
+		Server{Name: "wk", Schedule: Schedule{Backup: "weekly sun 03:00", Enabled: Ptr(true)}})
 	out := RenderCrontab(cfg)
 	for _, want := range []string{"* * * * * barman barman cron\n", "0 2 * * * barman barman backup pg-main\n", "0 3 * * 0 barman barman backup wk\n"} {
 		if !strings.Contains(out, want) {
@@ -240,17 +240,17 @@ func TestExampleDecodesStrictly(t *testing.T) {
 	if err := dec.Decode(cfg); err != nil {
 		t.Fatalf("example file has unknown or invalid keys: %v", err)
 	}
-	if cfg.Barman.CronInterval != time.Minute || cfg.AuditRetentionDays != 90 {
-		t.Errorf("example values: cron_interval=%v audit_retention_days=%d", cfg.Barman.CronInterval, cfg.AuditRetentionDays)
+	if cfg.Barman.CronInterval != time.Minute || cfg.EffectiveAuditRetentionDays() != 90 {
+		t.Errorf("example values: cron_interval=%v audit_retention_days=%d", cfg.Barman.CronInterval, cfg.EffectiveAuditRetentionDays())
 	}
 }
 
 func TestAuditAndCronDefaults(t *testing.T) {
 	d := Defaults()
-	if d.Barman.CronInterval != time.Minute || d.AuditRetentionDays != 90 {
-		t.Errorf("defaults: %v %d", d.Barman.CronInterval, d.AuditRetentionDays)
+	if d.Barman.CronInterval != time.Minute || d.EffectiveAuditRetentionDays() != 90 {
+		t.Errorf("defaults: %v %d", d.Barman.CronInterval, d.EffectiveAuditRetentionDays())
 	}
-	d.AuditRetentionDays = -1
+	d.AuditRetentionDays = Ptr(-1)
 	if len(Validate(d)) == 0 {
 		t.Error("negative audit_retention_days should be a problem")
 	}
@@ -298,7 +298,7 @@ func TestSetupInterval(t *testing.T) {
 
 func TestRecoveriesDefaultsAndValidation(t *testing.T) {
 	d := Defaults().Recoveries
-	if d.Dir != "/var/lib/pgcellar/recoveries" || d.MaxDownloadBytes != 2<<30 || d.KeepDays != 7 {
+	if d.Dir != "/var/lib/pgcellar/recoveries" || d.MaxDownloadBytes != 2<<30 || d.EffectiveKeepDays() != 7 {
 		t.Fatalf("defaults: %+v", d)
 	}
 	path := filepath.Join(t.TempDir(), "pgcellar.yaml")
@@ -309,7 +309,7 @@ func TestRecoveriesDefaultsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Recoveries.Dir != "/srv/restores" || cfg.Recoveries.KeepDays != 0 || cfg.Recoveries.MaxDownloadBytes != 2<<30 {
+	if cfg.Recoveries.Dir != "/srv/restores" || cfg.Recoveries.EffectiveKeepDays() != 0 || cfg.Recoveries.MaxDownloadBytes != 2<<30 {
 		t.Fatalf("partial section keeps the other defaults: %+v", cfg.Recoveries)
 	}
 	for name, mod := range map[string]func(*Config){
@@ -317,7 +317,7 @@ func TestRecoveriesDefaultsAndValidation(t *testing.T) {
 		"empty":    func(c *Config) { c.Recoveries.Dir = "" },
 		"root":     func(c *Config) { c.Recoveries.Dir = "/" },
 		"neg size": func(c *Config) { c.Recoveries.MaxDownloadBytes = -1 },
-		"neg days": func(c *Config) { c.Recoveries.KeepDays = -1 },
+		"neg days": func(c *Config) { c.Recoveries.KeepDays = Ptr(-1) },
 	} {
 		c := sampleConfig(t)
 		mod(c)

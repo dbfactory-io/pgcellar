@@ -51,12 +51,12 @@ func lastKey(kind int, server string) string {
 // specOf returns the schedule text of a server for a kind, "" when it has none.
 func specOf(cfg *config.Config, kind int, srv config.Server) string {
 	if kind == kindDrill {
-		if !cfg.Drills.Enabled {
+		if !cfg.Drills.IsEnabled() {
 			return ""
 		}
 		return strings.TrimSpace(srv.Drills.Schedule)
 	}
-	if !srv.Schedule.Enabled {
+	if !srv.Schedule.IsEnabled() {
 		return ""
 	}
 	return srv.Schedule.Backup
@@ -91,7 +91,7 @@ type schedState struct {
 // It is the single source of truth for "next backup": the scheduler, the
 // timeline and the status pages all use it.
 func NextDue(s config.Schedule, after time.Time) (time.Time, bool) {
-	if !s.Enabled || strings.TrimSpace(s.Backup) == "" {
+	if !s.IsEnabled() || strings.TrimSpace(s.Backup) == "" {
 		return time.Time{}, false
 	}
 	cron, _, err := config.ParseSchedule(s.Backup)
@@ -103,7 +103,7 @@ func NextDue(s config.Schedule, after time.Time) (time.Time, bool) {
 
 // configScheduleOf wraps a schedule text for NextDue.
 func configScheduleOf(spec string) config.Schedule {
-	return config.Schedule{Backup: spec, Enabled: true}
+	return config.Schedule{Backup: spec, Enabled: config.Ptr(true)}
 }
 
 // lastDueIn returns the latest due time of a cron expression in (after, now].
@@ -201,7 +201,7 @@ func (a *App) initialAfter(kind int, server string, now time.Time, noCatchUp boo
 func (a *App) SchedulerTick(ctx context.Context, now time.Time) {
 	cfg := a.Config()
 	sc := cfg.Scheduler
-	if !sc.Enabled || a.Store == nil {
+	if !sc.IsEnabled() || a.Store == nil {
 		return
 	}
 	parallel := sc.Parallel
@@ -238,7 +238,7 @@ func (a *App) SchedulerTick(ctx context.Context, now time.Time) {
 			seen[key] = true
 			e := s.entries[key]
 			if e == nil || e.spec != spec {
-				e = &schedEntry{spec: spec, cron: cron, after: a.initialAfter(kind, srv.Name, now, started || e != nil, sc.CatchUp)}
+				e = &schedEntry{spec: spec, cron: cron, after: a.initialAfter(kind, srv.Name, now, started || e != nil, sc.EffectiveCatchUp())}
 				s.entries[key] = e
 			}
 			if e.dead {

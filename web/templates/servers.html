@@ -12,7 +12,7 @@
   <div>{{if .State}}{{template "level" .State.Level}}{{else}}<small>unknown</small>{{end}}</div>
   {{if .State}}{{if .State.SetupLevel}}<div>{{template "setup_pill" .State}}</div>{{end}}{{end}}
   <div class="meta">{{if .HasFile}}{{.BackupMethod}}{{else}}-{{end}}</div>
-  <div class="meta">{{if .Schedule.Enabled}}{{.ScheduleHuman}}{{else}}<span aria-hidden="true">💤</span> schedule off{{end}}</div>
+  <div class="meta">{{if .Schedule.IsEnabled}}{{.ScheduleHuman}}{{else}}<span aria-hidden="true">💤</span> schedule off{{end}}</div>
   <div class="meta">{{retention .Retention}}</div>
 </li>
 {{end}}

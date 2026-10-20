@@ -538,7 +538,7 @@ func (r *drillRun) finish(ctx context.Context, failed string) {
 	}
 
 	r.step(StepCleanup, func() (string, error) {
-		keep := failed == "" && cfg.Drills.KeepLast && r.dest != ""
+		keep := failed == "" && cfg.Drills.KeepsLast() && r.dest != ""
 		for _, d := range r.extraDirs {
 			_ = os.RemoveAll(d)
 		}

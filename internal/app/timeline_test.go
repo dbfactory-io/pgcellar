@@ -51,7 +51,7 @@ func tlWAL(t *testing.T, home string, entries ...string) {
 
 func tlBuild(home string, now time.Time) *Timeline {
 	return buildTimeline(timelineInput{Server: "s", Home: home, Now: now, Ret: config.Retention{RecoveryWindowDays: 7},
-		Schedule: config.Schedule{Backup: "daily 03:10", Enabled: true}})
+		Schedule: config.Schedule{Backup: "daily 03:10", Enabled: config.Ptr(true)}})
 }
 
 func TestTimelineContinuousChain(t *testing.T) {

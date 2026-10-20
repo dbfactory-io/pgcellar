@@ -283,7 +283,7 @@ func (a *App) problemsFor(in ServerInput, bs barman.Server) []string {
 		if _, _, err := config.ParseSchedule(in.Schedule.Backup); err != nil {
 			p = append(p, "Schedule: "+err.Error()+".")
 		}
-	} else if in.Schedule.Enabled {
+	} else if in.Schedule.IsEnabled() {
 		p = append(p, "Schedule: give a schedule such as \"daily 02:00\" or untick \"enabled\".")
 	}
 	r := in.Retention
