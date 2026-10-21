@@ -179,7 +179,7 @@ PROBLEM  updates.source "ftp://mirror" must be an http:// or https:// URL
 | `TZ` | Time zone of schedules, the daily summary and displayed times. |
 | The ones you name in `*_env` | Alert secrets (chapter 8). |
 | `PGCELLAR_BASE_URL` | Only in `--demo` mode: base URL of links. |
-| `PGCELLAR_IN_DOCKER` | `1` tells pgCellar it runs in a container even without `/.dockerenv` or `/run/.containerenv`: no self-update, the Updates page shows the host updater command instead (chapter 16). |
+| `PGCELLAR_IN_DOCKER` | `1` or `true` tells pgCellar it runs in a container even without `/.dockerenv` or `/run/.containerenv`; `0` (or any other value) tells it the opposite even if one of those files exists. In a container: no self-update, the Updates page shows the host updater command instead (chapter 16). |
 
 ## Validation errors
 

@@ -31,7 +31,7 @@ cmd/pgcellar (main: `serve`, `check`, `apikey`, `license`, `hash-password`, `ver
 - `make lint`   -> gofmt check + go vet + golangci-lint
 - `make demo`   -> ./pgcellar serve --demo (fictional data, demo / demo)
 - `make run`    -> ./pgcellar serve --config deploy/pgcellar.example.yaml --dev (fake barman on PATH)
-- `make docker` -> docker build deploy/
+- `make docker` -> builds deploy/Dockerfile as `pgcellar:dev` and `ghcr.io/dbfactory-io/pgcellar:dev` (releases are built by GitHub Actions on a `v*` tag, see docs/manual/16-releases-and-updates.md)
 - `make release-dry` -> goreleaser snapshot (linux amd64/arm64, darwin arm64, checksums in dist/), nothing published; `make version-check` -> the injected version is printed
 
 ## Milestones

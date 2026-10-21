@@ -1,6 +1,7 @@
 package selfupdate
 
 import (
+	"strings"
 	"context"
 	"net/http"
 	"os"
@@ -49,8 +50,10 @@ func DefaultSystem() System {
 			return filepath.EvalSymlinks(p)
 		},
 		InContainer: func() bool {
-			if os.Getenv("PGCELLAR_IN_DOCKER") == "1" {
-				return true
+			// Same rule as app.InDocker: "1" or "true" forces a container,
+			// any other non-empty value (such as "0") forces a plain host.
+			if v := strings.TrimSpace(os.Getenv("PGCELLAR_IN_DOCKER")); v != "" {
+				return v == "1" || strings.EqualFold(v, "true")
 			}
 			// Docker writes /.dockerenv, Podman /run/.containerenv.
 			for _, f := range []string{"/.dockerenv", "/run/.containerenv"} {
