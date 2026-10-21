@@ -29,7 +29,7 @@ const (
 	updatesRetry = time.Hour
 	// UpdaterCommand is what runs on the Docker host to update the container
 	// (shown on the Updates page; see docs/manual/16-releases-and-updates.md).
-	UpdaterCommand = "pgcellar-host-update"
+	UpdaterCommand = "sudo pgcellar-updater"
 )
 
 // updatesState is persisted in the settings table: what was announced, the
