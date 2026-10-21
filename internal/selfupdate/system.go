@@ -1,13 +1,13 @@
 package selfupdate
 
 import (
-	"strings"
 	"context"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 )
