@@ -39,6 +39,14 @@
   {{else}}
   <p>{{t "updates.how_self_off"}}</p>
   {{end}}
+  {{with .SelfUpdate}}
+  <dl class="facts">
+    <div><dt>{{t "updates.self"}}</dt><dd><strong>{{if .Enabled}}{{t "updates.self_on"}}{{else}}{{t "updates.self_off"}}{{end}}</strong>{{if .RefusedReason}} <span class="muted">{{t "updates.self_waiting"}} {{.RefusedReason}}</span>{{end}}</dd></div>
+    {{with .LastAttempt}}<div><dt>{{t "updates.self_last"}}</dt><dd>{{when .}}</dd></div>{{end}}
+  </dl>
+  {{if .LastError}}<div class="flash warn" role="status">{{t "updates.self_error"}} {{.LastError}}</div>{{end}}
+  {{if .FailedVersions}}<p class="muted">{{t "updates.self_failed"}} {{range $i, $f := .FailedVersions}}{{if $i}}, {{end}}{{$f.Version}}{{end}}</p>{{end}}
+  {{end}}
 </section>
 {{end}}
 {{end}}

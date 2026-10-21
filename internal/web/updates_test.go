@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"github.com/dbfactory-io/pgcellar/internal/app"
 	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
 	"github.com/dbfactory-io/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/selfupdate"
 )
 
 func TestUpdatesPageBannerAndMetrics(t *testing.T) {
@@ -58,5 +60,28 @@ func TestUpdatesPageBannerAndMetrics(t *testing.T) {
 	rec = f.get("/metrics", nil)
 	if !strings.Contains(rec.Body.String(), "pgcellar_update_available 1") || !strings.Contains(rec.Body.String(), `pgcellar_build_info{version="0.1.0"} 1`) {
 		t.Errorf("metrics:\n%s", rec.Body.String())
+	}
+}
+
+func TestUpdatesPageShowsSelfUpdate(t *testing.T) {
+	env := apptest.New(t)
+	env.App.Version = "0.1.0"
+	old := app.InDocker
+	t.Cleanup(func() { app.InDocker = old })
+	app.InDocker = func() bool { return true }
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	env.App.StartSelfUpdate(ctx, selfupdate.StartupResult{}, "127.0.0.1:1")
+	s, err := New(env.App)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fixture{env: env, srv: s, h: s.Handler()}
+	viewer, _ := f.login(t, "viewer")
+	body := f.get("/updates", viewer).Body.String()
+	for _, want := range []string{"Automatic updates", "<strong>off</strong>", "runs in a container"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page lacks %q", want)
+		}
 	}
 }

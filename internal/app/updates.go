@@ -7,9 +7,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dbfactory-io/pgcellar/internal/alerts"
+	"github.com/dbfactory-io/pgcellar/internal/selfupdate"
 	"github.com/dbfactory-io/pgcellar/internal/updates"
 )
 
@@ -45,6 +47,7 @@ type updatesHolder struct {
 	once    sync.Once
 	checker *updates.Checker
 	mu      sync.Mutex // the state in the settings table
+	self    atomic.Pointer[selfupdate.Updater]
 }
 
 // InDocker reports whether pgCellar runs in a container: PGCELLAR_IN_DOCKER=1,
@@ -107,6 +110,9 @@ type UpdateView struct {
 	Docker      bool      `json:"docker"`                    // running in a container: the host updater applies updates
 	NextCheckAt time.Time `json:"next_check_at,omitzero"`    // zero when no automatic check runs
 	Updater     string    `json:"updater_command,omitempty"` // in a container: the command to run on the host
+	// SelfUpdate is the state of automatic updates of a binary installation
+	// (internal/selfupdate); absent when its loop is not running.
+	SelfUpdate *selfupdate.Status `json:"self_update,omitempty"`
 }
 
 // UpdateStatus describes the update check for the pages and the API.
@@ -124,6 +130,7 @@ func (a *App) UpdateStatus() UpdateView {
 	if v.Docker {
 		v.Updater = UpdaterCommand
 	}
+	v.SelfUpdate = a.SelfUpdateStatus()
 	if a.autoCheck() {
 		v.NextCheckAt = a.nextUpdateCheck(v.Status)
 	}

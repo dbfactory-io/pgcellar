@@ -162,3 +162,45 @@ docker compose up -d
 ```
 
 To go back, put the previous tag in `.env` (the updater left it in `.pgcellar-updater.prev`) and run `docker compose up -d` again. The SQLite migrations of a newer version are not undone by going back; back up `/var/lib/pgcellar` before a jump of several versions ([Operations](11-operations.md)).
+### Automatic updates (binary install)
+
+A pgCellar installed as a binary under systemd can install new releases by itself. It is off unless you ask for it, and it never runs in a container (the image is updated from the host, see Automatic updates (Docker) above).
+
+**Prerequisites.**
+
+- `updates.auto: true` in `pgcellar.yaml` (the update check must be on too: `updates.check` absent or `true`).
+- A release build: `pgcellar version` prints a version number, not `dev`.
+- Not in a container: `PGCELLAR_IN_DOCKER=1`, `/.dockerenv` or `/run/.containerenv` turns it off.
+- The binary and its directory are writable by the user of the service, because the new binary is written next to the old one and renamed over it. The unit in `deploy/systemd/pgcellar.service` runs `/opt/pgcellar/bin/pgcellar` as `barman` (the only user Barman agrees to run as) and lists `/opt/pgcellar/bin` in `ReadWritePaths`:
+
+  ```sh
+  install -d -o barman -g barman -m 0755 /opt/pgcellar/bin
+  install -o barman -g barman -m 0755 pgcellar /opt/pgcellar/bin/pgcellar
+  ```
+
+- `Restart=on-failure` in the unit: a new version that crashes is started again by systemd, and those starts are what triggers the rollback.
+
+When one of these is missing, nothing happens and the Updates page says why next to "Automatic updates" (the same text is `self_update.refused_reason` in `GET /api/v1/updates`).
+
+**What happens.** Every 10 minutes pgCellar looks at the latest release found by the daily check. It goes on only when that release is newer than the running version, has a binary for this platform (`linux_amd64`, `linux_arm64`, `darwin_arm64`), never failed here before, the clock is inside `updates.window`, and no backup, restore or restore drill is running. Then:
+
+1. It downloads the archive named in `manifest.json` (HTTPS only, 200 MB at most) into a temporary file in the directory of the binary, and compares its SHA-256 with the manifest.
+2. It takes the `pgcellar` file out of the archive (an archive with an absolute path or a `..` in any entry is refused) and makes it executable.
+3. It runs `<new binary> version` (10 seconds at most) and checks that it prints the expected version.
+4. It writes `pgcellar.update.json` next to the binary (`from`, `to`, `started_at`, `attempts`), renames the running binary to `pgcellar.prev`, renames the new one to `pgcellar`, and replaces its own process with the new binary (same PID, same arguments, systemd sees no restart).
+5. The new version counts its start in `pgcellar.update.json`. After 120 seconds during which `/healthz` answers on the local address, it removes the file: the update is confirmed. `pgcellar.prev` stays, for a return by hand.
+
+Any failure before step 4 leaves the running binary untouched and removes what was downloaded; the error is shown on the Updates page and the next attempt comes 10 minutes later. If the process cannot be replaced at step 4, the old binary is put back and pgCellar goes on with it.
+
+**Rollback.** A new version that crashes before it is confirmed is started again by systemd (`Restart=on-failure`, 5 seconds later). At its third start pgCellar gives up on it: `pgcellar.prev` is renamed back to `pgcellar`, the version is written to `pgcellar.update.failed.json`, and the old binary is started in place of the new one. A version listed in that file is never installed automatically again; the Updates page lists it. Delete the file to allow it again.
+
+**Turning it off.** Remove `updates.auto` from `pgcellar.yaml` or set it to `false`. The change is read at the next check, no restart needed.
+
+**Going back by hand.** The previous binary is kept as `pgcellar.prev` next to the binary:
+
+```sh
+cd /opt/pgcellar/bin
+mv pgcellar.prev pgcellar && systemctl restart pgcellar
+```
+
+Then, to keep it from coming back at the next window, either set `updates.auto: false` or add the version to `pgcellar.update.failed.json`.

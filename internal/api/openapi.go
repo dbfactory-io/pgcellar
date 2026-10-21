@@ -146,7 +146,7 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 				"get": op("The licence in force: edition, licensee, servers allowed and used, expiry, state", "viewer", m{"responses": m{"200": resp("Licence", nil)}}),
 			},
 			"/updates": m{
-				"get": op("What the last release check found (current, latest, available, checked_at, published_at, notes_url, manifest, error) and the updates settings (check, interval, auto, window, in_window, docker). The check sends nothing but the running version, in its User-Agent.", "viewer", m{"responses": m{"200": resp("Update status", nil)}}),
+				"get": op("What the last release check found (current, latest, available, checked_at, published_at, notes_url, manifest, error) and the updates settings (check, interval, auto, window, in_window, docker), plus self_update on a binary installation (enabled, current, refused_reason, last_attempt, last_error, failed_versions). The check sends nothing but the running version, in its User-Agent.", "viewer", m{"responses": m{"200": resp("Update status", nil)}}),
 			},
 			"/updates/check": m{
 				"post": op("Check for a new release now (GET on updates.source, then on the manifest of the release). Audited as updates.check. 502 when the check failed; the body then carries both error and data.", "operator", m{"responses": m{"200": resp("Update status", nil), "502": errResp}}),

@@ -534,3 +534,35 @@ func TestNewer(t *testing.T) {
 		}
 	}
 }
+
+func TestRunFollowsIsEnabled(t *testing.T) {
+	w := newWorld(t)
+	u := w.updater(w.release())
+	var on bool
+	var mu sync.Mutex
+	u.IsEnabled = func() bool { mu.Lock(); defer mu.Unlock(); return on }
+	u.Interval = 10 * time.Millisecond
+	u.Sys.Exec = func(string, []string, []string) error { return errors.New("stop here") }
+	if st := u.Status(); st.Enabled || st.RefusedReason != offReason {
+		t.Fatalf("off: %+v", st)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { u.Run(ctx); close(done) }()
+	time.Sleep(50 * time.Millisecond)
+	if u.Status().LastAttempt != nil {
+		t.Fatal("attempted while off")
+	}
+	mu.Lock()
+	on = true
+	mu.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	for u.Status().LastError == "" && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if st := u.Status(); st.LastAttempt == nil || !strings.Contains(st.LastError, "stop here") {
+		t.Fatalf("on: %+v", st)
+	}
+}

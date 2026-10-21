@@ -60,10 +60,12 @@ type Status struct {
 type Updater struct {
 	// Current is the running version (main.Version).
 	Current string
-	// Enabled is updates.auto.
-	Enabled bool
-	Source  Source
-	Guard   Guard
+	// Enabled is updates.auto. IsEnabled, when set, is asked instead at each
+	// check, so a change of the configuration file is followed.
+	Enabled   bool
+	IsEnabled func() bool
+	Source    Source
+	Guard     Guard
 	// InWindow reports whether t is inside updates.window; nil = always.
 	InWindow func(t time.Time) bool
 	// Logf receives one line per decision worth keeping.
@@ -95,6 +97,13 @@ func (u *Updater) logf(format string, args ...any) {
 	}
 }
 
+func (u *Updater) enabled() bool {
+	if u.IsEnabled != nil {
+		return u.IsEnabled()
+	}
+	return u.Enabled
+}
+
 func (u *Updater) interval() time.Duration {
 	if u.Interval > 0 {
 		return u.Interval
@@ -115,11 +124,13 @@ func (u *Updater) Status() Status {
 	u.mu.Lock()
 	s := u.status
 	u.mu.Unlock()
-	s.Enabled = u.Enabled
+	s.Enabled = u.enabled()
 	s.Current = u.Current
 	exe, err := u.Sys.Executable()
 	if reason := u.staticRefusal(exe, err); reason != "" {
 		s.RefusedReason = reason
+	} else if !s.Enabled {
+		s.RefusedReason = offReason
 	}
 	if err == nil {
 		if list, ferr := readFailed(exe); ferr == nil {
@@ -170,14 +181,17 @@ func quoteOr(s, empty string) string {
 	return fmt.Sprintf("%q", s)
 }
 
-// Run confirms a fresh install when Confirm is set, then, when Enabled,
-// checks every Interval until ctx ends.
+const offReason = "automatic updates are off (updates.auto)"
+
+// Run confirms a fresh install when Confirm is set, then checks every
+// Interval until ctx ends. With Enabled false and no IsEnabled it stops after
+// the confirmation.
 func (u *Updater) Run(ctx context.Context) {
 	if u.Confirm {
 		u.confirm(ctx)
 	}
-	if !u.Enabled {
-		u.setStatus(func(s *Status) { s.RefusedReason = "automatic updates are off (updates.auto)" })
+	if u.IsEnabled == nil && !u.Enabled {
+		u.setStatus(func(s *Status) { s.RefusedReason = offReason })
 		return
 	}
 	t := time.NewTicker(u.interval())
@@ -187,6 +201,10 @@ func (u *Updater) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			if !u.enabled() {
+				u.setStatus(func(s *Status) { s.RefusedReason = offReason })
+				continue
+			}
 			u.Tick(ctx)
 		}
 	}

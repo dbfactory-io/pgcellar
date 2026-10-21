@@ -32,6 +32,7 @@ import (
 	"github.com/dbfactory-io/pgcellar/internal/barman"
 	"github.com/dbfactory-io/pgcellar/internal/config"
 	"github.com/dbfactory-io/pgcellar/internal/demo"
+	"github.com/dbfactory-io/pgcellar/internal/selfupdate"
 	"github.com/dbfactory-io/pgcellar/internal/web"
 )
 
@@ -113,6 +114,13 @@ func serve(args []string, stdout, stderr io.Writer) int {
 		cronOverride = d
 	}
 
+	// After an automatic update: count this start of the new version, and
+	// at the third one put the previous binary back and execute it.
+	var boot selfupdate.StartupResult
+	if !*demoMode && !*dev {
+		boot = app.SelfUpdateStartup(Version, stderr)
+	}
+
 	var a *app.App
 	var dm *demo.Demo
 	var err error
@@ -159,6 +167,7 @@ func serve(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	a.Start(ctx)
+	a.StartSelfUpdate(ctx, boot, ln.Addr().String())
 	if dm != nil {
 		go dm.Run(ctx)
 	}
