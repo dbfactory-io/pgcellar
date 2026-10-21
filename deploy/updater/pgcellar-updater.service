@@ -1,0 +1,22 @@
+[Unit]
+Description=pgCellar updater: move the pgCellar container to the latest release
+Documentation=https://github.com/dbfactory-io/pgcellar/blob/main/docs/manual/16-releases-and-updates.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Root: the updater runs docker compose and rewrites the compose .env file.
+# Membership of the docker group is equivalent to root on the host, so a
+# dedicated user in that group would not be safer, and the compose directory
+# and its .env (secrets, mode 0600) usually belong to root. To use a dedicated
+# user anyway: a drop-in with User= and Group=docker, and give that user the
+# compose directory, the .env file and the key file.
+User=root
+EnvironmentFile=/etc/pgcellar/updater.env
+ExecStart=/usr/local/bin/pgcellar-updater
+# Exit 2 = update failed and rolled back: the unit is marked failed, which is
+# what monitoring should see.
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true

@@ -1,0 +1,12 @@
+[Unit]
+Description=Check for a pgCellar update every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=120
+# No catch-up after downtime: when to update is decided by pgCellar itself
+# (updates.window and the jobs it runs, through /api/v1/updates/ready).
+Persistent=false
+
+[Install]
+WantedBy=timers.target

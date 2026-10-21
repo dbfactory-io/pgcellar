@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Fake docker for the updater tests: logs every call to $FAKE_STATE/docker.log
+# and simulates pull, buildx imagetools inspect, image inspect and compose up.
+set -euo pipefail
+state=${FAKE_STATE:?}
+echo "docker $*" >>"$state/docker.log"
+
+case "$1 ${2:-}" in
+  "pull "*)
+    exit 0
+    ;;
+  "buildx version")
+    [ -f "$state/no-buildx" ] && exit 1
+    echo "github.com/docker/buildx v0.17.1"
+    ;;
+  "buildx imagetools")
+    printf '{"mediaType":"application/vnd.oci.image.index.v1+json","digest":"%s","size":1609}\n' "$(cat "$state/remote_digest")"
+    ;;
+  "image inspect")
+    printf 'ghcr.io/dbfactory-io/pgcellar@%s\n\n' "$(cat "$state/remote_digest")"
+    ;;
+  "compose --env-file")
+    # docker compose --env-file FILE up -d SERVICE...: "start" the tag written in FILE.
+    env_file=$3
+    tag=$(sed -n 's/^PGCELLAR_TAG=//p' "$env_file" | tail -n 1)
+    echo "${tag#v}" >"$state/running"
+    ;;
+  *)
+    echo "fake docker: unexpected call: $*" >&2
+    exit 1
+    ;;
+esac

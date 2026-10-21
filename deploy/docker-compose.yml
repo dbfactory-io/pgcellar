@@ -1,12 +1,16 @@
 # Run from this directory: docker compose up -d
 # Put pgcellar.yaml in ./etc-pgcellar and your Barman server files in ./etc-barman.d
 # (start from pgcellar.example.yaml and barman.d.example/).
+# The image comes from ghcr.io; its tag is PGCELLAR_TAG in .env (copy .env.example).
+# Pin a version there: pgcellar-updater (deploy/updater/) moves it to the next
+# release and puts it back if the new one does not come up healthy.
+# "docker compose build" builds the same name from this checkout instead.
 services:
   pgcellar:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: pgcellar:dev
+    image: ghcr.io/dbfactory-io/pgcellar:${PGCELLAR_TAG:-latest}
     container_name: pgcellar
     ports:
       - "8080:8080"
@@ -36,7 +40,7 @@ services:
   # in pgcellar.yaml to how PostgreSQL reaches this port. Do not publish it on
   # the internet: bind it to a private address ("10.0.0.5:2222:2222") if you can.
   pgcellar-ssh:
-    image: pgcellar:dev
+    image: ghcr.io/dbfactory-io/pgcellar:${PGCELLAR_TAG:-latest}
     container_name: pgcellar-ssh
     entrypoint: /usr/local/bin/pgcellar-sshd
     ports:

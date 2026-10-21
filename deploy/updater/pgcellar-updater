@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+# pgcellar-updater: update a pgCellar container run by Docker Compose to the
+# latest release, from the host. Meant to be started by pgcellar-updater.timer
+# (every 15 minutes); safe to run by hand at any time.
+#
+# pgCellar has no access to the Docker socket (that would make it root on the
+# host), so it cannot replace its own image. It only says, through its API,
+# whether an update exists (GET /api/v1/updates) and whether now is a good time
+# (GET /api/v1/updates/ready: nothing running and inside updates.window).
+# This script does the rest:
+#   1. ask the API; nothing new -> exit 0
+#   2. ask /ready; 409 -> exit 0 with the reason, the next run tries again
+#   3. take the image named by the release manifest, refuse any other repository
+#   4. pull it and check its digest against the manifest; mismatch -> exit 1
+#   5. pin the new tag in the compose .env file, docker compose up -d
+#   6. wait for /healthz and for the API to report the new version
+#   7. on failure put the previous tag back, up -d again, exit 2
+#
+# Exit codes: 0 up to date, busy, or updated; 1 error, nothing changed;
+# 2 update failed and was rolled back; 3 update failed and the rollback too.
+#
+# Usage: pgcellar-updater [--now] [--dry-run]
+#   --now      ignore updates.window (an update started by hand); pgCellar
+#              still refuses while a backup, restore or drill runs
+#   --dry-run  say what would be done, change nothing (same as DRY_RUN=1)
+#
+# Configuration: /etc/pgcellar/updater.env (see updater.env.example), or the
+# file named by UPDATER_CONFIG. The API key is read from API_KEY_FILE and never
+# printed nor passed on a command line.
+set -euo pipefail
+
+ready_query=""
+cli_dry_run=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --now) ready_query="?now=1" ;;
+    --dry-run) cli_dry_run=1 ;;
+    -h | --help) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) printf 'pgcellar-updater: unknown option %s (try --help)\n' "$1" >&2; exit 1 ;;
+  esac
+  shift
+done
+
+UPDATER_CONFIG=${UPDATER_CONFIG:-/etc/pgcellar/updater.env}
+SETTINGS="COMPOSE_DIR SERVICE ENV_FILE TAG_VAR API_URL API_KEY_FILE HEALTH_TIMEOUT DRY_RUN DOCKER LOCK_FILE POLL_INTERVAL"
+if [ -f "$UPDATER_CONFIG" ]; then
+  # A variable already set in the environment wins over the file, so that
+  # "DRY_RUN=1 pgcellar-updater" works by hand.
+  saved=""
+  for v in $SETTINGS; do
+    if [ -n "${!v+x}" ]; then saved="$saved$v=$(printf '%q' "${!v}")"$'\n'; fi
+  done
+  # shellcheck disable=SC1090
+  . "$UPDATER_CONFIG"
+  eval "$saved"
+fi
+
+COMPOSE_DIR=${COMPOSE_DIR:-}
+SERVICE=${SERVICE:-pgcellar}
+ENV_FILE=${ENV_FILE:-${COMPOSE_DIR:+$COMPOSE_DIR/.env}}
+TAG_VAR=${TAG_VAR:-PGCELLAR_TAG}
+API_URL=${API_URL:-http://127.0.0.1:8080}
+API_KEY_FILE=${API_KEY_FILE:-/etc/pgcellar/updater.key}
+HEALTH_TIMEOUT=${HEALTH_TIMEOUT:-180}
+DRY_RUN=${DRY_RUN:-0}
+DOCKER=${DOCKER:-docker}
+LOCK_FILE=${LOCK_FILE:-/run/lock/pgcellar-updater.lock}
+# Seconds between two health probes (tests lower it).
+POLL_INTERVAL=${POLL_INTERVAL:-5}
+if [ "$cli_dry_run" = 1 ]; then DRY_RUN=1; fi
+
+# The only repository an update may come from. Not configurable on purpose.
+ALLOWED_REPO=ghcr.io/dbfactory-io/pgcellar
+
+log() { printf 'pgcellar-updater: %s\n' "$*"; }
+err() { printf 'pgcellar-updater: %s\n' "$*" >&2; }
+die() { err "$*"; exit 1; }
+
+# ---------------------------------------------------------------- checks
+[ -n "$COMPOSE_DIR" ] || die "COMPOSE_DIR is not set (in $UPDATER_CONFIG)"
+[ -f "$COMPOSE_DIR/docker-compose.yml" ] || [ -f "$COMPOSE_DIR/compose.yaml" ] \
+  || [ -f "$COMPOSE_DIR/compose.yml" ] || [ -f "$COMPOSE_DIR/docker-compose.yaml" ] \
+  || die "no compose file in $COMPOSE_DIR"
+[ -r "$API_KEY_FILE" ] || die "API key file $API_KEY_FILE is not readable"
+case "$TAG_VAR" in
+  *[!A-Za-z0-9_]* | "") die "TAG_VAR must be a variable name, got '$TAG_VAR'" ;;
+esac
+case "$HEALTH_TIMEOUT" in
+  *[!0-9]* | "") die "HEALTH_TIMEOUT must be a number of seconds" ;;
+esac
+for tool in curl jq "$DOCKER"; do
+  command -v "$tool" >/dev/null 2>&1 || die "$tool is not installed"
+done
+
+# ---------------------------------------------------------------- lock
+# One run at a time. flock (util-linux) on Linux; a directory as a fallback
+# for systems without it.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    log "another run is in progress, skipping"
+    exit 0
+  fi
+else
+  if ! mkdir "$LOCK_FILE.d" 2>/dev/null; then
+    log "another run is in progress, skipping"
+    exit 0
+  fi
+fi
+
+workdir=$(mktemp -d)
+# shellcheck disable=SC2329 # called by the EXIT trap
+cleanup() {
+  rm -rf "$workdir"
+  if ! command -v flock >/dev/null 2>&1; then rmdir "$LOCK_FILE.d" 2>/dev/null || true; fi
+}
+trap cleanup EXIT
+
+# ---------------------------------------------------------------- API
+# api PATH OUTFILE: GET PATH with the key, body in OUTFILE, HTTP status on
+# stdout ("000" when the server could not be reached). The key goes to curl on
+# its standard input, so it never shows in the process list.
+api() {
+  local path=$1 out=$2 key code
+  key=$(tr -d '[:space:]' <"$API_KEY_FILE")
+  code=$(printf 'header = "Authorization: Bearer %s"\n' "$key" \
+    | curl --config - --silent --show-error --fail-with-body --max-time 20 \
+        --output "$out" --write-out '%{http_code}' "$API_URL$path" 2>"$workdir/curl.err") || true
+  printf '%s' "${code:-000}"
+}
+
+# healthy: /healthz answers 200 (no key needed).
+healthy() {
+  curl --silent --fail-with-body --max-time 20 --output /dev/null "$API_URL/healthz" 2>/dev/null
+}
+
+# current_version: the version the running pgCellar reports, empty if unknown.
+current_version() {
+  local code
+  code=$(api /api/v1/updates "$workdir/now.json")
+  [ "$code" = 200 ] || return 0
+  jq -r '(.data // .).current // empty' "$workdir/now.json" 2>/dev/null | sed 's/^v//'
+}
+
+# ---------------------------------------------------------------- .env
+# read_tag: value of TAG_VAR in ENV_FILE, empty when absent.
+read_tag() {
+  [ -f "$ENV_FILE" ] || return 0
+  sed -n -E "s/^[[:space:]]*(export[[:space:]]+)?$TAG_VAR=[\"']?([^\"'#[:space:]]*).*$/\2/p" "$ENV_FILE" | tail -n 1
+}
+
+# write_tag VALUE: set TAG_VAR=VALUE in ENV_FILE, replacing the line or adding
+# it, through a temporary file renamed over the original (atomic, keeps mode).
+write_tag() {
+  local value=$1 dir tmp
+  dir=$(dirname "$ENV_FILE")
+  tmp=$(mktemp "$dir/.updater-env.XXXXXX")
+  if [ -f "$ENV_FILE" ]; then
+    cp -p "$ENV_FILE" "$tmp"
+    awk -v var="$TAG_VAR" -v val="$value" '
+      BEGIN { done = 0; re = "^[[:space:]]*(export[[:space:]]+)?" var "=" }
+      $0 ~ re { if (!done) { print var "=" val; done = 1 }; next }
+      { print }
+      END { if (!done) print var "=" val }
+    ' "$ENV_FILE" >"$tmp"
+  else
+    chmod 600 "$tmp"
+    printf '%s=%s\n' "$TAG_VAR" "$value" >"$tmp"
+  fi
+  mv -f "$tmp" "$ENV_FILE"
+}
+
+compose_up() {
+  # shellcheck disable=SC2086 # SERVICE may list several services
+  (cd "$COMPOSE_DIR" && "$DOCKER" compose --env-file "$ENV_FILE" up -d $SERVICE)
+}
+
+# wait_for VERSION: until HEALTH_TIMEOUT, /healthz 200 and, when VERSION is
+# not empty, the API reporting VERSION as current.
+wait_for() {
+  local want=$1 deadline now
+  deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
+  while :; do
+    if healthy; then
+      if [ -z "$want" ]; then return 0; fi
+      now=$(current_version)
+      [ "$now" = "$want" ] && return 0
+    fi
+    [ "$(date +%s)" -ge "$deadline" ] && return 1
+    sleep "$POLL_INTERVAL"
+  done
+}
+
+# ---------------------------------------------------------------- 1. update?
+code=$(api /api/v1/updates "$workdir/updates.json")
+case "$code" in
+  200) ;;
+  000) die "pgCellar API not reachable at $API_URL ($(head -c 200 "$workdir/curl.err"))" ;;
+  401 | 403) die "GET /api/v1/updates: $code, check the API key (role operator) in $API_KEY_FILE" ;;
+  *) die "GET /api/v1/updates: HTTP $code" ;;
+esac
+# The answer is {"data": {...}}, like the rest of the API.
+jq -e '.data // .' "$workdir/updates.json" >"$workdir/status.json" 2>/dev/null \
+  || die "GET /api/v1/updates: not JSON"
+
+current=$(jq -r '.current // empty' "$workdir/status.json" | sed 's/^v//')
+available=$(jq -r '.available // false' "$workdir/status.json")
+if [ "$available" != true ]; then
+  check_error=$(jq -r '.error // empty' "$workdir/status.json")
+  if [ -n "$check_error" ]; then
+    log "up to date as far as pgCellar knows (${current:-unknown version}); its last release check failed: $check_error"
+  else
+    log "up to date (${current:-unknown version})"
+  fi
+  exit 0
+fi
+
+# ---------------------------------------------------------------- 2. ready?
+code=$(api "/api/v1/updates/ready$ready_query" "$workdir/ready.json")
+case "$code" in
+  200) ;;
+  409)
+    reason=$(jq -r '.reason // "not ready"' "$workdir/ready.json" 2>/dev/null || echo "not ready")
+    log "update available but not now: $reason (next run will try again)"
+    exit 0
+    ;;
+  *) die "GET /api/v1/updates/ready: HTTP $code" ;;
+esac
+
+# ---------------------------------------------------------------- 3. target
+target=$(jq -r '.latest // empty' "$workdir/status.json" | sed 's/^v//')
+image=$(jq -r '.manifest.image // empty' "$workdir/status.json")
+digest=$(jq -r '.manifest.image_digest // empty' "$workdir/status.json")
+[ -n "$target" ] || die "the API reports an update but no latest version"
+[ -n "$image" ] || die "the release manifest of $target names no image"
+case "$digest" in
+  sha256:*) ;;
+  *) die "the release manifest of $target has no image digest" ;;
+esac
+
+# The image must be ALLOWED_REPO:<tag>, nothing else (no other registry, no
+# look-alike name, no digest-only reference).
+repo=${image%:*}
+tag=${image##*:}
+if [ "$repo" != "$ALLOWED_REPO" ] || [ "$tag" = "$image" ] || [ -z "$tag" ] \
+  || [ "${image#*@}" != "$image" ]; then
+  die "refusing image $image: updates come only from $ALLOWED_REPO:<version>"
+fi
+case "$tag" in
+  *[!A-Za-z0-9._-]*) die "refusing image $image: unexpected tag" ;;
+esac
+if [ "${tag#v}" != "$target" ]; then
+  die "the manifest image tag $tag does not match the latest version $target"
+fi
+
+log "update available: ${current:-unknown} -> $target ($image)"
+
+# ---------------------------------------------------------------- 4. pull + digest
+if [ "$DRY_RUN" = 1 ]; then
+  log "dry run: would pull $image, check $digest, set $TAG_VAR=$tag in $ENV_FILE and restart $SERVICE"
+  exit 0
+fi
+
+"$DOCKER" pull "$image" >/dev/null || die "pull of $image failed"
+
+# Digest of what the registry serves for this tag (the multi-arch index, the
+# same value the release manifest records). buildx when present, otherwise the
+# repository digests recorded by the pull.
+remote_ok=0
+if "$DOCKER" buildx version >/dev/null 2>&1; then
+  got=$("$DOCKER" buildx imagetools inspect --format '{{json .Manifest}}' "$image" | jq -r '.digest // empty') \
+    || die "cannot read the digest of $image from the registry"
+  [ "$got" = "$digest" ] && remote_ok=1
+else
+  got=$("$DOCKER" image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image") \
+    || die "cannot inspect $image"
+  if printf '%s\n' "$got" | grep -qxF "$ALLOWED_REPO@$digest"; then remote_ok=1; fi
+fi
+if [ "$remote_ok" != 1 ]; then
+  die "digest mismatch for $image: release says $digest, registry gave $(printf '%s' "$got" | tr '\n' ' '); nothing changed"
+fi
+log "digest verified: $digest"
+
+# ---------------------------------------------------------------- 5. switch
+prev=$(read_tag)
+if [ -z "$prev" ] || [ "$prev" = latest ]; then
+  # Not pinned yet: the running version is what we come back to.
+  prev=$current
+  log "$TAG_VAR was not pinned in $ENV_FILE; rollback target is the running version ${prev:-unknown}"
+fi
+[ -n "$prev" ] || die "cannot tell which version runs now, refusing to update without a rollback target"
+printf '%s\n' "$prev" >"$COMPOSE_DIR/.pgcellar-updater.prev"
+
+write_tag "$tag"
+log "$TAG_VAR=$tag written to $ENV_FILE (previous: $prev), starting $SERVICE"
+up_ok=1
+compose_up || up_ok=0
+
+# ---------------------------------------------------------------- 6. verify
+if [ "$up_ok" = 1 ] && wait_for "$target"; then
+  log "updated from $prev to $target"
+  exit 0
+fi
+
+# ---------------------------------------------------------------- 7. rollback
+err "update to $target failed (no health or version $target within ${HEALTH_TIMEOUT}s), rolling back to $prev"
+write_tag "$prev"
+if compose_up && wait_for ""; then
+  err "rolled back: $TAG_VAR=$prev, pgCellar is healthy again; update to $target NOT applied"
+  exit 2
+fi
+err "ROLLBACK FAILED: $TAG_VAR=$prev is written in $ENV_FILE but pgCellar is not healthy; check 'docker compose ps' and logs in $COMPOSE_DIR"
+exit 3
