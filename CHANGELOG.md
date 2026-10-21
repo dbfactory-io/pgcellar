@@ -13,7 +13,7 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 - `pgcellar serve --demo`: a public, read-only demonstration instance with fictional data (Northwind Logistics), meant to be put on the internet; compose file, nginx vhost and README in `deploy/demo/`, `make demo` to try it locally.
 - Sign-in attempts are limited to 10 a minute per address (the address comes from `X-Real-IP` when the request reaches pgCellar through a proxy on a private or loopback address).
 
-## [0.1.0] - not released yet
+## [0.1.0] - 2026-10-21
 
 First version. A control room for physical PostgreSQL backups with point-in-time recovery, built on top of Barman.
 

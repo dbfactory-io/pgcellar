@@ -144,7 +144,7 @@ Barman is GPL-3.0. It is installed unmodified and I only drive it through its co
 
 ## Status
 
-Version 0.1 is ready to be tagged and not released yet: the repository is private and moves to its organisation first. See `CHANGELOG.md`.
+Version 0.1.0 was tagged on 2026-10-21, after the move to the dbfactory-io organisation. See `CHANGELOG.md`.
 
 ## Author
 
