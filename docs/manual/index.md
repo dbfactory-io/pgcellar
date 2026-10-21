@@ -23,4 +23,4 @@ Three words you will see everywhere. A **server** is one PostgreSQL instance tha
 13. [Troubleshooting](13-troubleshooting.md) - The real traps, with the symptom, the cause and the fix.
 14. [Licensing and editions](14-licensing-and-editions.md) - FSL-1.1, what a licence blocks and what it never blocks.
 15. [CLI reference](15-cli-reference.md) - serve, check, apikey, hash-password, license, version.
-16. [Releases and updates](16-releases-and-updates.md) - How a release is built, what it contains, and how to update.
+16. [Releases and updates](16-releases-and-updates.md) - How a release is built, the update check, automatic updates (binary and Docker), and updating by hand.

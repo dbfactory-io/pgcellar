@@ -143,6 +143,35 @@ At least one user must be `admin`. Names are unique inside each list.
 | `max_age` | `192h` (8 days) | A server with a drill schedule turns orange when its last good drill is older. |
 | `bin_dir` | `/usr/lib/postgresql` | Holds one directory per PostgreSQL major version, each with a `bin/`. Absolute path. |
 
+## `updates`
+
+The check for new releases and the automatic updates (chapter 16). Every key is optional; an absent block means: check once a day, install nothing.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `check` | `true` | Look for a new release every `interval`. `false` = nothing leaves the machine unless someone presses **Check now**; it also stops automatic updates, which act on what the check found (the host updater included). Only a release build checks: a `dev` build, `--dev` and `--demo` never do. |
+| `interval` | `24h` | Time between two checks. At least `1h`. After a failed check the next one comes one hour later. |
+| `channel` | `stable` | The only channel for now. Any other value is refused. |
+| `auto` | `false` | Binary installs: download, verify and install new releases by themselves, inside `window` (chapter 16 lists the prerequisites). Ignored in a container: there the host updater does the work. Read again at each attempt, no restart needed. |
+| `window` | `"02:00-05:00"` | When an update may be applied, `HH:MM-HH:MM` in the local time of the server (`TZ`). It may cross midnight (`"23:00-01:00"`); the start is included, the end is not. Start and end must differ. Applies to `auto` and to `/api/v1/updates/ready`, which the host updater asks. Put it away from the nightly backups and drills. |
+| `source` | `https://api.github.com/repos/dbfactory-io/pgcellar/releases/latest` | Where the latest release is read, in the GitHub API format: a mirror that answers the same way. Must be an `http://` or `https://` URL. Read again at each check. |
+
+```yaml
+updates:
+  auto: true
+  window: "03:00-04:30"
+```
+
+Validation messages:
+
+```
+PROBLEM  updates.interval must be at least 1h0m0s (for example "24h"); leave it out for the default
+PROBLEM  updates.channel "beta" is not known: only "stable" exists for now
+PROBLEM  updates.window: "3h-4h" is not a time range (use "02:00-05:00")
+PROBLEM  updates.window: "03:00-03:00" starts and ends at the same time
+PROBLEM  updates.source "ftp://mirror" must be an http:// or https:// URL
+```
+
 ## Environment variables
 
 | Variable | Used for |
@@ -150,6 +179,7 @@ At least one user must be `admin`. Names are unique inside each list.
 | `TZ` | Time zone of schedules, the daily summary and displayed times. |
 | The ones you name in `*_env` | Alert secrets (chapter 8). |
 | `PGCELLAR_BASE_URL` | Only in `--demo` mode: base URL of links. |
+| `PGCELLAR_IN_DOCKER` | `1` tells pgCellar it runs in a container even without `/.dockerenv` or `/run/.containerenv`: no self-update, the Updates page shows the host updater command instead (chapter 16). |
 
 ## Validation errors
 

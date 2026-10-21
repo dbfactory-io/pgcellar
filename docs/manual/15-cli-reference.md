@@ -5,7 +5,7 @@ One binary, `pgcellar`, with a few subcommands. In the Docker image it is the en
 ```
 docker compose run --rm pgcellar check --config /etc/pgcellar/pgcellar.yaml
 docker compose exec pgcellar pgcellar apikey list --config /etc/pgcellar/pgcellar.yaml
-docker run -i --rm pgcellar:dev hash-password
+docker compose run -T --rm pgcellar hash-password
 ```
 
 `run` starts a new throwaway container; `exec` runs in the one that is up. The default command of the image is `serve --config /etc/pgcellar/pgcellar.yaml`.
@@ -144,7 +144,7 @@ make test             # go test -race ./...
 make lint             # gofmt, go vet, golangci-lint
 make run              # the --dev mode, on the example configuration
 make demo             # the --demo mode on 127.0.0.1:8080
-make docker           # build the image as pgcellar:dev
+make docker           # build the image as pgcellar:dev and ghcr.io/dbfactory-io/pgcellar:dev
 make release-dry      # linux amd64/arm64 and macOS arm64 archives with checksums in dist/
 make docs             # this manual, as HTML, in site/docs/
 make docs-pdf         # this manual, as site/docs/pgcellar-manual.pdf

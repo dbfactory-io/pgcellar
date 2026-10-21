@@ -64,11 +64,13 @@ A server turns **orange** in Status when its last drill failed, or when no drill
 
 ## What the image must contain
 
-A drill starts the restored copy with the PostgreSQL **server** binaries of the same major version as the source. The Docker image installs them for the versions in the build argument `PG_MAJORS` (default `16 17 18`), as binaries only: no cluster, no service. If the source's major version is not there, the drill fails at step 2 with "PostgreSQL <major> binaries are not in this image". Rebuild:
+A drill starts the restored copy with the PostgreSQL **server** binaries of the same major version as the source. The Docker image installs them for the versions in the build argument `PG_MAJORS` (default `16 17 18`), as binaries only: no cluster, no service. If the source's major version is not there, the drill fails at step 2 with "PostgreSQL <major> binaries are not in this image". The published image has the default; for another set, build your own from the checkout, in `deploy/`:
 
 ```
-docker build -f deploy/Dockerfile -t pgcellar:dev --build-arg PG_MAJORS="15 16 17" .
+docker compose build --build-arg PG_MAJORS="15 16 17"
 ```
+
+The result takes the name of the image in the compose file, so `docker compose up -d` runs it. Leave the host updater of chapter 16 off with a self-built image (it would replace it with the published one), and rebuild it at each release.
 
 Sizes, measured on arm64 (uncompressed): 312 MB without the server binaries, 639 MB with `16 17 18`. A single version is about 170 MB more than none. Fewer versions, smaller image.
 
@@ -79,8 +81,7 @@ A restored data directory keeps the collation and ctype locale of its source, an
 The image generates a fixed list from the build argument `PG_LOCALES`: `C.UTF-8 en_US.UTF-8 en_GB.UTF-8 fr_FR.UTF-8 fr_BE.UTF-8 nl_NL.UTF-8 nl_BE.UTF-8 de_DE.UTF-8 es_ES.UTF-8 it_IT.UTF-8 pt_BR.UTF-8`. That adds about 23 MB. If your cluster uses another one, add it (name as in `/usr/share/i18n/SUPPORTED`) and rebuild:
 
 ```
-docker build -f deploy/Dockerfile -t pgcellar:dev \
-  --build-arg PG_LOCALES="C.UTF-8 en_US.UTF-8 pl_PL.UTF-8" .
+docker compose build --build-arg PG_LOCALES="C.UTF-8 en_US.UTF-8 pl_PL.UTF-8"
 ```
 
 A start that fails on a locale is reported as: "The cluster uses locale X, which this image does not have. Rebuild with PG_LOCALES including Y (see deploy/Dockerfile)." Find your cluster's locale with `SELECT datcollate, datctype FROM pg_database;`.

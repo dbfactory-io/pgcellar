@@ -11,12 +11,12 @@ Each entry has the symptom you see, the cause, and the fix. They come from real 
 **Fix.** Give the folders to the barman uid, then restart:
 
 ```
-docker run --rm --entrypoint id pgcellar:dev barman      # prints the uid, 997 in the current image
+docker compose run --rm --entrypoint id pgcellar barman   # prints the uid, 997 in the current image
 sudo chown -R 997:997 etc-pgcellar etc-barman.d /path/to/your/data /path/to/recoveries
 docker compose restart pgcellar
 ```
 
-For named volumes: `docker run --rm -v pgcellar_pgcellar-data:/d --user root --entrypoint chown pgcellar:dev -R 997:997 /d`.
+For named volumes: `docker compose run --rm --no-deps --user root --entrypoint chown pgcellar -R 997:997 /var/lib/pgcellar`.
 
 ### "sudo: executable file not found" on every `barman cron`
 

@@ -36,33 +36,35 @@
   <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 11 of 15</p>
-<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#updating-the-image">Updating the image</a></li><li class="l2"><a href="#backing-up-pgcellar-itself">Backing up pgCellar itself</a></li><li class="l2"><a href="#metrics">Metrics</a></li><li class="l2"><a href="#logs">Logs</a></li><li class="l2"><a href="#audit">Audit</a></li><li class="l2"><a href="#history">History</a></li><li class="l2"><a href="#storage-and-projection">Storage and projection</a></li><li class="l2"><a href="#a-short-weekly-routine">A short weekly routine</a></li></ul></nav>
+<p class="kicker">Chapter 11 of 16</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#updating-pgcellar">Updating pgCellar</a></li><li class="l2"><a href="#backing-up-pgcellar-itself">Backing up pgCellar itself</a></li><li class="l2"><a href="#metrics">Metrics</a></li><li class="l2"><a href="#logs">Logs</a></li><li class="l2"><a href="#audit">Audit</a></li><li class="l2"><a href="#history">History</a></li><li class="l2"><a href="#storage-and-projection">Storage and projection</a></li><li class="l2"><a href="#a-short-weekly-routine">A short weekly routine</a></li></ul></nav>
 <article>
 <h1 id="operations">Operations</h1>
 <p>Day-two work: updating, backing up pgCellar itself, watching it, and keeping an eye on the disk.</p>
-<h2 id="updating-the-image">Updating the image</h2>
-<p>The state is in volumes and bind mounts, not in the image. Updating is a rebuild and a restart:</p>
+<h2 id="updating-pgcellar">Updating pgCellar</h2>
+<p>How a new release reaches you, by hand or automatically, for Docker and for a binary install, is <a href="../releases-and-updates/">Releases and updates</a>. The short version for Docker by hand: the state is in volumes and bind mounts, not in the image, so updating is a new tag and a restart.</p>
 <pre><code>cd pgcellar/deploy
-git pull
-docker compose build
+sed -i 's/^PGCELLAR_TAG=.*/PGCELLAR_TAG=0.1.2/' .env     # or edit .env
+docker compose pull
 docker compose up -d
 </code></pre>
-<p>Compose recreates both containers (<code>pgcellar</code> and <code>pgcellar-ssh</code>) with the new image. Backups in progress are interrupted: a backup that was running is recorded as interrupted, and the scheduler catches up a missed due time if it is younger than <code>scheduler.catch_up</code> (6 hours by default). Choose a quiet moment.</p>
+<p>Compose recreates both containers (<code>pgcellar</code> and <code>pgcellar-ssh</code>) with the new image. Backups in progress are interrupted: a backup that was running is recorded as interrupted, and the scheduler catches up a missed due time if it is younger than <code>scheduler.catch_up</code> (6 hours by default). Choose a quiet moment; the update window and the host updater of chapter 16 do that for you.</p>
 <p>After the start:</p>
 <ul>
-<li><code>pgcellar version</code> inside the container, the startup log line and the metric <code>pgcellar_build_info</code> tell the version.</li>
+<li><code>pgcellar version</code> inside the container, the startup log line, the metric <code>pgcellar_build_info</code> and the <strong>Updates</strong> page tell the version.</li>
 <li>The pages are full right away: the status cache is kept in SQLite and shown marked as stale (&quot;as of 08:12, refreshing&quot;) until the first refresh completes.</li>
-<li>Alerts are silent for the first two minutes.</li>
+<li>Alerts are silent for the first two minutes. The version change itself is announced once (<code>update_applied</code>).</li>
 <li><code>docker compose logs --tail 50 pgcellar</code> shows <code>pgcellar &lt;version&gt; listening on ...</code>.</li>
 </ul>
-<p>If you run the binary without Docker, replace it and restart the service (<code>deploy/pgcellar.service</code> is a systemd unit that runs as the <code>barman</code> user).</p>
-<p><strong>Pin what you can.</strong> The image takes Barman from the PGDG repository at build time. Rebuilding on another day may bring a newer Barman. Read its release notes before a rebuild on a production backup host, and keep the previous image (<code>docker tag pgcellar:dev pgcellar:previous</code>) so you can go back.</p>
+<p>To go back, put the previous tag in <code>.env</code> and run <code>docker compose up -d</code> again.</p>
+<p>With a binary install (<code>deploy/systemd/pgcellar.service</code>, chapter 1), replace <code>/opt/pgcellar/bin/pgcellar</code> and <code>systemctl restart pgcellar</code>, or let <code>updates.auto</code> do it (chapter 16).</p>
+<p><strong>Barman comes with the image.</strong> A published image carries the Barman version of its build, so a given tag always gives the same Barman. If you build the image yourself (<code>docker compose build</code>), it takes Barman from the PGDG repository on that day: read Barman's release notes before a rebuild on a production backup host, and keep the previous image (<code>docker tag &lt;image&gt; pgcellar:previous</code>) so you can go back.</p>
 <p>Migrations of the SQLite database are applied automatically at start. Back up before updating anyway (below).</p>
 <h2 id="backing-up-pgcellar-itself">Backing up pgCellar itself</h2>
 <p>pgCellar is a control room, and its state is small. Back up three things, plus Barman's own data.</p>
@@ -109,7 +111,7 @@ docker compose up -d
 <li><strong>Back up the backups too.</strong> If the volume or the machine goes, the backups go with it. Copy <code>/var/lib/barman</code> to another machine (rsync, a snapshot of the volume, object storage is outside the scope of this version). A backup system on a single disk is a single disk.</li>
 <li><code>~/.pgpass</code> and the private key are what let Barman talk to your servers. Treat them like any credential.</li>
 </ul>
-<p>To restore pgCellar on a new host: install Docker, put back the configuration folders, the volumes (<code>.ssh</code>, <code>.pgpass</code>, <code>barman-data</code>), build the image, <code>docker compose up -d</code>. The status, the schedule and the servers are all back. Drill and run history come back only if you restored <code>pgcellar.db</code>.</p>
+<p>To restore pgCellar on a new host: install Docker, put back the configuration folders, the volumes (<code>.ssh</code>, <code>.pgpass</code>, <code>barman-data</code>), the <code>.env</code> file with the same <code>PGCELLAR_TAG</code>, <code>docker compose up -d</code>. The status, the schedule and the servers are all back. Drill and run history come back only if you restored <code>pgcellar.db</code>.</p>
 <h2 id="metrics">Metrics</h2>
 <p>Prometheus text format on <code>/metrics</code>. A scrape never runs Barman: it reads the status cache. Example scrape configuration:</p>
 <pre><code class="language-yaml">scrape_configs:

@@ -8,22 +8,31 @@ You need:
 - A PostgreSQL server, version 13 to 18, where you can create two roles and edit `pg_hba.conf`.
 - Disk space for the backups. Rule of thumb: one full copy of the database, plus the WAL of the retention period.
 
-## Get the files and build the image
+## Get the files and the image
 
 ```
 git clone https://github.com/dbfactory-io/pgcellar.git
 cd pgcellar/deploy
 mkdir etc-pgcellar etc-barman.d
 cp pgcellar.example.yaml etc-pgcellar/pgcellar.yaml
-docker compose build
+cp .env.example .env && chmod 600 .env
+docker compose pull
 ```
 
-The image is called `pgcellar:dev`. It contains pgCellar, an unmodified Barman from the PGDG packages, the PostgreSQL client tools, and the PostgreSQL server binaries that restore drills use (chapter 7).
+The image is published on GitHub's registry as `ghcr.io/dbfactory-io/pgcellar:<version>`, for linux/amd64 and linux/arm64. `.env` says which version you run: `PGCELLAR_TAG=0.1.0`. Put the latest release there (see the [releases page](https://github.com/dbfactory-io/pgcellar/releases)). Pinning a version means a restart never brings a new one by surprise; moving to the next one is chapter 16. The image contains pgCellar, an unmodified Barman from the PGDG packages, the PostgreSQL client tools, and the PostgreSQL server binaries that restore drills use (chapter 7).
+
+The commands below use a shell variable for the image:
+
+```
+IMAGE=ghcr.io/dbfactory-io/pgcellar:$(sed -n 's/^PGCELLAR_TAG=//p' .env)
+```
+
+**Building it yourself** (developers, or a custom set of PostgreSQL versions, chapter 7): `docker compose build` builds `deploy/Dockerfile` from the checkout and tags the result with the same name, so the rest of this chapter works unchanged. A self-built image is yours to rebuild at each release: leave the host updater of chapter 16 off, it would replace it with the published image. `make docker` at the root of the repository builds it as `pgcellar:dev` and `ghcr.io/dbfactory-io/pgcellar:dev`.
 
 Two folders are bind-mounted from the host: `etc-pgcellar` (your `pgcellar.yaml`) and `etc-barman.d` (one Barman file per server, written by the console). The container runs as the `barman` user, not as root, so these folders must be writable by that user. Find its uid and set the owner:
 
 ```
-docker run --rm --entrypoint id pgcellar:dev barman
+docker run --rm --entrypoint id "$IMAGE" barman
 sudo chown -R 997:997 etc-pgcellar etc-barman.d
 ```
 
@@ -34,7 +43,7 @@ Use the uid the first command prints (997 in the current image). If you skip thi
 pgCellar stores a bcrypt hash, never a password. Type the password once and keep the hash:
 
 ```
-read -rs PW; printf '%s\n' "$PW" | docker run -i --rm pgcellar:dev hash-password
+read -rs PW; printf '%s\n' "$PW" | docker run -i --rm "$IMAGE" hash-password
 ```
 
 The password needs at least 8 characters. The command prints one line that starts with `$2a$` or `$2b$`.
@@ -49,7 +58,7 @@ Edit `etc-pgcellar/pgcellar.yaml`:
 Check the file:
 
 ```
-docker run --rm -v "$PWD/etc-pgcellar:/etc/pgcellar" pgcellar:dev check --config /etc/pgcellar/pgcellar.yaml
+docker run --rm -v "$PWD/etc-pgcellar:/etc/pgcellar" "$IMAGE" check --config /etc/pgcellar/pgcellar.yaml
 ```
 
 You want to read `all good` at the end.
@@ -132,6 +141,42 @@ Press **Backup now**. pgCellar runs `barman backup pg-main`, then forces a WAL s
 When it is done, the server is green on Status and the Timeline shows the first point in time you can restore to.
 
 ![Status](images/status.png)
+
+## Without Docker: the binary under systemd
+
+pgCellar is also one static binary, for linux amd64, linux arm64 and macOS arm64, attached to every [release](https://github.com/dbfactory-io/pgcellar/releases) with `checksums.txt`. It needs a working Barman on the same machine (installed from the PGDG packages, with its `barman` user) and the PostgreSQL client tools. The unit file is `deploy/systemd/pgcellar.service`.
+
+The service runs as `barman`: Barman refuses to run as anyone but its `barman_user`, and the SSH keys pgCellar manages are that user's. The binary lives in `/opt/pgcellar/bin`, a directory owned by `barman`, so that automatic updates can replace it next to itself (chapter 16). As root, from a checkout of the repository (for the example configuration and the unit), with `V` the version you install:
+
+```
+V=0.1.0; A=linux_amd64
+curl -fLO https://github.com/dbfactory-io/pgcellar/releases/download/v$V/pgcellar_${V}_$A.tar.gz
+curl -fLO https://github.com/dbfactory-io/pgcellar/releases/download/v$V/checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+tar -xzf pgcellar_${V}_$A.tar.gz pgcellar
+install -d -o barman -g barman -m 0755 /opt/pgcellar/bin /etc/pgcellar /var/lib/pgcellar
+install -o barman -g barman -m 0755 pgcellar /opt/pgcellar/bin/pgcellar
+install -o barman -g barman -m 0640 deploy/pgcellar.example.yaml /etc/pgcellar/pgcellar.yaml
+install -m 0644 deploy/systemd/pgcellar.service /etc/systemd/system/pgcellar.service
+```
+
+Edit `/etc/pgcellar/pgcellar.yaml` as above (admin hash from `/opt/pgcellar/bin/pgcellar hash-password`, `base_url`, no example servers), check it with `sudo -u barman /opt/pgcellar/bin/pgcellar check --config /etc/pgcellar/pgcellar.yaml`, then:
+
+```
+systemctl daemon-reload
+systemctl enable --now pgcellar
+journalctl -u pgcellar -n 20      # "pgcellar 0.1.0 listening on ..."
+```
+
+What the unit sets, and why:
+
+- `User=barman`, `Group=barman`.
+- `ExecStart=/opt/pgcellar/bin/pgcellar serve --config /etc/pgcellar/pgcellar.yaml`.
+- `EnvironmentFile=-/etc/pgcellar/pgcellar.env`: the secrets of the alert channels (chapter 8), mode 0600, never in the YAML.
+- `Restart=on-failure`, `RestartSec=5`: a crash restarts the service. After an automatic update these restarts are counted, and the third one rolls back to the previous binary (chapter 16).
+- `ProtectSystem=full`, `ProtectHome=read-only`, `NoNewPrivileges=true`, and `ReadWritePaths=/opt/pgcellar/bin /var/lib/pgcellar /etc/pgcellar /etc/barman.d /var/lib/barman`: the only places it writes.
+
+Without automatic updates the binary may stay root-owned, anywhere; change `ExecStart` to match. The SSH companion is a container of the Docker setup only: with a binary install, `archive_command` (chapter 4) needs an sshd on the host that lets the `barman` user in, and `ssh_port` set to its port.
 
 ## Where to go next
 

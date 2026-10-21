@@ -2,29 +2,31 @@
 
 Day-two work: updating, backing up pgCellar itself, watching it, and keeping an eye on the disk.
 
-## Updating the image
+## Updating pgCellar
 
-The state is in volumes and bind mounts, not in the image. Updating is a rebuild and a restart:
+How a new release reaches you, by hand or automatically, for Docker and for a binary install, is [Releases and updates](16-releases-and-updates.md). The short version for Docker by hand: the state is in volumes and bind mounts, not in the image, so updating is a new tag and a restart.
 
 ```
 cd pgcellar/deploy
-git pull
-docker compose build
+sed -i 's/^PGCELLAR_TAG=.*/PGCELLAR_TAG=0.1.2/' .env     # or edit .env
+docker compose pull
 docker compose up -d
 ```
 
-Compose recreates both containers (`pgcellar` and `pgcellar-ssh`) with the new image. Backups in progress are interrupted: a backup that was running is recorded as interrupted, and the scheduler catches up a missed due time if it is younger than `scheduler.catch_up` (6 hours by default). Choose a quiet moment.
+Compose recreates both containers (`pgcellar` and `pgcellar-ssh`) with the new image. Backups in progress are interrupted: a backup that was running is recorded as interrupted, and the scheduler catches up a missed due time if it is younger than `scheduler.catch_up` (6 hours by default). Choose a quiet moment; the update window and the host updater of chapter 16 do that for you.
 
 After the start:
 
-- `pgcellar version` inside the container, the startup log line and the metric `pgcellar_build_info` tell the version.
+- `pgcellar version` inside the container, the startup log line, the metric `pgcellar_build_info` and the **Updates** page tell the version.
 - The pages are full right away: the status cache is kept in SQLite and shown marked as stale ("as of 08:12, refreshing") until the first refresh completes.
-- Alerts are silent for the first two minutes.
+- Alerts are silent for the first two minutes. The version change itself is announced once (`update_applied`).
 - `docker compose logs --tail 50 pgcellar` shows `pgcellar <version> listening on ...`.
 
-If you run the binary without Docker, replace it and restart the service (`deploy/systemd/pgcellar.service` is a systemd unit that runs as the `barman` user).
+To go back, put the previous tag in `.env` and run `docker compose up -d` again.
 
-**Pin what you can.** The image takes Barman from the PGDG repository at build time. Rebuilding on another day may bring a newer Barman. Read its release notes before a rebuild on a production backup host, and keep the previous image (`docker tag pgcellar:dev pgcellar:previous`) so you can go back.
+With a binary install (`deploy/systemd/pgcellar.service`, chapter 1), replace `/opt/pgcellar/bin/pgcellar` and `systemctl restart pgcellar`, or let `updates.auto` do it (chapter 16).
+
+**Barman comes with the image.** A published image carries the Barman version of its build, so a given tag always gives the same Barman. If you build the image yourself (`docker compose build`), it takes Barman from the PGDG repository on that day: read Barman's release notes before a rebuild on a production backup host, and keep the previous image (`docker tag <image> pgcellar:previous`) so you can go back.
 
 Migrations of the SQLite database are applied automatically at start. Back up before updating anyway (below).
 
@@ -47,7 +49,7 @@ Notes:
 - **Back up the backups too.** If the volume or the machine goes, the backups go with it. Copy `/var/lib/barman` to another machine (rsync, a snapshot of the volume, object storage is outside the scope of this version). A backup system on a single disk is a single disk.
 - `~/.pgpass` and the private key are what let Barman talk to your servers. Treat them like any credential.
 
-To restore pgCellar on a new host: install Docker, put back the configuration folders, the volumes (`.ssh`, `.pgpass`, `barman-data`), build the image, `docker compose up -d`. The status, the schedule and the servers are all back. Drill and run history come back only if you restored `pgcellar.db`.
+To restore pgCellar on a new host: install Docker, put back the configuration folders, the volumes (`.ssh`, `.pgpass`, `barman-data`), the `.env` file with the same `PGCELLAR_TAG`, `docker compose up -d`. The status, the schedule and the servers are all back. Drill and run history come back only if you restored `pgcellar.db`.
 
 ## Metrics
 

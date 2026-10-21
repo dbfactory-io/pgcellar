@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Releases and updates - pgCellar manual</title>
+<meta name="description" content="A release starts from one annotated tag. Nothing is built by hand and nothing is uploaded from a laptop.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/releases-and-updates/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css?v=fbd435dfa8b5">
+<link rel="stylesheet" href="/docs/docs.css?v=43808e89cbb4">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/" aria-label="pgCellar"><svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" class="el-s" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" class="el-s" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" class="el-f"/><path d="M50 18c5 3 7 9 5 15" fill="none" class="el-s" stroke-width="2.2" stroke-linecap="round"/></svg><b>pg<span>Cellar</span></b></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.1.0</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  <li><a href="/docs/releases-and-updates/" class="on" aria-current="page"><span class="n">16</span>Releases and updates</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 16 of 16</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#how-a-release-is-built">How a release is built</a></li><li class="l2"><a href="#updating-pgcellar">Updating pgCellar</a></li><li class="l2"><a href="#checking-for-updates">Checking for updates</a></li><li class="l2"><a href="#automatic-updates-binary-install">Automatic updates (binary install)</a></li><li class="l2"><a href="#automatic-updates-docker">Automatic updates (Docker)</a></li><li class="l2"><a href="#doing-it-by-hand">Doing it by hand</a></li></ul></nav>
+<article>
+<h1 id="releases-and-updates">Releases and updates</h1>
+<h2 id="how-a-release-is-built">How a release is built</h2>
+<p>A release starts from one annotated tag. Nothing is built by hand and nothing is uploaded from a laptop.</p>
+<ol>
+<li>The section of the version is written in <code>CHANGELOG.md</code> (<code>## [0.1.1] - 2026-10-28</code>).</li>
+<li>That change is committed on <code>main</code>, then tagged: <code>git tag -a v0.1.1 -m &quot;pgCellar 0.1.1&quot;</code>.</li>
+<li><code>git push origin main --tags</code>.</li>
+</ol>
+<p>The tag starts the <code>release</code> workflow on GitHub Actions (<code>.github/workflows/release.yml</code>). It runs three jobs.</p>
+<p><strong>binaries.</strong> <code>go test ./...</code>, then GoReleaser builds the static binary for linux amd64, linux arm64 and macOS arm64, packs each one with <code>LICENSE</code> and <code>README.md</code>, and writes <code>checksums.txt</code> (SHA-256). It creates the GitHub Release as a draft. The notes of the release are the section of <code>CHANGELOG.md</code> for that version, extracted by <code>make release-notes VERSION=0.1.1</code>; a tag without a section in the changelog fails here.</p>
+<p><strong>image.</strong> Docker Buildx builds <code>deploy/Dockerfile</code> for linux/amd64 and linux/arm64 (arm64 under QEMU emulation, about 15 minutes because of the PGDG packages) with <code>--build-arg VERSION=0.1.1</code>, and pushes <code>ghcr.io/dbfactory-io/pgcellar:0.1.1</code> and <code>:latest</code>. The image is pushed without attestation manifests, so its digest is the one <code>docker pull</code> shows.</p>
+<p><strong>manifest.</strong> When both jobs succeeded, a small <code>manifest.json</code> is attached to the release, then the draft is published. Until that moment the release is invisible: <code>releases/latest</code> never points at a release without its image or its manifest.</p>
+<p>What a release contains:</p>
+<table>
+<thead>
+<tr>
+<th>Asset</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pgcellar_0.1.1_linux_amd64.tar.gz</code></td>
+<td>binary, LICENSE, README.md</td>
+</tr>
+<tr>
+<td><code>pgcellar_0.1.1_linux_arm64.tar.gz</code></td>
+<td>same, arm64</td>
+</tr>
+<tr>
+<td><code>pgcellar_0.1.1_darwin_arm64.tar.gz</code></td>
+<td>same, macOS on Apple silicon</td>
+</tr>
+<tr>
+<td><code>checksums.txt</code></td>
+<td>SHA-256 of the three archives</td>
+</tr>
+<tr>
+<td><code>manifest.json</code></td>
+<td>what an update needs to know, below</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  &quot;version&quot;: &quot;0.1.1&quot;,
+  &quot;published_at&quot;: &quot;2026-10-28T09:12:00Z&quot;,
+  &quot;image&quot;: &quot;ghcr.io/dbfactory-io/pgcellar:0.1.1&quot;,
+  &quot;image_digest&quot;: &quot;sha256:…&quot;,
+  &quot;binaries&quot;: {
+    &quot;linux_amd64&quot;:  { &quot;url&quot;: &quot;https://github.com/dbfactory-io/pgcellar/releases/download/v0.1.1/pgcellar_0.1.1_linux_amd64.tar.gz&quot;,  &quot;sha256&quot;: &quot;…&quot; },
+    &quot;linux_arm64&quot;:  { &quot;url&quot;: &quot;…&quot;, &quot;sha256&quot;: &quot;…&quot; },
+    &quot;darwin_arm64&quot;: { &quot;url&quot;: &quot;…&quot;, &quot;sha256&quot;: &quot;…&quot; }
+  },
+  &quot;notes_url&quot;: &quot;https://github.com/dbfactory-io/pgcellar/releases/tag/v0.1.1&quot;
+}
+</code></pre>
+<p>A tag with a suffix (<code>v0.2.0-rc.1</code>) gives a pre-release: same assets, marked as pre-release on GitHub, and <code>:latest</code> and <code>releases/latest</code> do not move.</p>
+<p>Trust rests on HTTPS and on the official repository: the archives are checked against the SHA-256 in <code>manifest.json</code> and <code>checksums.txt</code>, the image is pulled by digest. Neither the manifest nor the archives are signed yet.</p>
+<p>To see what a release would contain without publishing anything: <code>make release-dry</code> (archives and checksums in <code>dist/</code>) and <code>make -s release-notes VERSION=0.1.1</code>.</p>
+<h2 id="updating-pgcellar">Updating pgCellar</h2>
+<p>Two words are used the same way everywhere below:</p>
+<ul>
+<li>the <strong>update window</strong> is <code>updates.window</code> in <code>pgcellar.yaml</code>, a daily time range (default <code>02:00-05:00</code>, local time of the pgCellar server) outside which nothing is replaced automatically;</li>
+<li>the <strong>host updater</strong> is <code>pgcellar-updater</code> (<code>deploy/updater/</code>), a script on the Docker host, started by a systemd timer, that updates a pgCellar run by Docker Compose.</li>
+</ul>
+<p>pgCellar always checks for new releases and tells you (next section). Who installs them depends on how pgCellar runs:</p>
+<table>
+<thead>
+<tr>
+<th>You run pgCellar...</th>
+<th>Automatic updates</th>
+<th>Turned on by</th>
+<th>By hand</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>with Docker Compose (<code>deploy/docker-compose.yml</code>)</td>
+<td>the host updater, on the Docker host</td>
+<td><code>systemctl enable --now pgcellar-updater.timer</code></td>
+<td>change <code>PGCELLAR_TAG</code>, <code>docker compose pull &amp;&amp; docker compose up -d</code>, or <code>sudo pgcellar-updater --now</code></td>
+</tr>
+<tr>
+<td>as a binary under systemd (<code>deploy/systemd/pgcellar.service</code>)</td>
+<td>pgCellar itself (self-update)</td>
+<td><code>updates.auto: true</code></td>
+<td>replace <code>/opt/pgcellar/bin/pgcellar</code>, <code>systemctl restart pgcellar</code></td>
+</tr>
+<tr>
+<td>with an image you built yourself, or <code>--dev</code> / <code>--demo</code></td>
+<td>none</td>
+<td>-</td>
+<td>rebuild, restart</td>
+</tr>
+</tbody>
+</table>
+<p>In both automatic cases the update waits for the update window and for running jobs (no backup, restore or restore drill in progress), checks what it downloaded against the release's <code>manifest.json</code>, and goes back to the previous version when the new one does not come up. A version that had to be rolled back is not installed automatically again.</p>
+<h2 id="checking-for-updates">Checking for updates</h2>
+<p>pgCellar looks for a new release by itself, once a day, and tells you. It does not install anything at this step: installing is done by the self-update (binary installs) or by the host updater (Docker).</p>
+<p><strong>What is sent.</strong> One <code>GET</code> on <code>updates.source</code> (by default <code>https://api.github.com/repos/dbfactory-io/pgcellar/releases/latest</code>) with <code>User-Agent: pgcellar/0.1.1</code> and <code>Accept: application/vnd.github+json</code>, then one <code>GET</code> on the <code>manifest.json</code> of that release. Nothing else: no identifier, no number of servers, no configuration, no cookie. The <code>ETag</code> of the last answer is kept in memory and sent back as <code>If-None-Match</code>, so an unchanged release costs a <code>304</code>. A check gives up after 15 seconds.</p>
+<p><strong>What is compared.</strong> The <code>tag_name</code> of the release (without its <code>v</code>) against the running version, as semantic versions (<code>0.1.10</code> is newer than <code>0.1.9</code>, <code>0.2.0-rc.1</code> older than <code>0.2.0</code>). A development build (<code>pgcellar version</code> prints <code>dev</code>) is never told an update exists, and does not check by itself; &quot;Check now&quot; still shows the latest release. <code>--dev</code> and <code>--demo</code> never check by themselves either.</p>
+<p><strong>Configuration</strong> (<code>pgcellar.yaml</code>, every key optional; the full reference with validation is in <a href="../configuration-reference/">Configuration reference</a>):</p>
+<pre><code class="language-yaml">updates:
+  check: true                # look for a new release every interval; absent = true
+  interval: 24h              # at least 1h; absent = 24h
+  channel: stable            # only &quot;stable&quot; exists for now
+  auto: false                # binary installs: install new releases by itself, in the update window; absent = false
+  window: &quot;02:00-05:00&quot;      # the update window, local time of the server; may cross midnight (&quot;23:00-01:00&quot;)
+  source: https://api.github.com/repos/dbfactory-io/pgcellar/releases/latest   # a mirror answering in the same format
+</code></pre>
+<p><code>check: false</code> stops the daily request; nothing leaves the machine any more unless somebody presses &quot;Check now&quot;. It also stops every automatic update, the host updater included: both act on what this check found. After a failed check (no network, GitHub rate limit) pgCellar tries again one hour later, not one day later.</p>
+<p><strong>Where you see it.</strong></p>
+<ul>
+<li>The <strong>Updates</strong> page (<code>/updates</code>, any signed-in user; the version in the footer links to it): running version, latest release, when it was published, last and next check, the error of the last check if any, the update window, and how to update this instance. The <strong>Check now</strong> button needs the operator role and is audited as <code>updates.check</code>.</li>
+<li>A discreet line on the <strong>Status</strong> page, &quot;pgCellar 0.1.2 is available&quot;, with a link to the Updates page, as long as a newer release is known.</li>
+<li>An <strong>alert</strong> through the configured channels (Telegram, mail, webhook), kind <code>update_available</code>, sent once per version: a restart does not repeat it, the next version is announced again. When the running version changed since the previous start, one message of kind <code>update_applied</code> (&quot;pgCellar updated from 0.1.1 to 0.1.2&quot;) with the link to the notes.</li>
+<li><strong>Metrics</strong>: <code>pgcellar_update_available</code> (1 when a newer release is known) next to <code>pgcellar_build_info{version=&quot;…&quot;}</code>.</li>
+</ul>
+<p>What pgCellar remembers (latest release seen, last check, last error, last version announced, last version started) is one row of the <code>settings</code> table in SQLite. Losing it costs at most one repeated message.</p>
+<p><strong>API.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Request</th>
+<th>Role</th>
+<th>Answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/v1/updates</code></td>
+<td>viewer</td>
+<td><code>{&quot;data&quot;: {&quot;current&quot;, &quot;latest&quot;, &quot;available&quot;, &quot;checked_at&quot;, &quot;published_at&quot;, &quot;notes_url&quot;, &quot;manifest&quot;, &quot;error&quot;, &quot;check&quot;, &quot;interval&quot;, &quot;auto&quot;, &quot;window&quot;, &quot;in_window&quot;, &quot;docker&quot;, &quot;next_check_at&quot;, &quot;updater_command&quot;, &quot;self_update&quot;}}</code>; <code>updater_command</code> only in a container; <code>self_update</code> (state of the self-update, with the reason it does nothing when it does nothing) absent with <code>--dev</code> and <code>--demo</code></td>
+</tr>
+<tr>
+<td><code>POST /api/v1/updates/check</code></td>
+<td>operator</td>
+<td>the same after a check now; <code>502</code> with both <code>error</code> and <code>data</code> when the check failed</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/updates/ready</code></td>
+<td>operator</td>
+<td><code>200 {&quot;ready&quot;: true, &quot;window&quot;: &quot;02:00-05:00&quot;}</code> or <code>409 {&quot;ready&quot;: false, &quot;reason&quot;: &quot;...&quot;, &quot;window&quot;: &quot;...&quot;}</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>/updates/ready</code> is what the host updater asks before it replaces pgCellar: it answers <code>ready</code> only when no backup, restore or restore drill is running and the clock of the pgCellar server is inside the update window. <code>?now=1</code> skips the window, for an update started by hand; a running backup still says no. It needs an API key with the operator role, like every other request that leads to an action (<code>pgcellar apikey create --config FILE --name NAME --role operator</code>, see <a href="../users-roles-and-api/">Users, roles and the API</a>). Its answer is not wrapped in <code>data</code>, so that a shell script can read it with <code>grep '&quot;ready&quot;:true'</code>.</p>
+<p><strong>In a container</strong> (<code>PGCELLAR_IN_DOCKER=1</code>, or the <code>/.dockerenv</code> or <code>/run/.containerenv</code> file), pgCellar never replaces itself, and the Updates page shows the command to run on the Docker host, <code>sudo pgcellar-updater</code>, instead of the self-update setting.</p>
+<h2 id="automatic-updates-binary-install">Automatic updates (binary install)</h2>
+<p>A pgCellar installed as a binary under systemd can install new releases by itself. It is off unless you ask for it, and it never runs in a container (there the host updater does the work, next section).</p>
+<p><strong>Prerequisites.</strong></p>
+<ul>
+<li>
+<p><code>updates.auto: true</code> in <code>pgcellar.yaml</code> (the update check must be on too: <code>updates.check</code> absent or <code>true</code>).</p>
+</li>
+<li>
+<p>A release build: <code>pgcellar version</code> prints a version number, not <code>dev</code>.</p>
+</li>
+<li>
+<p>Not in a container: <code>PGCELLAR_IN_DOCKER=1</code>, <code>/.dockerenv</code> or <code>/run/.containerenv</code> turns it off.</p>
+</li>
+<li>
+<p>The binary and its directory are writable by the user of the service, because the new binary is written next to the old one and renamed over it. The unit in <code>deploy/systemd/pgcellar.service</code> runs <code>/opt/pgcellar/bin/pgcellar</code> as <code>barman</code> (the only user Barman agrees to run as) and lists <code>/opt/pgcellar/bin</code> in <code>ReadWritePaths</code> (installation: <a href="../getting-started/">Getting started</a>, &quot;Without Docker&quot;):</p>
+<pre><code class="language-sh">install -d -o barman -g barman -m 0755 /opt/pgcellar/bin
+install -o barman -g barman -m 0755 pgcellar /opt/pgcellar/bin/pgcellar
+</code></pre>
+</li>
+<li>
+<p><code>Restart=on-failure</code> in the unit: a new version that crashes is started again by systemd, and those starts are what triggers the rollback.</p>
+</li>
+</ul>
+<p>When one of these is missing, nothing happens and the Updates page says why next to &quot;Automatic updates&quot; (the same text is <code>self_update.refused_reason</code> in <code>GET /api/v1/updates</code>).</p>
+<p><strong>What happens.</strong> Every 10 minutes pgCellar looks at the latest release found by the daily check. It goes on only when that release is newer than the running version, has a binary for this platform (<code>linux_amd64</code>, <code>linux_arm64</code>, <code>darwin_arm64</code>), is not in the list of failed versions (below), the clock is inside the update window, and no backup, restore or restore drill is running. Then:</p>
+<ol>
+<li>It downloads the archive named in <code>manifest.json</code> (HTTPS only, 200 MB at most) into a temporary file in the directory of the binary, and compares its SHA-256 with the manifest.</li>
+<li>It takes the <code>pgcellar</code> file out of the archive (an archive with an absolute path or a <code>..</code> in any entry is refused) and makes it executable.</li>
+<li>It runs <code>&lt;new binary&gt; version</code> (10 seconds at most) and checks that it prints the expected version.</li>
+<li>It writes <code>pgcellar.update.json</code> next to the binary (<code>from</code>, <code>to</code>, <code>started_at</code>, <code>attempts</code>), renames the running binary to <code>pgcellar.prev</code>, renames the new one to <code>pgcellar</code>, and replaces its own process with the new binary (same PID, same arguments, systemd sees no restart).</li>
+<li>The new version counts its start in <code>pgcellar.update.json</code>. After 120 seconds during which <code>/healthz</code> answers on the local address, it removes the file: the update is confirmed. <code>pgcellar.prev</code> stays, for a return by hand.</li>
+</ol>
+<p>Any failure before step 4 leaves the running binary untouched and removes what was downloaded; the error is shown on the Updates page and the next attempt comes 10 minutes later. If the process cannot be replaced at step 4, the old binary is put back and pgCellar goes on with it.</p>
+<p><strong>Rollback.</strong> A new version that crashes before it is confirmed is started again by systemd (<code>Restart=on-failure</code>, 5 seconds later). At its third start pgCellar gives up on it: <code>pgcellar.prev</code> is renamed back to <code>pgcellar</code>, the version is written to <code>pgcellar.update.failed.json</code> next to the binary, and the old binary is started in place of the new one.</p>
+<p><strong>Failed versions.</strong> A version listed in <code>pgcellar.update.failed.json</code> is never installed automatically again; the Updates page lists it (<code>self_update.failed_versions</code> in the API). A newer release is tried normally. To allow a failed version again, delete the file, or remove its entry from <code>versions</code>.</p>
+<p><strong>Turning it off.</strong> Remove <code>updates.auto</code> from <code>pgcellar.yaml</code> or set it to <code>false</code>. The change is read at the next attempt, no restart needed.</p>
+<h2 id="automatic-updates-docker">Automatic updates (Docker)</h2>
+<p>In a container, pgCellar cannot update itself, and that is on purpose. Replacing an image means talking to the Docker daemon, and a container that holds the Docker socket can start a privileged container and take over the host: it is root on the host. pgCellar keeps backup credentials and SSH keys to production databases; it must not also be root on the machine that runs it. So the container has no socket, and the update is done by the host updater. pgCellar only answers two questions through its API: is there a new release, and is now a good time.</p>
+<p><strong>Pin the version.</strong> The compose file says <code>image: ghcr.io/dbfactory-io/pgcellar:${PGCELLAR_TAG:-latest}</code> and <code>deploy/.env.example</code> sets <code>PGCELLAR_TAG=0.1.0</code>. With a pinned tag a restart never brings a new version by surprise and the host updater knows exactly where to come back. Without one (<code>latest</code>), the host updater uses the running version as the way back and pins the tag from then on.</p>
+<p><strong>What a run does.</strong> Every 15 minutes (plus up to 2 minutes of random delay):</p>
+<ol>
+<li><code>GET /api/v1/updates</code>. Nothing newer than the running version: &quot;up to date&quot;, exit 0.</li>
+<li><code>GET /api/v1/updates/ready</code>. <code>409</code>: the reason is logged (&quot;outside the update window&quot;, &quot;a backup of erp-prod is running&quot;) and the run ends with exit 0; the next run asks again. The timer never passes <code>?now=1</code>: when to update is decided by the update window and by the jobs pgCellar runs, not by the timer.</li>
+<li>The target is <code>latest</code>; the image is <code>manifest.image</code> of that release. Anything other than <code>ghcr.io/dbfactory-io/pgcellar:&lt;that version&gt;</code> is refused (another registry, a look-alike name, a digest-only reference); the repository is written in the script, not in its configuration. A version in the list of failed versions (below) is skipped and the run says so.</li>
+<li><code>docker pull</code>, then the digest the registry serves for that tag (<code>docker buildx imagetools inspect</code>, or the repository digests recorded by the pull when buildx is missing) is compared with <code>manifest.image_digest</code>. A difference stops the run with exit 1; nothing was changed.</li>
+<li>The current <code>PGCELLAR_TAG</code> is saved in <code>.pgcellar-updater.prev</code> next to the compose file, the new tag is written into the compose <code>.env</code> file (one line replaced, the rest of the file kept, written to a temporary file and renamed), then <code>docker compose up -d pgcellar pgcellar-ssh</code>.</li>
+<li>It waits up to <code>HEALTH_TIMEOUT</code> (180 s) for <code>/healthz</code> to answer <code>200</code> and for <code>/api/v1/updates</code> to report the new version as <code>current</code>. Then: &quot;updated from 0.1.1 to 0.1.2&quot;, exit 0, and pgCellar itself sends its <code>update_applied</code> alert.</li>
+<li>Otherwise it rolls back: the previous tag goes back into <code>.env</code>, <code>docker compose up -d</code> again, wait for <code>/healthz</code>, &quot;rolled back&quot;, exit 2, so the unit is marked failed. If even the previous version does not come back, exit 3 with what to look at.</li>
+</ol>
+<p>Two runs never overlap (<code>flock</code> on <code>/run/lock/pgcellar-updater.lock</code>). The API key is read from a file and handed to <code>curl</code> on its standard input: it appears neither in the journal nor in the process list. Everything goes to the journal: <code>journalctl -u pgcellar-updater</code>.</p>
+<p><strong>Failed versions.</strong> A version that had to be rolled back (exit 2, or 3 when the rollback failed too) is written to <code>$COMPOSE_DIR/.pgcellar-updater.failed</code>, one line per version: the version, the date, and the outcome. The next runs skip it and say so in the journal; a newer release is tried normally. <code>sudo pgcellar-updater --retry-failed --now</code> (or <code>RETRY_FAILED=1</code>; without <code>--now</code> it waits for the update window) tries it once more and removes it from the list when it works; deleting its line does the same at the next run. <code>--dry-run</code> shows the versions it skips. This is the same rule as the self-update of a binary install, where the list is <code>pgcellar.update.failed.json</code> and the rollback comes at the third failed start.</p>
+<p><strong>Install.</strong> On the Docker host, from a checkout of the repository:</p>
+<pre><code>cd pgcellar/deploy/updater
+sudo ./install.sh                # script, units, /etc/pgcellar/updater.env; enables nothing
+sudo nano /etc/pgcellar/updater.env
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>COMPOSE_DIR</code></td>
+<td>(required)</td>
+<td>directory of the <code>docker-compose.yml</code> that runs pgCellar</td>
+</tr>
+<tr>
+<td><code>SERVICE</code></td>
+<td><code>pgcellar</code></td>
+<td>services to recreate; the example says <code>&quot;pgcellar pgcellar-ssh&quot;</code>, both use the image</td>
+</tr>
+<tr>
+<td><code>ENV_FILE</code></td>
+<td><code>$COMPOSE_DIR/.env</code></td>
+<td>file compose reads its variables from</td>
+</tr>
+<tr>
+<td><code>TAG_VAR</code></td>
+<td><code>PGCELLAR_TAG</code></td>
+<td>variable that holds the image tag</td>
+</tr>
+<tr>
+<td><code>API_URL</code></td>
+<td><code>http://127.0.0.1:8080</code></td>
+<td>where pgCellar answers, seen from the host</td>
+</tr>
+<tr>
+<td><code>API_KEY_FILE</code></td>
+<td><code>/etc/pgcellar/updater.key</code></td>
+<td>one line, an API key with the operator role, mode 0600</td>
+</tr>
+<tr>
+<td><code>HEALTH_TIMEOUT</code></td>
+<td><code>180</code></td>
+<td>seconds before a rollback</td>
+</tr>
+<tr>
+<td><code>DRY_RUN</code></td>
+<td><code>0</code></td>
+<td><code>1</code> = say what would be done, change nothing</td>
+</tr>
+<tr>
+<td><code>DOCKER</code></td>
+<td><code>docker</code></td>
+<td><code>podman</code> works too when <code>podman compose</code> does</td>
+</tr>
+<tr>
+<td><code>RETRY_FAILED</code></td>
+<td><code>0</code></td>
+<td><code>1</code> = try a version on the failed list again, like <code>--retry-failed</code></td>
+</tr>
+</tbody>
+</table>
+<p>Then the key, the update window, a dry run, and the timer:</p>
+<pre><code>cd /srv/pgcellar                 # COMPOSE_DIR
+sudo install -m 600 /dev/null /etc/pgcellar/updater.key
+docker compose exec -T pgcellar pgcellar apikey create --config /etc/pgcellar/pgcellar.yaml \
+  --name updater --role operator | sudo tee /etc/pgcellar/updater.key &gt;/dev/null
+sudo pgcellar-updater --dry-run
+sudo systemctl enable --now pgcellar-updater.timer
+</code></pre>
+<p>Set <code>updates.window</code> to a quiet slot, away from the nightly backups and drills. <code>updates.auto</code> is for binary installs only; on Docker, enabling the timer is the opt-in. <code>updates.check: false</code> also stops the host updater: it relies on what pgCellar's own check found.</p>
+<p>The service runs as root. The host updater runs <code>docker compose</code> and rewrites the <code>.env</code> file, which usually belongs to root and holds secrets; membership of the <code>docker</code> group is worth root anyway, so a dedicated user in that group would not be safer. To run it as another user all the same, add a drop-in with <code>User=</code> and <code>Group=docker</code>, and give that user the compose directory, the <code>.env</code> file and the key file. With rootless Podman, install the units as user units of the account that owns the containers and set <code>DOCKER=podman</code>.</p>
+<p>The script needs <code>bash</code>, <code>curl</code> 7.76 or later, <code>jq</code> and <code>flock</code> (util-linux) on the host.</p>
+<p><strong>Update now.</strong> <code>sudo pgcellar-updater --now</code> skips the update window (it sends <code>?now=1</code>); pgCellar still says no while a backup, a restore or a drill runs. The Updates page of a pgCellar in a container shows this command.</p>
+<p><strong>Disable.</strong> <code>sudo systemctl disable --now pgcellar-updater.timer</code>. The tag in <code>.env</code> stays where it is.</p>
+<h2 id="doing-it-by-hand">Doing it by hand</h2>
+<p>Without automatic updates, or to go back to a previous version.</p>
+<p><strong>Docker.</strong> In the compose directory:</p>
+<pre><code>cd /srv/pgcellar
+sed -i 's/^PGCELLAR_TAG=.*/PGCELLAR_TAG=0.1.2/' .env      # or edit .env
+docker compose pull
+docker buildx imagetools inspect ghcr.io/dbfactory-io/pgcellar:0.1.2 | head -3   # optional: Digest = image_digest of manifest.json
+docker compose up -d
+</code></pre>
+<p>To go back, put the previous tag in <code>.env</code> (the host updater leaves it in <code>.pgcellar-updater.prev</code>) and run <code>docker compose up -d</code> again.</p>
+<p><strong>Binary.</strong> Download the archive of the new version and check it (as in <a href="../getting-started/">Getting started</a>, &quot;Without Docker&quot;), then:</p>
+<pre><code class="language-sh">cd /opt/pgcellar/bin
+cp -p pgcellar pgcellar.prev
+install -o barman -g barman -m 0755 /path/to/new/pgcellar pgcellar.new
+mv pgcellar.new pgcellar
+systemctl restart pgcellar
+</code></pre>
+<p>To go back, <code>mv pgcellar.prev pgcellar &amp;&amp; systemctl restart pgcellar</code> (the self-update also leaves the previous binary as <code>pgcellar.prev</code>). With <code>updates.auto: true</code>, keep the version you left from coming back at the next update window: set <code>updates.auto: false</code>, or add it to <code>pgcellar.update.failed.json</code>.</p>
+<p><strong>Database.</strong> The SQLite migrations of a newer version are not undone by going back; back up <code>/var/lib/pgcellar</code> before a jump of several versions (<a href="../operations/">Operations</a>).</p>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/cli-reference/"><small>Previous</small>CLI reference</a>
+  <span></span>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

@@ -36,13 +36,14 @@
   <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 1 of 15</p>
-<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#get-the-files-and-build-the-image">Get the files and build the image</a></li><li class="l2"><a href="#create-the-first-admin">Create the first admin</a></li><li class="l2"><a href="#start">Start</a></li><li class="l2"><a href="#prepare-postgresql">Prepare PostgreSQL</a></li><li class="l2"><a href="#add-the-first-server">Add the first server</a></li><li class="l2"><a href="#first-barman-check">First barman check</a></li><li class="l2"><a href="#first-backup">First backup</a></li><li class="l2"><a href="#where-to-go-next">Where to go next</a></li></ul></nav>
+<p class="kicker">Chapter 1 of 16</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#get-the-files-and-the-image">Get the files and the image</a></li><li class="l2"><a href="#create-the-first-admin">Create the first admin</a></li><li class="l2"><a href="#start">Start</a></li><li class="l2"><a href="#prepare-postgresql">Prepare PostgreSQL</a></li><li class="l2"><a href="#add-the-first-server">Add the first server</a></li><li class="l2"><a href="#first-barman-check">First barman check</a></li><li class="l2"><a href="#first-backup">First backup</a></li><li class="l2"><a href="#without-docker-the-binary-under-systemd">Without Docker: the binary under systemd</a></li><li class="l2"><a href="#where-to-go-next">Where to go next</a></li></ul></nav>
 <article>
 <h1 id="getting-started">Getting started</h1>
 <p>By the end of this chapter you have pgCellar running in Docker, one PostgreSQL server added, a green <code>barman check</code>, and a first backup. Count five minutes if PostgreSQL is already prepared. If you still have to create the roles, chapter 3 has the commands.</p>
@@ -52,22 +53,27 @@
 <li>A PostgreSQL server, version 13 to 18, where you can create two roles and edit <code>pg_hba.conf</code>.</li>
 <li>Disk space for the backups. Rule of thumb: one full copy of the database, plus the WAL of the retention period.</li>
 </ul>
-<h2 id="get-the-files-and-build-the-image">Get the files and build the image</h2>
+<h2 id="get-the-files-and-the-image">Get the files and the image</h2>
 <pre><code>git clone https://github.com/dbfactory-io/pgcellar.git
 cd pgcellar/deploy
 mkdir etc-pgcellar etc-barman.d
 cp pgcellar.example.yaml etc-pgcellar/pgcellar.yaml
-docker compose build
+cp .env.example .env &amp;&amp; chmod 600 .env
+docker compose pull
 </code></pre>
-<p>The image is called <code>pgcellar:dev</code>. It contains pgCellar, an unmodified Barman from the PGDG packages, the PostgreSQL client tools, and the PostgreSQL server binaries that restore drills use (chapter 7).</p>
+<p>The image is published on GitHub's registry as <code>ghcr.io/dbfactory-io/pgcellar:&lt;version&gt;</code>, for linux/amd64 and linux/arm64. <code>.env</code> says which version you run: <code>PGCELLAR_TAG=0.1.0</code>. Put the latest release there (see the <a href="https://github.com/dbfactory-io/pgcellar/releases">releases page</a>). Pinning a version means a restart never brings a new one by surprise; moving to the next one is chapter 16. The image contains pgCellar, an unmodified Barman from the PGDG packages, the PostgreSQL client tools, and the PostgreSQL server binaries that restore drills use (chapter 7).</p>
+<p>The commands below use a shell variable for the image:</p>
+<pre><code>IMAGE=ghcr.io/dbfactory-io/pgcellar:$(sed -n 's/^PGCELLAR_TAG=//p' .env)
+</code></pre>
+<p><strong>Building it yourself</strong> (developers, or a custom set of PostgreSQL versions, chapter 7): <code>docker compose build</code> builds <code>deploy/Dockerfile</code> from the checkout and tags the result with the same name, so the rest of this chapter works unchanged. A self-built image is yours to rebuild at each release: leave the host updater of chapter 16 off, it would replace it with the published image. <code>make docker</code> at the root of the repository builds it as <code>pgcellar:dev</code> and <code>ghcr.io/dbfactory-io/pgcellar:dev</code>.</p>
 <p>Two folders are bind-mounted from the host: <code>etc-pgcellar</code> (your <code>pgcellar.yaml</code>) and <code>etc-barman.d</code> (one Barman file per server, written by the console). The container runs as the <code>barman</code> user, not as root, so these folders must be writable by that user. Find its uid and set the owner:</p>
-<pre><code>docker run --rm --entrypoint id pgcellar:dev barman
+<pre><code>docker run --rm --entrypoint id &quot;$IMAGE&quot; barman
 sudo chown -R 997:997 etc-pgcellar etc-barman.d
 </code></pre>
 <p>Use the uid the first command prints (997 in the current image). If you skip this step, pgCellar cannot save its configuration.</p>
 <h2 id="create-the-first-admin">Create the first admin</h2>
 <p>pgCellar stores a bcrypt hash, never a password. Type the password once and keep the hash:</p>
-<pre><code>read -rs PW; printf '%s\n' &quot;$PW&quot; | docker run -i --rm pgcellar:dev hash-password
+<pre><code>read -rs PW; printf '%s\n' &quot;$PW&quot; | docker run -i --rm &quot;$IMAGE&quot; hash-password
 </code></pre>
 <p>The password needs at least 8 characters. The command prints one line that starts with <code>$2a$</code> or <code>$2b$</code>.</p>
 <p>Edit <code>etc-pgcellar/pgcellar.yaml</code>:</p>
@@ -78,7 +84,7 @@ sudo chown -R 997:997 etc-pgcellar etc-barman.d
 <li>Delete the fake entry in <code>api_keys:</code> unless you want it.</li>
 </ul>
 <p>Check the file:</p>
-<pre><code>docker run --rm -v &quot;$PWD/etc-pgcellar:/etc/pgcellar&quot; pgcellar:dev check --config /etc/pgcellar/pgcellar.yaml
+<pre><code>docker run --rm -v &quot;$PWD/etc-pgcellar:/etc/pgcellar&quot; &quot;$IMAGE&quot; check --config /etc/pgcellar/pgcellar.yaml
 </code></pre>
 <p>You want to read <code>all good</code> at the end.</p>
 <h2 id="start">Start</h2>
@@ -162,6 +168,33 @@ EOF
 <figure><img src="../images/runs.png" alt="The runs page" loading="lazy"><figcaption>The runs page</figcaption></figure>
 <p>When it is done, the server is green on Status and the Timeline shows the first point in time you can restore to.</p>
 <figure><img src="../images/status.png" alt="Status" loading="lazy"><figcaption>Status</figcaption></figure>
+<h2 id="without-docker-the-binary-under-systemd">Without Docker: the binary under systemd</h2>
+<p>pgCellar is also one static binary, for linux amd64, linux arm64 and macOS arm64, attached to every <a href="https://github.com/dbfactory-io/pgcellar/releases">release</a> with <code>checksums.txt</code>. It needs a working Barman on the same machine (installed from the PGDG packages, with its <code>barman</code> user) and the PostgreSQL client tools. The unit file is <code>deploy/systemd/pgcellar.service</code>.</p>
+<p>The service runs as <code>barman</code>: Barman refuses to run as anyone but its <code>barman_user</code>, and the SSH keys pgCellar manages are that user's. The binary lives in <code>/opt/pgcellar/bin</code>, a directory owned by <code>barman</code>, so that automatic updates can replace it next to itself (chapter 16). As root, from a checkout of the repository (for the example configuration and the unit), with <code>V</code> the version you install:</p>
+<pre><code>V=0.1.0; A=linux_amd64
+curl -fLO https://github.com/dbfactory-io/pgcellar/releases/download/v$V/pgcellar_${V}_$A.tar.gz
+curl -fLO https://github.com/dbfactory-io/pgcellar/releases/download/v$V/checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+tar -xzf pgcellar_${V}_$A.tar.gz pgcellar
+install -d -o barman -g barman -m 0755 /opt/pgcellar/bin /etc/pgcellar /var/lib/pgcellar
+install -o barman -g barman -m 0755 pgcellar /opt/pgcellar/bin/pgcellar
+install -o barman -g barman -m 0640 deploy/pgcellar.example.yaml /etc/pgcellar/pgcellar.yaml
+install -m 0644 deploy/systemd/pgcellar.service /etc/systemd/system/pgcellar.service
+</code></pre>
+<p>Edit <code>/etc/pgcellar/pgcellar.yaml</code> as above (admin hash from <code>/opt/pgcellar/bin/pgcellar hash-password</code>, <code>base_url</code>, no example servers), check it with <code>sudo -u barman /opt/pgcellar/bin/pgcellar check --config /etc/pgcellar/pgcellar.yaml</code>, then:</p>
+<pre><code>systemctl daemon-reload
+systemctl enable --now pgcellar
+journalctl -u pgcellar -n 20      # &quot;pgcellar 0.1.0 listening on ...&quot;
+</code></pre>
+<p>What the unit sets, and why:</p>
+<ul>
+<li><code>User=barman</code>, <code>Group=barman</code>.</li>
+<li><code>ExecStart=/opt/pgcellar/bin/pgcellar serve --config /etc/pgcellar/pgcellar.yaml</code>.</li>
+<li><code>EnvironmentFile=-/etc/pgcellar/pgcellar.env</code>: the secrets of the alert channels (chapter 8), mode 0600, never in the YAML.</li>
+<li><code>Restart=on-failure</code>, <code>RestartSec=5</code>: a crash restarts the service. After an automatic update these restarts are counted, and the third one rolls back to the previous binary (chapter 16).</li>
+<li><code>ProtectSystem=full</code>, <code>ProtectHome=read-only</code>, <code>NoNewPrivileges=true</code>, and <code>ReadWritePaths=/opt/pgcellar/bin /var/lib/pgcellar /etc/pgcellar /etc/barman.d /var/lib/barman</code>: the only places it writes.</li>
+</ul>
+<p>Without automatic updates the binary may stay root-owned, anywhere; change <code>ExecStart</code> to match. The SSH companion is a container of the Docker setup only: with a binary install, <code>archive_command</code> (chapter 4) needs an sshd on the host that lets the <code>barman</code> user in, and <code>ssh_port</code> set to its port.</p>
 <h2 id="where-to-go-next">Where to go next</h2>
 <ul>
 <li>Put the schedule in place: <a href="../backups-schedules-retention/">Backups, schedules and retention</a>.</li>

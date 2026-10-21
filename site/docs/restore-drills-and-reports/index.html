@@ -36,12 +36,13 @@
   <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 7 of 15</p>
+<p class="kicker">Chapter 7 of 16</p>
 <nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#what-a-drill-does-step-by-step">What a drill does, step by step</a></li><li class="l2"><a href="#switching-drills-on">Switching drills on</a></li><li class="l2"><a href="#what-the-image-must-contain">What the image must contain</a></li><li class="l3"><a href="#locales">Locales</a></li><li class="l2"><a href="#disk-and-memory">Disk and memory</a></li><li class="l2"><a href="#the-pdf-report">The PDF report</a></li><li class="l3"><a href="#the-fingerprint">The fingerprint</a></li><li class="l2"><a href="#reading-a-failed-drill">Reading a failed drill</a></li></ul></nav>
 <article>
 <h1 id="restore-drills-and-reports">Restore drills and reports</h1>
@@ -123,15 +124,15 @@ drills:
 <p>The body is optional. By default the drill uses the latest DONE backup and target <code>latest</code>. You can give <code>backup_id</code>, <code>target</code> (<code>latest</code>, <code>backup_end</code>, <code>time</code>) and <code>target_time</code>. The call answers <code>202</code> with a <code>run_id</code>; the run output lists every command with its answer. It returns <code>409</code> while another drill or a backup of the same server runs.</p>
 <p>A server turns <strong>orange</strong> in Status when its last drill failed, or when no drill has passed for <code>max_age</code>. A server that never had a drill is not orange: its first due time is not late. Metrics: <code>pgcellar_last_drill_ok{server}</code> and <code>pgcellar_last_drill_age_seconds{server}</code>.</p>
 <h2 id="what-the-image-must-contain">What the image must contain</h2>
-<p>A drill starts the restored copy with the PostgreSQL <strong>server</strong> binaries of the same major version as the source. The Docker image installs them for the versions in the build argument <code>PG_MAJORS</code> (default <code>16 17 18</code>), as binaries only: no cluster, no service. If the source's major version is not there, the drill fails at step 2 with &quot;PostgreSQL <!-- raw HTML omitted --> binaries are not in this image&quot;. Rebuild:</p>
-<pre><code>docker build -f deploy/Dockerfile -t pgcellar:dev --build-arg PG_MAJORS=&quot;15 16 17&quot; .
+<p>A drill starts the restored copy with the PostgreSQL <strong>server</strong> binaries of the same major version as the source. The Docker image installs them for the versions in the build argument <code>PG_MAJORS</code> (default <code>16 17 18</code>), as binaries only: no cluster, no service. If the source's major version is not there, the drill fails at step 2 with &quot;PostgreSQL <!-- raw HTML omitted --> binaries are not in this image&quot;. The published image has the default; for another set, build your own from the checkout, in <code>deploy/</code>:</p>
+<pre><code>docker compose build --build-arg PG_MAJORS=&quot;15 16 17&quot;
 </code></pre>
+<p>The result takes the name of the image in the compose file, so <code>docker compose up -d</code> runs it. Leave the host updater of chapter 16 off with a self-built image (it would replace it with the published one), and rebuild it at each release.</p>
 <p>Sizes, measured on arm64 (uncompressed): 312 MB without the server binaries, 639 MB with <code>16 17 18</code>. A single version is about 170 MB more than none. Fewer versions, smaller image.</p>
 <h3 id="locales">Locales</h3>
 <p>A restored data directory keeps the collation and ctype locale of its source, and PostgreSQL refuses to start on a locale the system does not have. A source cluster created in a <code>postgres:16-alpine</code> or <code>postgres:16</code> container is typically <code>en_US.utf8</code>.</p>
 <p>The image generates a fixed list from the build argument <code>PG_LOCALES</code>: <code>C.UTF-8 en_US.UTF-8 en_GB.UTF-8 fr_FR.UTF-8 fr_BE.UTF-8 nl_NL.UTF-8 nl_BE.UTF-8 de_DE.UTF-8 es_ES.UTF-8 it_IT.UTF-8 pt_BR.UTF-8</code>. That adds about 23 MB. If your cluster uses another one, add it (name as in <code>/usr/share/i18n/SUPPORTED</code>) and rebuild:</p>
-<pre><code>docker build -f deploy/Dockerfile -t pgcellar:dev \
-  --build-arg PG_LOCALES=&quot;C.UTF-8 en_US.UTF-8 pl_PL.UTF-8&quot; .
+<pre><code>docker compose build --build-arg PG_LOCALES=&quot;C.UTF-8 en_US.UTF-8 pl_PL.UTF-8&quot;
 </code></pre>
 <p>A start that fails on a locale is reported as: &quot;The cluster uses locale X, which this image does not have. Rebuild with PG_LOCALES including Y (see deploy/Dockerfile).&quot; Find your cluster's locale with <code>SELECT datcollate, datctype FROM pg_database;</code>.</p>
 <h2 id="disk-and-memory">Disk and memory</h2>

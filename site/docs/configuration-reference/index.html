@@ -36,13 +36,14 @@
   <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 10 of 15</p>
-<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#the-rule-an-absent-key-is-the-default">The rule: an absent key is the default</a></li><li class="l2"><a href="#top-level">Top level</a></li><li class="l2"><a href="#barman">barman</a></li><li class="l2"><a href="#scheduler">scheduler</a></li><li class="l2"><a href="#servers">servers</a></li><li class="l2"><a href="#alerts">alerts</a></li><li class="l2"><a href="#license">license</a></li><li class="l2"><a href="#users-and-api-keys">users and api_keys</a></li><li class="l2"><a href="#recoveries">recoveries</a></li><li class="l2"><a href="#drills">drills</a></li><li class="l2"><a href="#environment-variables">Environment variables</a></li><li class="l2"><a href="#validation-errors">Validation errors</a></li></ul></nav>
+<p class="kicker">Chapter 10 of 16</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#the-rule-an-absent-key-is-the-default">The rule: an absent key is the default</a></li><li class="l2"><a href="#top-level">Top level</a></li><li class="l2"><a href="#barman">barman</a></li><li class="l2"><a href="#scheduler">scheduler</a></li><li class="l2"><a href="#servers">servers</a></li><li class="l2"><a href="#alerts">alerts</a></li><li class="l2"><a href="#license">license</a></li><li class="l2"><a href="#users-and-api-keys">users and api_keys</a></li><li class="l2"><a href="#recoveries">recoveries</a></li><li class="l2"><a href="#drills">drills</a></li><li class="l2"><a href="#updates">updates</a></li><li class="l2"><a href="#environment-variables">Environment variables</a></li><li class="l2"><a href="#validation-errors">Validation errors</a></li></ul></nav>
 <article>
 <h1 id="configuration-reference">Configuration reference</h1>
 <p>Everything that belongs to pgCellar lives in one file, <code>pgcellar.yaml</code>. Barman's own settings stay in <code>/etc/barman.conf</code> and <code>/etc/barman.d/*.conf</code>. Secrets never go in this file: use the <code>*_env</code> keys, which name an environment variable, and hashes.</p>
@@ -438,6 +439,60 @@ api_keys:
 </tr>
 </tbody>
 </table>
+<h2 id="updates"><code>updates</code></h2>
+<p>The check for new releases and the automatic updates (chapter 16). Every key is optional; an absent block means: check once a day, install nothing.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>check</code></td>
+<td><code>true</code></td>
+<td>Look for a new release every <code>interval</code>. <code>false</code> = nothing leaves the machine unless someone presses <strong>Check now</strong>; it also stops automatic updates, which act on what the check found (the host updater included). Only a release build checks: a <code>dev</code> build, <code>--dev</code> and <code>--demo</code> never do.</td>
+</tr>
+<tr>
+<td><code>interval</code></td>
+<td><code>24h</code></td>
+<td>Time between two checks. At least <code>1h</code>. After a failed check the next one comes one hour later.</td>
+</tr>
+<tr>
+<td><code>channel</code></td>
+<td><code>stable</code></td>
+<td>The only channel for now. Any other value is refused.</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td><code>false</code></td>
+<td>Binary installs: download, verify and install new releases by themselves, inside <code>window</code> (chapter 16 lists the prerequisites). Ignored in a container: there the host updater does the work. Read again at each attempt, no restart needed.</td>
+</tr>
+<tr>
+<td><code>window</code></td>
+<td><code>&quot;02:00-05:00&quot;</code></td>
+<td>When an update may be applied, <code>HH:MM-HH:MM</code> in the local time of the server (<code>TZ</code>). It may cross midnight (<code>&quot;23:00-01:00&quot;</code>); the start is included, the end is not. Start and end must differ. Applies to <code>auto</code> and to <code>/api/v1/updates/ready</code>, which the host updater asks. Put it away from the nightly backups and drills.</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><code>https://api.github.com/repos/dbfactory-io/pgcellar/releases/latest</code></td>
+<td>Where the latest release is read, in the GitHub API format: a mirror that answers the same way. Must be an <code>http://</code> or <code>https://</code> URL. Read again at each check.</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-yaml">updates:
+  auto: true
+  window: &quot;03:00-04:30&quot;
+</code></pre>
+<p>Validation messages:</p>
+<pre><code>PROBLEM  updates.interval must be at least 1h0m0s (for example &quot;24h&quot;); leave it out for the default
+PROBLEM  updates.channel &quot;beta&quot; is not known: only &quot;stable&quot; exists for now
+PROBLEM  updates.window: &quot;3h-4h&quot; is not a time range (use &quot;02:00-05:00&quot;)
+PROBLEM  updates.window: &quot;03:00-03:00&quot; starts and ends at the same time
+PROBLEM  updates.source &quot;ftp://mirror&quot; must be an http:// or https:// URL
+</code></pre>
 <h2 id="environment-variables">Environment variables</h2>
 <table>
 <thead>
@@ -458,6 +513,10 @@ api_keys:
 <tr>
 <td><code>PGCELLAR_BASE_URL</code></td>
 <td>Only in <code>--demo</code> mode: base URL of links.</td>
+</tr>
+<tr>
+<td><code>PGCELLAR_IN_DOCKER</code></td>
+<td><code>1</code> tells pgCellar it runs in a container even without <code>/.dockerenv</code> or <code>/run/.containerenv</code>: no self-update, the Updates page shows the host updater command instead (chapter 16).</td>
 </tr>
 </tbody>
 </table>

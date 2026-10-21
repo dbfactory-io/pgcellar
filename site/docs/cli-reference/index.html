@@ -36,19 +36,20 @@
   <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/" class="on" aria-current="page"><span class="n">15</span>CLI reference</a></li>
+  <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 15 of 15</p>
+<p class="kicker">Chapter 15 of 16</p>
 <nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#serve">serve</a></li><li class="l2"><a href="#check">check</a></li><li class="l2"><a href="#apikey">apikey</a></li><li class="l2"><a href="#hash-password">hash-password</a></li><li class="l2"><a href="#license">license</a></li><li class="l2"><a href="#version">version</a></li><li class="l2"><a href="#help">help</a></li><li class="l2"><a href="#build-from-source">Build from source</a></li></ul></nav>
 <article>
 <h1 id="cli-reference">CLI reference</h1>
 <p>One binary, <code>pgcellar</code>, with a few subcommands. In the Docker image it is the entry point, so the arguments go straight after the image name or the service name:</p>
 <pre><code>docker compose run --rm pgcellar check --config /etc/pgcellar/pgcellar.yaml
 docker compose exec pgcellar pgcellar apikey list --config /etc/pgcellar/pgcellar.yaml
-docker run -i --rm pgcellar:dev hash-password
+docker compose run -T --rm pgcellar hash-password
 </code></pre>
 <p><code>run</code> starts a new throwaway container; <code>exec</code> runs in the one that is up. The default command of the image is <code>serve --config /etc/pgcellar/pgcellar.yaml</code>.</p>
 <pre><code>pgcellar serve ...
@@ -203,7 +204,7 @@ make test             # go test -race ./...
 make lint             # gofmt, go vet, golangci-lint
 make run              # the --dev mode, on the example configuration
 make demo             # the --demo mode on 127.0.0.1:8080
-make docker           # build the image as pgcellar:dev
+make docker           # build the image as pgcellar:dev and ghcr.io/dbfactory-io/pgcellar:dev
 make release-dry      # linux amd64/arm64 and macOS arm64 archives with checksums in dist/
 make docs             # this manual, as HTML, in site/docs/
 make docs-pdf         # this manual, as site/docs/pgcellar-manual.pdf
@@ -213,7 +214,7 @@ make docs-pdf         # this manual, as site/docs/pgcellar-manual.pdf
 </article>
 <nav class="dpn" aria-label="Previous and next chapter">
   <a class="prev" href="/docs/licensing-and-editions/"><small>Previous</small>Licensing and editions</a>
-  <span></span>
+  <a class="next" href="/docs/releases-and-updates/"><small>Next</small>Releases and updates</a>
 </nav>
 
 </main>
