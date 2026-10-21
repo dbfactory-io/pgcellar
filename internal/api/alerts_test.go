@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stranix79/pgcellar/internal/app/apptest"
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 func TestAlertsAndLicenseAPI(t *testing.T) {

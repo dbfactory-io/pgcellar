@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 // SignatureHeader carries "sha256=<hex hmac of the body>" when a secret is set.

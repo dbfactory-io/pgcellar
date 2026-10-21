@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/config"
-	"github.com/stranix79/pgcellar/internal/sshkeys"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/sshkeys"
 )
 
 // ---- status ----

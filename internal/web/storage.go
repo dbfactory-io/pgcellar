@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app"
 )
 
 // storageLine is the "Storage: ..." sentence of the Status page, one per file

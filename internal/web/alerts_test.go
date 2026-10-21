@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stranix79/pgcellar/internal/app/apptest"
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 func fixtureWith(t *testing.T, mutate func(*config.Config)) *fixture {

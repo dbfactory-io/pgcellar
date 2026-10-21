@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/api"
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/web"
+	"github.com/dbfactory-io/pgcellar/internal/api"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/web"
 )
 
 // Server serves the web interface.

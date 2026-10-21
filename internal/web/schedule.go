@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app"
 )
 
 // fmtNext is "tonight 03:10": the next due time of a schedule, with the same

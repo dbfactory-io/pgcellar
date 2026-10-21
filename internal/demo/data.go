@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/alerts"
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/alerts"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 // Actors of the fictional team.

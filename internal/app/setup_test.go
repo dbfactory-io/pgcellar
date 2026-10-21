@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/app/apptest"
-	"github.com/stranix79/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
 )
 
 func psqlCalls(t *testing.T, e *apptest.Env) int {

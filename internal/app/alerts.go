@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/alerts"
-	"github.com/stranix79/pgcellar/internal/config"
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/alerts"
+	"github.com/dbfactory-io/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 // AlertStartGrace is how long after startup pgCellar stays quiet: the status

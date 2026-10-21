@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app"
 )
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {

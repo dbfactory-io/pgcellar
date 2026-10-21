@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stranix79/pgcellar/internal/license"
+	"github.com/dbfactory-io/pgcellar/internal/license"
 )
 
 func TestLicenseRoundTrip(t *testing.T) {

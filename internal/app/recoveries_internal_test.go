@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 func TestRecoveryDestStaysUnderTheRoot(t *testing.T) {

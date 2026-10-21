@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app"
 )
 
 // The public demo (pgcellar serve --demo) shows every page and changes

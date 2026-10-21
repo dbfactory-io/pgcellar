@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/app/apptest"
-	"github.com/stranix79/pgcellar/internal/config"
-	"github.com/stranix79/pgcellar/internal/report"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/report"
 )
 
 func newDrillFixture(t *testing.T) *fixture {

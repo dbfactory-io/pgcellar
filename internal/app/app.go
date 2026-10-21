@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/alerts"
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/config"
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/alerts"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 // Roles, from the least to the most privileged.

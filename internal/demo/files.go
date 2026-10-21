@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app"
 )
 
 // backup is one entry of the catalogue of a server.

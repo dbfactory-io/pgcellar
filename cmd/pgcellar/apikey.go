@@ -6,7 +6,7 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 // apikey implements `pgcellar apikey create|list`. Keys live in pgcellar.yaml

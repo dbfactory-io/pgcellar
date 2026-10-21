@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/stranix79/pgcellar/internal/sshkeys"
+	"github.com/dbfactory-io/pgcellar/internal/sshkeys"
 )
 
 func TestAuthorizedKeysAPI(t *testing.T) {

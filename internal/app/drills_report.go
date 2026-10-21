@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/report"
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/report"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 // elephant is the small drawing in the header of the report.

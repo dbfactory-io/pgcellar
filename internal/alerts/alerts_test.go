@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }

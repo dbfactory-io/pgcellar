@@ -28,11 +28,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/config"
-	"github.com/stranix79/pgcellar/internal/demo"
-	"github.com/stranix79/pgcellar/internal/web"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/demo"
+	"github.com/dbfactory-io/pgcellar/internal/web"
 )
 
 // Version is set at build time by -ldflags "-X main.Version=...".

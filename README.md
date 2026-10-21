@@ -31,7 +31,7 @@ Screenshots will be added here before the first release.
 You need Docker (or Podman) with Compose, and a PostgreSQL server that allows a streaming connection from this host. The image contains pgCellar and Barman.
 
 ```
-git clone https://github.com/stranix79/pgcellar.git
+git clone https://github.com/dbfactory-io/pgcellar.git
 cd pgcellar/deploy
 mkdir etc-pgcellar etc-barman.d
 cp pgcellar.example.yaml etc-pgcellar/pgcellar.yaml

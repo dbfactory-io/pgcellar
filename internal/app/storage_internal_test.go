@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
 )
 
 func TestStatFSOnTempDir(t *testing.T) {

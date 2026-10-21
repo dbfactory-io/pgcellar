@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 // Thresholds used when alerts.max_backup_age / max_wal_age are not set.

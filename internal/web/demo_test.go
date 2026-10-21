@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/demo"
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/demo"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 // demoFixture is the public demo behind its web interface, signed in as demo.

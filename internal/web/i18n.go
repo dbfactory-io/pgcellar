@@ -1,6 +1,6 @@
 package web
 
-import "github.com/stranix79/pgcellar/internal/app"
+import "github.com/dbfactory-io/pgcellar/internal/app"
 
 // Every user-visible label that is not part of a sentence goes through here,
 // so that a French (or other) catalogue can be added without touching the

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
 )
 
 type fixture struct {

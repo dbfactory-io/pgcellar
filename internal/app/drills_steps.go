@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 // journalRunner puts every Barman command of the drill in the journal.

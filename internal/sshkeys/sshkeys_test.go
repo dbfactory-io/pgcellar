@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/stranix79/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
 )
 
 func TestEnsureCreatesPairOnce(t *testing.T) {

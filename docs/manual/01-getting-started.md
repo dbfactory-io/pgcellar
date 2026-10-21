@@ -11,7 +11,7 @@ You need:
 ## Get the files and build the image
 
 ```
-git clone https://github.com/stranix79/pgcellar.git
+git clone https://github.com/dbfactory-io/pgcellar.git
 cd pgcellar/deploy
 mkdir etc-pgcellar etc-barman.d
 cp pgcellar.example.yaml etc-pgcellar/pgcellar.yaml

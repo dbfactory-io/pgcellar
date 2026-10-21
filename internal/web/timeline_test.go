@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app"
 )
 
 func TestServerPageHasTheTimelineSection(t *testing.T) {

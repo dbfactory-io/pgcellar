@@ -4,6 +4,10 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+- The repository moved to the dbfactory-io organisation; the Go module path is now `github.com/dbfactory-io/pgcellar` (GitHub redirects the old URL).
+
 ### Added
 
 - `pgcellar serve --demo`: a public, read-only demonstration instance with fictional data (Northwind Logistics), meant to be put on the internet; compose file, nginx vhost and README in `deploy/demo/`, `make demo` to try it locally.
@@ -33,5 +37,5 @@ First version. A control room for physical PostgreSQL backups with point-in-time
 ### Known limits
 
 - One pgCellar instance per Barman host. The Barman engine is behind an interface, a second engine (pgBackRest) is designed for but not built.
-- The repository is private and the module path is `github.com/stranix79/pgcellar`; both change when it moves to its organisation.
+- The repository is private, under the dbfactory-io organisation; the module path is `github.com/dbfactory-io/pgcellar`.
 - The interface is in English only; every string goes through one catalogue so other languages can follow.

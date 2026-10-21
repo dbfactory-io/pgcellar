@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 // DrillBrief is the last drill of a server in a status.

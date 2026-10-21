@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/app/apptest"
-	"github.com/stranix79/pgcellar/internal/store"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/store"
 )
 
 func startRecovery(t *testing.T, e *apptest.Env, in app.RecoveryInput) *app.RunView {

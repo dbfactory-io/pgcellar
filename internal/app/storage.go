@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
 )
 
 // Storage defaults.

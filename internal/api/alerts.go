@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/stranix79/pgcellar/internal/alerts"
+	"github.com/dbfactory-io/pgcellar/internal/alerts"
 )
 
 func (a *API) alerts(w http.ResponseWriter, r *http.Request, p principal) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
 )
 
 func callCount(t *testing.T, e *apptest.Env) int {

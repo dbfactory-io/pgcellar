@@ -1,4 +1,4 @@
-module github.com/stranix79/pgcellar
+module github.com/dbfactory-io/pgcellar
 
 go 1.25
 

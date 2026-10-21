@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stranix79/pgcellar/internal/app/apptest"
-	"github.com/stranix79/pgcellar/internal/report"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/report"
 )
 
 func TestDrillEndpoints(t *testing.T) {

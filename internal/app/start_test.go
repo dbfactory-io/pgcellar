@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app/apptest"
+	"github.com/dbfactory-io/pgcellar/internal/app/apptest"
 )
 
 // barman cron starts the WAL receivers: the first status refresh must come

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 type mailer struct {

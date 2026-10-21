@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 func TestAPIKeyCreateAndList(t *testing.T) {

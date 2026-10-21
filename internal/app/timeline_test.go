@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 var tlT0 = time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/sshkeys"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/sshkeys"
 )
 
 // sshTestTimeout bounds one SSH connection test (ssh itself gives up after

@@ -3,8 +3,8 @@ package app
 import (
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/barman"
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/barman"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 // ServerInput is everything the user can set on a server: the Barman options

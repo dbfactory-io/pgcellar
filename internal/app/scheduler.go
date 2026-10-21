@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 // SchedulerActor is the actor of the backups pgCellar starts by itself. The

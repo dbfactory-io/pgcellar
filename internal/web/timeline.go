@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stranix79/pgcellar/internal/app"
-	"github.com/stranix79/pgcellar/internal/config"
+	"github.com/dbfactory-io/pgcellar/internal/app"
+	"github.com/dbfactory-io/pgcellar/internal/config"
 )
 
 // The timeline picture is an SVG written by the server: no script, no
