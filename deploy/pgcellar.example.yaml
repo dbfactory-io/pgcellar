@@ -115,3 +115,15 @@ drills:
   keep_last: true                      # keep the data directory of the last good drill; absent = true
   verify_tables: false                 # true = SELECT count(*) on every table (slow)
   max_age: 192h                        # orange when the last good drill is older (8 days)
+
+# New releases: once a day pgCellar reads the latest GitHub release and its
+# manifest.json, and says when a newer version exists (Updates page, a line on the
+# Status page, one alert per version). Nothing is sent but the running version, in
+# the User-Agent. Every key is optional; these are the defaults.
+updates:
+  check: true                          # false = never look; "Check now" still works
+  interval: 24h                        # at least 1h
+  channel: stable                      # the only channel for now
+  auto: false                          # true = install new releases by itself, inside the window (binary installs)
+  window: "02:00-05:00"                # when an update may be applied, local time; may cross midnight
+  # source: https://api.github.com/repos/dbfactory-io/pgcellar/releases/latest
