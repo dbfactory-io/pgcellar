@@ -17,6 +17,12 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 - Update check: once a day pgCellar reads the latest GitHub release and its `manifest.json` (nothing sent but its version, in the User-Agent) and says when a newer version exists: an Updates page with "Check now", a line on the Status page, one alert per version (`update_available`) and one when the running version changed (`update_applied`), the `pgcellar_update_available` metric, `GET /api/v1/updates`, `POST /api/v1/updates/check`, and `GET /api/v1/updates/ready` for updaters that run outside pgCellar. New `updates:` block in `pgcellar.yaml` (check, interval, channel, auto, window, source).
 - `pgcellar-updater` (`deploy/updater/`): updates a pgCellar run by Docker Compose from the host, through a systemd timer every 15 minutes. It asks `/api/v1/updates` and `/api/v1/updates/ready` (so it waits for `updates.window` and for running jobs), accepts only images of `ghcr.io/dbfactory-io/pgcellar`, checks the pulled digest against `manifest.json`, pins the new tag in the compose `.env`, and puts the previous tag back when the new version does not come up healthy. `--now` and `--dry-run` for a run by hand; `install.sh` installs it without enabling anything; tests with a fake API and a fake docker (`deploy/updater/test/run.sh`). Manual chapter 16, "Automatic updates (Docker)".
 
+### Fixed
+
+- Dates read from Barman follow one rule everywhere: a date that carries a time zone (`backup.info`, `show-backup`) is taken as written, a date without one (`list-backups`, backup ids) is the local time of the Barman server, which is the machine pgCellar runs on. A zone abbreviation Go does not know (`CEST` in a process set to UTC) no longer moves a backup by hours.
+- Hour marks of the backup timeline fall on whole hours in time zones with a half-hour offset (India, +05:30), instead of every mark showing `:30`.
+- `pgcellar serve --dev` freezes its clock on the instant of the fixtures (20 October 2026, 02:30 in Brussels) instead of 02:30 on the wall clock of the machine, so the ages it shows are right in every time zone.
+
 ## [0.1.0] - 2026-10-21
 
 First version. A control room for physical PostgreSQL backups with point-in-time recovery, built on top of Barman.

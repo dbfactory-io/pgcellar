@@ -95,22 +95,33 @@ func asInt64(v any) int64 {
 	return 0
 }
 
+// timeLayouts are the date formats Barman prints. Those with a zone are read
+// as written; the others are wall-clock times of the Barman server.
 var timeLayouts = []string{
 	time.RFC3339Nano,
-	"2006-01-02 15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999Z07:00", // backup.info, show-backup
 	"2006-01-02 15:04:05Z07:00",
 	"2006-01-02 15:04:05.999999999",
 	"2006-01-02 15:04:05",
-	time.ANSIC, // Python ctime(): "Tue Oct 20 02:00:45 2026"
-	"Mon Jan _2 15:04:05 2006 MST",
+	time.ANSIC, // Python ctime(): "Tue Oct 20 02:00:45 2026" (list-backups)
 }
 
-// parseTime reads a Barman date. A bare epoch (the *_timestamp keys) and the
-// formats Barman prints are accepted; zone-less dates are read in local time,
-// which is what Barman's ctime() output means.
+// zoneAbbrevLayout is ctime() followed by a zone abbreviation ("CEST").
+const zoneAbbrevLayout = "Mon Jan _2 15:04:05 2006 MST"
+
+// parseTime is the only reader of Barman dates in this package (JSON output,
+// backup.info, xlog.db). The rule:
+//   - a bare epoch (the *_timestamp keys) is an instant;
+//   - a date with an offset (+02:00, Z) is read as written, whatever the time
+//     zone of the pgCellar process;
+//   - a date without a zone is a wall-clock time of the Barman server. pgCellar
+//     runs on the same machine (same /etc/localtime, same TZ), so it is read
+//     in time.Local.
+//
+// "", "None" and anything unreadable give the zero time.
 func parseTime(s string) time.Time {
 	s = strings.TrimSpace(s)
-	if s == "" {
+	if s == "" || s == "None" {
 		return time.Time{}
 	}
 	if n, err := strconv.ParseFloat(s, 64); err == nil && n > 1e8 {
@@ -120,6 +131,20 @@ func parseTime(s string) time.Time {
 		if t, err := time.ParseInLocation(l, s, time.Local); err == nil {
 			return t
 		}
+	}
+	if t, err := time.ParseInLocation(zoneAbbrevLayout, s, time.Local); err == nil {
+		// Go knows the offset of an abbreviation only when it is the local
+		// zone's (or UTC/GMT); an unknown one comes back with offset 0, which
+		// would shift the date by hours. Barman runs on this machine, so its
+		// abbreviation is the local one: keep the wall clock instead.
+		if name, off := t.Zone(); off == 0 && name != "UTC" && name != "GMT" {
+			if i := strings.LastIndexByte(s, ' '); i > 0 {
+				if lt, err := time.ParseInLocation(time.ANSIC, s[:i], time.Local); err == nil {
+					return lt
+				}
+			}
+		}
+		return t
 	}
 	return time.Time{}
 }

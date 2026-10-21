@@ -35,25 +35,6 @@ type BackupInfo struct {
 // Incremental reports whether the backup depends on a parent backup.
 func (b BackupInfo) Incremental() bool { return b.ParentID != "" }
 
-var backupInfoLayouts = []string{
-	"2006-01-02 15:04:05.999999999Z07:00",
-	"2006-01-02 15:04:05.999999999",
-	time.RFC3339Nano,
-}
-
-func parseInfoTime(s string) time.Time {
-	s = strings.TrimSpace(s)
-	if s == "" || s == "None" {
-		return time.Time{}
-	}
-	for _, l := range backupInfoLayouts {
-		if t, err := time.ParseInLocation(l, s, time.Local); err == nil {
-			return t
-		}
-	}
-	return time.Time{}
-}
-
 func parseInfoInt(s string) int64 {
 	n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	if err != nil || n < 0 {
@@ -85,9 +66,9 @@ func ParseBackupInfo(id string, r io.Reader) (BackupInfo, error) {
 		case "status":
 			b.Status = noneEmpty(v)
 		case "begin_time":
-			b.BeginTime = parseInfoTime(v)
+			b.BeginTime = parseTime(v)
 		case "end_time":
-			b.EndTime = parseInfoTime(v)
+			b.EndTime = parseTime(v)
 		case "begin_wal":
 			b.BeginWAL = noneEmpty(v)
 		case "end_wal":

@@ -407,7 +407,11 @@ func tlTicks(sc tlScale) []tlTick {
 				break
 			}
 		}
-		t := sc.start.Truncate(time.Hour)
+		// Round down to the hour of the displayed zone, not of UTC: in a zone
+		// with a half-hour offset (India, +05:30) Truncate would put every
+		// tick on :30.
+		s := sc.start.In(loc)
+		t := time.Date(s.Year(), s.Month(), s.Day(), s.Hour(), 0, 0, 0, loc)
 		for ; t.Before(sc.start) || t.Hour()%int(step/time.Hour) != 0; t = t.Add(time.Hour) {
 		}
 		for ; !t.After(sc.end); t = t.Add(step) {

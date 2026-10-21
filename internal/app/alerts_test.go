@@ -76,7 +76,7 @@ func setClock(e *apptest.Env, t time.Time) {
 	e.App.RefreshStatuses(context.Background())
 }
 
-var day0 = time.Date(2026, 10, 20, 2, 30, 0, 0, time.Local)
+var day0 = apptest.Frozen
 
 func TestAlertsLevelChangeRepeatAndResolved(t *testing.T) {
 	e, sk := alertEnv(t, nil)

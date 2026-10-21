@@ -18,6 +18,7 @@ import (
 	"github.com/dbfactory-io/pgcellar/internal/barman"
 	"github.com/dbfactory-io/pgcellar/internal/config"
 	"github.com/dbfactory-io/pgcellar/internal/license"
+	"github.com/dbfactory-io/pgcellar/internal/tztest"
 )
 
 // Env is what a test gets.
@@ -34,6 +35,15 @@ type Env struct {
 	// LicenseKey issues a licence key that the App of this environment accepts.
 	LicenseKey func(edition string, servers int, expires string) string
 }
+
+// fixtureZone is the offset of the Barman fixtures (Brussels, summer time on
+// 2026-10-20). The dates built here are instants, not wall-clock times of the
+// machine running the tests.
+var fixtureZone = time.FixedZone("CEST", 2*60*60)
+
+// Frozen is the instant the clock of every test App is stopped at:
+// 2026-10-20 02:30 in Brussels, twenty minutes after the last pg-main backup.
+var Frozen = time.Date(2026, 10, 20, 2, 30, 0, 0, fixtureZone)
 
 // Password of every test user.
 const Password = "secret-pass"
@@ -61,8 +71,15 @@ func New(t *testing.T) *Env { return NewWith(t, nil) }
 
 // NewWith is New with a last chance to change the configuration before it is
 // written and loaded.
+//
+// The package of the test must pin the time zone with tztest.Main: the
+// fixtures and the frozen clock are instants (2026-10-20 02:30 in Brussels),
+// and wall-clock settings (schedules, daily summary) are read in time.Local.
 func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 	t.Helper()
+	if !tztest.Pinned() {
+		t.Fatal("time zone not pinned: add func TestMain(m *testing.M) { tztest.Main(m) } to this package")
+	}
 	root := repoRoot()
 	testdata := filepath.Join(root, "internal", "barman", "testdata")
 	t.Setenv("PATH", testdata+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -131,7 +148,7 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 			if err := os.WriteFile(part, []byte("x"), 0o640); err != nil {
 				t.Fatal(err)
 			}
-			at := time.Date(2026, 10, 20, 2, 25, 0, 0, time.Local)
+			at := time.Date(2026, 10, 20, 2, 25, 0, 0, fixtureZone)
 			if err := os.Chtimes(part, at, at); err != nil {
 				t.Fatal(err)
 			}
@@ -184,8 +201,8 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 	a.DrillTools = app.DrillTools{PgCtl: "fake-pg_ctl", PgIsReady: "fake-pg_isready", PgChecksums: "fake-pg_checksums"}
 	a.DrillPollInterval = 20 * time.Millisecond
-	fixed := time.Date(2026, 10, 20, 2, 30, 0, 0, time.Local)
-	a.Now = func() time.Time { return fixed }
+	// Same instant in every zone, shown in the process zone like time.Now().
+	a.Now = func() time.Time { return Frozen.In(time.Local) }
 	t.Cleanup(func() { _ = a.Close() })
 	a.RefreshStatuses(context.Background())
 	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, SSHHome: a.SSHHome, SSHLog: sshLog, Keys: keys, LicenseKey: issue}
@@ -223,7 +240,7 @@ func Calls(t *testing.T, e *Env) string {
 // timeline 1, the last one (07) archived at 02:10 on 2026-10-20, the first
 // ones around the three nightly backups of the fixtures.
 func pgMainCatalogue() string {
-	at := func(day, h, m int) int64 { return time.Date(2026, 10, day, h, m, 29, 0, time.Local).Unix() }
+	at := func(day, h, m int) int64 { return time.Date(2026, 10, day, h, m, 29, 0, fixtureZone).Unix() }
 	stamps := []int64{at(18, 2, 5), at(18, 14, 0), at(19, 2, 4), at(19, 14, 0), at(20, 0, 30), at(20, 1, 40), at(20, 2, 10)}
 	var b strings.Builder
 	for i, ts := range stamps {
@@ -240,7 +257,7 @@ func writePgMainMeta(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 	for i, day := range []int{18, 19, 20} {
-		begin := time.Date(2026, 10, day, 2, 0, 1, 0, time.Local)
+		begin := time.Date(2026, 10, day, 2, 0, 1, 0, fixtureZone)
 		wal := []int{1, 3, 6}[i]
 		sizes := []int{1503238553, 1509949440, 1516560384}
 		layout := "2006-01-02 15:04:05.000000-07:00"
