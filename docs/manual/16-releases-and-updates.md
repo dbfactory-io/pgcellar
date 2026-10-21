@@ -92,4 +92,73 @@ What pgCellar remembers (latest release seen, last check, last error, last versi
 
 In a container (`PGCELLAR_IN_DOCKER=1`, or the `/.dockerenv` or `/run/.containerenv` file), the Updates page shows the command to run on the Docker host instead of the self-update setting.
 
-<!-- updater -->
+### Automatic updates (Docker)
+
+In a container, pgCellar cannot update itself, and that is on purpose. Replacing an image means talking to the Docker daemon, and a container that holds the Docker socket can start a privileged container and take over the host: it is root on the host. pgCellar keeps backup credentials and SSH keys to production databases; it must not also be root on the machine that runs it. So the container has no socket, and the update is done by a small script on the Docker host, `pgcellar-updater` (`deploy/updater/`), started by a systemd timer. pgCellar only answers two questions through its API: is there a new release, and is now a good time.
+
+**What a run does.** Every 15 minutes (plus up to 2 minutes of random delay):
+
+1. `GET /api/v1/updates`. Nothing newer than the running version: "up to date", exit 0.
+2. `GET /api/v1/updates/ready`. `409`: the reason is logged ("outside the update window", "a backup of erp-prod is running") and the run ends with exit 0; the next run asks again. The timer never passes `?now=1`: when to update is decided by `updates.window` in `pgcellar.yaml` and by the jobs pgCellar runs, not by the timer.
+3. The target is `latest`; the image is `manifest.image` of that release. Anything other than `ghcr.io/dbfactory-io/pgcellar:<that version>` is refused (another registry, a look-alike name, a digest-only reference); the repository is written in the script, not in its configuration.
+4. `docker pull`, then the digest the registry serves for that tag (`docker buildx imagetools inspect`, or the repository digests recorded by the pull when buildx is missing) is compared with `manifest.image_digest`. A difference stops the run with exit 1; nothing was changed.
+5. The current `PGCELLAR_TAG` is saved in `.pgcellar-updater.prev` next to the compose file, the new tag is written into the compose `.env` file (one line replaced, the rest of the file kept, written to a temporary file and renamed), then `docker compose up -d pgcellar pgcellar-ssh`.
+6. It waits up to `HEALTH_TIMEOUT` (180 s) for `/healthz` to answer `200` and for `/api/v1/updates` to report the new version as `current`. Then: "updated from 0.1.1 to 0.1.2", exit 0, and pgCellar itself sends its `update_applied` alert.
+7. Otherwise it rolls back: the previous tag goes back into `.env`, `docker compose up -d` again, wait for `/healthz`, "rolled back", exit 2, so the unit is marked failed. If even the previous version does not come back, exit 3 with what to look at.
+
+Two runs never overlap (`flock` on `/run/lock/pgcellar-updater.lock`). The API key is read from a file and handed to `curl` on its standard input: it appears neither in the journal nor in the process list. Everything goes to the journal: `journalctl -u pgcellar-updater`.
+
+**Pin the version.** The compose file says `image: ghcr.io/dbfactory-io/pgcellar:${PGCELLAR_TAG:-latest}` and `deploy/.env.example` sets `PGCELLAR_TAG=0.1.0`. With a pinned tag a restart never brings a new version by surprise and the updater knows exactly where to come back. Without one (`latest`), the updater uses the running version as the way back and pins the tag from then on.
+
+**Install.** On the Docker host, from a checkout of the repository:
+
+```
+cd pgcellar/deploy/updater
+sudo ./install.sh                # script, units, /etc/pgcellar/updater.env; enables nothing
+sudo nano /etc/pgcellar/updater.env
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `COMPOSE_DIR` | (required) | directory of the `docker-compose.yml` that runs pgCellar |
+| `SERVICE` | `pgcellar` | services to recreate; the example says `"pgcellar pgcellar-ssh"`, both use the image |
+| `ENV_FILE` | `$COMPOSE_DIR/.env` | file compose reads its variables from |
+| `TAG_VAR` | `PGCELLAR_TAG` | variable that holds the image tag |
+| `API_URL` | `http://127.0.0.1:8080` | where pgCellar answers, seen from the host |
+| `API_KEY_FILE` | `/etc/pgcellar/updater.key` | one line, an API key with the operator role, mode 0600 |
+| `HEALTH_TIMEOUT` | `180` | seconds before a rollback |
+| `DRY_RUN` | `0` | `1` = say what would be done, change nothing |
+| `DOCKER` | `docker` | `podman` works too when `podman compose` does |
+
+Then the key, the window, a dry run, and the timer:
+
+```
+cd /srv/pgcellar                 # COMPOSE_DIR
+sudo install -m 600 /dev/null /etc/pgcellar/updater.key
+docker compose exec -T pgcellar pgcellar apikey create --config /etc/pgcellar/pgcellar.yaml \
+  --name updater --role operator | sudo tee /etc/pgcellar/updater.key >/dev/null
+sudo pgcellar-updater --dry-run
+sudo systemctl enable --now pgcellar-updater.timer
+```
+
+Set `updates.window` (above) to a quiet slot, away from the nightly backups and drills. `updates.auto` is about binary installs; on Docker the timer is the opt-in. `updates.check: false` also stops automatic Docker updates: the updater relies on what pgCellar's own check found.
+
+The service runs as root. The updater runs `docker compose` and rewrites the `.env` file, which usually belongs to root and holds secrets; membership of the `docker` group is worth root anyway, so a dedicated user in that group would not be safer. To run it as another user all the same, add a drop-in with `User=` and `Group=docker`, and give that user the compose directory, the `.env` file and the key file. With rootless Podman, install the units as user units of the account that owns the containers and set `DOCKER=podman`.
+
+The script needs `bash`, `curl` 7.76 or later, `jq` and `flock` (util-linux) on the host.
+
+**Update now, by hand.** `sudo pgcellar-updater --now` skips `updates.window` (it sends `?now=1`); pgCellar still says no while a backup, a restore or a drill runs. The Updates page of a pgCellar in a container shows this command.
+
+**Disable.** `sudo systemctl disable --now pgcellar-updater.timer`. The tag in `.env` stays where it is.
+
+**Without the updater.** The same steps by hand:
+
+```
+cd /srv/pgcellar
+docker pull ghcr.io/dbfactory-io/pgcellar:0.1.2
+docker buildx imagetools inspect ghcr.io/dbfactory-io/pgcellar:0.1.2 | head -3   # Digest = image_digest of manifest.json
+sed -i 's/^PGCELLAR_TAG=.*/PGCELLAR_TAG=0.1.2/' .env
+docker compose up -d
+```
+
+To go back, put the previous tag in `.env` (the updater left it in `.pgcellar-updater.prev`) and run `docker compose up -d` again. The SQLite migrations of a newer version are not undone by going back; back up `/var/lib/pgcellar` before a jump of several versions ([Operations](11-operations.md)).

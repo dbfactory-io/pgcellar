@@ -6,6 +6,7 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 
 ### Changed
 
+- `deploy/docker-compose.yml` uses the published image `ghcr.io/dbfactory-io/pgcellar:${PGCELLAR_TAG:-latest}` (the `build:` section is kept for a local build); `deploy/.env.example` pins `PGCELLAR_TAG=0.1.0`.
 - The repository moved to the dbfactory-io organisation; the Go module path is now `github.com/dbfactory-io/pgcellar` (GitHub redirects the old URL).
 
 ### Added
@@ -14,6 +15,7 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 - Sign-in attempts are limited to 10 a minute per address (the address comes from `X-Real-IP` when the request reaches pgCellar through a proxy on a private or loopback address).
 - Release pipeline: a `v*` tag builds a GitHub Release with the binaries (linux amd64 and arm64, macOS arm64) and `checksums.txt`, the multi-arch image `ghcr.io/dbfactory-io/pgcellar` (linux/amd64, linux/arm64) and a `manifest.json` for update checks; notes come from this file (`make release-notes`). Manual chapter 16, Releases and updates.
 - Update check: once a day pgCellar reads the latest GitHub release and its `manifest.json` (nothing sent but its version, in the User-Agent) and says when a newer version exists: an Updates page with "Check now", a line on the Status page, one alert per version (`update_available`) and one when the running version changed (`update_applied`), the `pgcellar_update_available` metric, `GET /api/v1/updates`, `POST /api/v1/updates/check`, and `GET /api/v1/updates/ready` for updaters that run outside pgCellar. New `updates:` block in `pgcellar.yaml` (check, interval, channel, auto, window, source).
+- `pgcellar-updater` (`deploy/updater/`): updates a pgCellar run by Docker Compose from the host, through a systemd timer every 15 minutes. It asks `/api/v1/updates` and `/api/v1/updates/ready` (so it waits for `updates.window` and for running jobs), accepts only images of `ghcr.io/dbfactory-io/pgcellar`, checks the pulled digest against `manifest.json`, pins the new tag in the compose `.env`, and puts the previous tag back when the new version does not come up healthy. `--now` and `--dry-run` for a run by hand; `install.sh` installs it without enabling anything; tests with a fake API and a fake docker (`deploy/updater/test/run.sh`). Manual chapter 16, "Automatic updates (Docker)".
 
 ## [0.1.0] - 2026-10-21
 
