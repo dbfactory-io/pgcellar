@@ -103,6 +103,7 @@ type App struct {
 	sched   schedState
 	alerts  alertEngine
 	lic     licenseCache
+	upd     updatesHolder
 	runMu   sync.Mutex
 	running map[string]int64 // server -> run id of the backup in progress
 
@@ -340,6 +341,7 @@ func (a *App) Start(ctx context.Context) {
 			a.alertsLoop(ctx)
 		}()
 	}
+	a.startUpdates(ctx)
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()

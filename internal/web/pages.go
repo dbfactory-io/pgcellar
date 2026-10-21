@@ -27,12 +27,13 @@ type statusData struct {
 	Summary summary
 	Storage []storageLine // one line per file system holding backups
 	License string        // discreet banner: over the quota, or expired
+	Update  string        // discreet banner: a newer pgCellar exists
 }
 
 func (s *Server) statusData() statusData {
 	states, at, errMsg := s.app.States()
 	stale := s.app.CacheStale()
-	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states), License: s.app.LicenseInfo().Banner}
+	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states), License: s.app.LicenseInfo().Banner, Update: s.updateBanner()}
 }
 
 func (s *Server) statusPage(w http.ResponseWriter, r *http.Request, u *userCtx) {

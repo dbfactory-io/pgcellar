@@ -145,6 +145,15 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			"/license": m{
 				"get": op("The licence in force: edition, licensee, servers allowed and used, expiry, state", "viewer", m{"responses": m{"200": resp("Licence", nil)}}),
 			},
+			"/updates": m{
+				"get": op("What the last release check found (current, latest, available, checked_at, published_at, notes_url, manifest, error) and the updates settings (check, interval, auto, window, in_window, docker). The check sends nothing but the running version, in its User-Agent.", "viewer", m{"responses": m{"200": resp("Update status", nil)}}),
+			},
+			"/updates/check": m{
+				"post": op("Check for a new release now (GET on updates.source, then on the manifest of the release). Audited as updates.check. 502 when the check failed; the body then carries both error and data.", "operator", m{"responses": m{"200": resp("Update status", nil), "502": errResp}}),
+			},
+			"/updates/ready": m{
+				"get": op("For the updater on the Docker host: 200 {\"ready\": true} when no backup, restore or drill runs and the clock of the server is inside updates.window; otherwise 409 {\"ready\": false, \"reason\": \"...\"}. ?now=1 ignores the window. Not wrapped in data.", "operator", m{"parameters": []m{{"name": "now", "in": "query", "schema": m{"type": "string", "enum": []string{"1"}}}}, "responses": m{"200": resp("Ready", m{"type": "object", "properties": m{"ready": m{"type": "boolean"}, "window": m{"type": "string"}}}), "409": resp("Not now", m{"type": "object", "properties": m{"ready": m{"type": "boolean"}, "reason": m{"type": "string"}, "window": m{"type": "string"}}})}}),
+			},
 			"/ssh/authorized-keys": m{
 				"get": op("Keys allowed to push WAL files to the SSH companion (the file ~barman/.ssh/authorized_keys, read at each call)", "admin", m{"responses": m{"200": resp("Authorised keys", m{"type": "object", "properties": m{"data": m{"type": "array", "items": ref("AuthorizedKey")}}})}}),
 				"post": op("Authorise the public key of the postgres user of a PostgreSQL server; the line is restricted to `barman put-wal <server>`", "admin", m{

@@ -1,0 +1,44 @@
+{{define "content"}}
+{{with .Data}}
+<h1>{{t "updates.title"}}</h1>
+<p class="muted">{{t "updates.intro"}}</p>
+
+{{if .Available}}
+<div class="flash ok" role="status"><strong>pgCellar {{.Latest}}</strong> {{t "updates.available"}}{{if .NotesURL}} <a href="{{.NotesURL}}" target="_blank" rel="noopener">{{t "updates.notes"}}</a>{{end}}</div>
+{{else if and .CurrentKnown .Latest (not .Error)}}
+<div class="softnote">{{t "updates.uptodate"}}</div>
+{{end}}
+{{if .Error}}<div class="flash warn" role="status">{{t "updates.error"}} {{.Error}}</div>{{end}}
+{{if not .CurrentKnown}}<div class="softnote">{{t "updates.dev_build"}}</div>{{else if not .Check}}<div class="softnote">{{t "updates.off"}}</div>{{end}}
+
+<section class="card">
+  <dl class="facts">
+    <div><dt>{{t "updates.current"}}</dt><dd><strong>{{if .Current}}{{.Current}}{{else}}{{t "updates.unknown"}}{{end}}</strong></dd></div>
+    <div><dt>{{t "updates.latest"}}</dt><dd>{{if .Latest}}{{.Latest}}{{if .Available}} <span class="pill ok">{{t "updates.new"}}</span>{{end}}{{else}}<span class="muted">{{t "updates.unknown"}}</span>{{end}}</dd></div>
+    <div><dt>{{t "updates.published"}}</dt><dd>{{when .PublishedAt}}</dd></div>
+    <div><dt>{{t "updates.checked"}}</dt><dd>{{if .CheckedAt.IsZero}}<span class="muted">{{t "updates.never"}}</span>{{else}}{{when .CheckedAt}}{{end}}</dd></div>
+    {{if not .NextCheckAt.IsZero}}<div><dt>{{t "updates.next"}}</dt><dd>{{when .NextCheckAt}}</dd></div>{{end}}
+    <div><dt>{{t "updates.window"}}</dt><dd>{{.Window}}{{if .InWindow}} <span class="muted">({{t "updates.window_now"}})</span>{{end}}</dd></div>
+  </dl>
+  {{if .CanOp}}
+  <form class="btns" method="post" action="/updates/check" style="margin-top:1rem">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button class="btn alt" type="submit">{{t "updates.btn_check"}}</button>
+  </form>
+  {{end}}
+</section>
+
+<section>
+  <h2>{{t "updates.how"}}</h2>
+  {{if .Docker}}
+  <p>{{t "updates.how_docker"}}</p>
+  <pre class="out">{{.Updater}}</pre>
+  <p class="muted">{{t "updates.how_docker_2"}}</p>
+  {{else if .Auto}}
+  <p>{{t "updates.how_self_on"}} ({{.Window}}).</p>
+  {{else}}
+  <p>{{t "updates.how_self_off"}}</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}

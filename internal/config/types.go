@@ -30,6 +30,8 @@ type Config struct {
 	// Recoveries is where point-in-time restores are written.
 	Recoveries Recoveries `yaml:"recoveries" json:"recoveries"`
 	License    License    `yaml:"license" json:"license"`
+	// Updates: the check for new pgCellar releases (see updates.go).
+	Updates Updates `yaml:"updates,omitempty" json:"updates"`
 	// StatusInterval is how often the cached status of every server is
 	// refreshed. Each refresh runs several Barman commands per server.
 	StatusInterval time.Duration `yaml:"status_interval,omitempty" json:"status_interval"`

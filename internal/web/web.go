@@ -32,7 +32,7 @@ type Server struct {
 	apiH    http.Handler
 }
 
-var pages = []string{"login", "status", "servers", "server_new", "server", "restore", "ssh_key", "runs", "run", "history", "audit", "error", "alerts"}
+var pages = []string{"login", "status", "servers", "server_new", "server", "restore", "ssh_key", "runs", "run", "history", "audit", "error", "alerts", "updates"}
 
 func funcs(assets map[string]string) template.FuncMap {
 	return template.FuncMap{
@@ -170,6 +170,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /audit", s.guard(app.RoleAdmin, s.auditPage))
 	mux.HandleFunc("GET /alerts", s.guard(app.RoleAdmin, s.alertsPage))
 	mux.HandleFunc("POST /alerts/test", s.guard(app.RoleAdmin, s.alertsTest))
+	mux.HandleFunc("GET /updates", s.guard(app.RoleViewer, s.updatesPage))
+	mux.HandleFunc("POST /updates/check", s.guard(app.RoleOperator, s.updatesCheck))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, r, nil, http.StatusNotFound, "This page does not exist.")
 	})

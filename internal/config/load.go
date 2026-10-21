@@ -304,6 +304,8 @@ func ValidateWith(cfg *Config, allowNoAdmin bool) []string {
 		add("alerts.webhook.url must start with http:// or https://")
 	}
 
+	p = append(p, validateUpdates(cfg.Updates)...)
+
 	if cfg.Drills.Timeout <= 0 {
 		add("drills.timeout must be positive (for example \"30m\")")
 	}

@@ -57,6 +57,7 @@
 <div id="status-table" hx-get="/status/table" hx-trigger="every 30s" hx-swap="outerHTML">
 {{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{end}}
 {{if .License}}<div class="flash warn licence-note" role="status">{{.License}}</div>{{end}}
+{{if .Update}}<div class="flash update-note" role="status">{{.Update}} <a href="/updates">{{t "updates.banner_link"}}</a></div>{{end}}
 <div class="headline {{.Summary.Level}}" role="status">
   <h1>{{.Summary.Text}}</h1>
   {{if .Summary.Sub}}<p>{{.Summary.Sub}}</p>{{end}}

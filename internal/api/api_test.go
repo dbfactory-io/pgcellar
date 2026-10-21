@@ -246,6 +246,9 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 		"/history":                     {"get"},
 		"/audit":                       {"get"},
 		"/ssh/authorized-keys":         {"get", "post", "delete"},
+		"/updates":                     {"get"},
+		"/updates/check":               {"post"},
+		"/updates/ready":               {"get"},
 	} {
 		item, ok := paths[path].(map[string]any)
 		if !ok {
