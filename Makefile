@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 LDFLAGS := -X main.Version=$(VERSION)
 
-.PHONY: build test lint run demo docker release-dry version-check clean docs docs-pdf og
+.PHONY: build test lint run demo docker release-dry release-notes version-check clean docs docs-pdf og
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o pgcellar ./cmd/pgcellar
@@ -38,6 +38,19 @@ release-dry:
 		done; \
 		(cd dist && shasum -a 256 pgcellar_* > checksums.txt); \
 	fi
+
+# The section of CHANGELOG.md for one version, without its heading, on standard
+# output: the notes of the GitHub Release. Fails when the section is missing or empty.
+#   make -s release-notes VERSION=0.1.1
+release-notes:
+	@v="$(VERSION)"; v="$${v#v}"; \
+	out="$$(awk -v v="$$v" ' \
+		index($$0, "## [" v "]") == 1 { on = 1; next } \
+		on && /^## \[/ { exit } \
+		on { print }' CHANGELOG.md \
+		| sed -e '/./,$$!d' | awk '{ a[NR] = $$0 } END { n = NR; while (n > 0 && a[n] == "") n--; for (i = 1; i <= n; i++) print a[i] }')"; \
+	if [ -z "$$out" ]; then echo "release-notes: no section '## [$$v]' in CHANGELOG.md" >&2; exit 1; fi; \
+	printf '%s\n' "$$out"
 
 # The binary must print the version injected at build time.
 version-check:

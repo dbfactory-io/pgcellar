@@ -25,12 +25,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v8
+      - name: gofmt and go vet
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+          go vet ./...
+      - name: golangci-lint (pinned)
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
-          install-only: true
-      - name: Lint (gofmt, go vet, golangci-lint)
-        run: make lint
+          version: v2.14.0
 
   release-dry:
     runs-on: ubuntu-latest

@@ -4,7 +4,8 @@ project_name: pgcellar
 
 before:
   hooks:
-    - go mod tidy
+    # Verify, never rewrite: the release is built from the tagged tree as it is.
+    - go mod verify
 
 builds:
   - id: pgcellar
@@ -28,12 +29,23 @@ archives:
       - LICENSE
       - README.md
 
+# CHANGELOG.md is written by hand. The release notes are the section of the
+# version being released, passed with --release-notes (make release-notes).
 changelog:
-  disable: true   # CHANGELOG.md is written by hand
+  disable: true
 
 checksum:
   name_template: checksums.txt
 
-# The repository is private for now: build archives, publish nothing.
+# GitHub Release on dbfactory-io/pgcellar. It is created as a draft: the release
+# workflow publishes it only once the multi-arch image is pushed and manifest.json
+# is attached, so /releases/latest never points at a half-finished release.
+# A tag with a suffix (v0.2.0-rc.1) becomes a pre-release.
 release:
-  disable: true
+  github:
+    owner: dbfactory-io
+    name: pgcellar
+  draft: true
+  replace_existing_draft: true
+  prerelease: auto
+  mode: replace

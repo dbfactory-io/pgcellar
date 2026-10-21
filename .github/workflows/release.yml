@@ -1,0 +1,167 @@
+# A tag v* pushed to GitHub builds and publishes a release:
+#   binaries  - tests, then goreleaser: archives + checksums.txt in a DRAFT release,
+#               notes = the CHANGELOG.md section of the version
+#   image     - ghcr.io/dbfactory-io/pgcellar:<version> (and :latest for a final
+#               version), linux/amd64 + linux/arm64, from deploy/Dockerfile
+#   manifest  - manifest.json (version, image digest, archive URLs and sha256) is
+#               attached, then the draft is published
+# The release only becomes visible (and /releases/latest only moves) when all three
+# have succeeded.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/dbfactory-io/pgcellar
+
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./...
+      - name: Release notes from CHANGELOG.md
+        run: make -s release-notes VERSION="${GITHUB_REF_NAME}" > "${RUNNER_TEMP}/notes.md"
+      - name: Build archives and create the draft release
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean --release-notes ${{ runner.temp }}/notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Keep checksums.txt for the manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: dist/checksums.txt
+          if-no-files-found: error
+
+  image:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version and tags
+        id: meta
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tags="${IMAGE}:${version}"
+          # A pre-release (0.2.0-rc.1) never moves :latest.
+          case "$version" in
+            *-*) ;;
+            *) tags="${tags},${IMAGE}:latest" ;;
+          esac
+          {
+            echo "version=${version}"
+            echo "tags=${tags}"
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push (linux/amd64, linux/arm64)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=FSL-1.1-Apache-2.0
+          # One plain image index, no attestation manifests: the digest written
+          # into manifest.json is the one `docker pull` resolves.
+          provenance: false
+          sbom: false
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  manifest:
+    needs: [binaries, image]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      DIGEST: ${{ needs.image.outputs.digest }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: checksums
+      - name: Write manifest.json
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          base="https://github.com/${GH_REPO}/releases/download/${tag}"
+          case "$DIGEST" in
+            sha256:*) ;;
+            *) echo "unexpected image digest: '$DIGEST'" >&2; exit 1 ;;
+          esac
+          sum() {
+            local f="pgcellar_${version}_$1.tar.gz" s
+            s="$(awk -v f="$f" '$2 == f { print $1 }' checksums.txt)"
+            if [ -z "$s" ]; then echo "$f missing from checksums.txt" >&2; exit 1; fi
+            printf '%s' "$s"
+          }
+          jq -n \
+            --arg version "$version" \
+            --arg published_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg image "${IMAGE}:${version}" \
+            --arg digest "$DIGEST" \
+            --arg amd64_url "${base}/pgcellar_${version}_linux_amd64.tar.gz" \
+            --arg amd64_sum "$(sum linux_amd64)" \
+            --arg arm64_url "${base}/pgcellar_${version}_linux_arm64.tar.gz" \
+            --arg arm64_sum "$(sum linux_arm64)" \
+            --arg darwin_url "${base}/pgcellar_${version}_darwin_arm64.tar.gz" \
+            --arg darwin_sum "$(sum darwin_arm64)" \
+            --arg notes_url "https://github.com/${GH_REPO}/releases/tag/${tag}" \
+            '{
+              version: $version,
+              published_at: $published_at,
+              image: $image,
+              image_digest: $digest,
+              binaries: {
+                linux_amd64:  { url: $amd64_url,  sha256: $amd64_sum },
+                linux_arm64:  { url: $arm64_url,  sha256: $arm64_sum },
+                darwin_arm64: { url: $darwin_url, sha256: $darwin_sum }
+              },
+              notes_url: $notes_url
+            }' > manifest.json
+          cat manifest.json
+      - name: Attach manifest.json and publish the release
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          gh release upload "$tag" manifest.json --clobber
+          case "$tag" in
+            *-*) gh release edit "$tag" --draft=false --latest=false ;;
+            *)   gh release edit "$tag" --draft=false --latest ;;
+          esac
