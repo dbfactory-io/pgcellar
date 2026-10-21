@@ -1,0 +1,30 @@
+[Unit]
+Description=pgCellar, control room for PostgreSQL backups (Barman)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# pgCellar runs Barman's command line, which only runs as the Barman user
+# (barman_user in /etc/barman.conf, `barman` by default).
+User=barman
+Group=barman
+# The binary lives in a directory owned by that user so that automatic
+# updates (updates.auto in pgcellar.yaml) can replace it next to itself:
+#   install -d -o barman -g barman -m 0755 /opt/pgcellar/bin
+#   install -o barman -g barman -m 0755 pgcellar /opt/pgcellar/bin/pgcellar
+# Without automatic updates the binary may stay root-owned anywhere.
+ExecStart=/opt/pgcellar/bin/pgcellar serve --config /etc/pgcellar/pgcellar.yaml
+# Secrets for alerts (SMTP, Telegram) live here, mode 0600, never in the YAML.
+EnvironmentFile=-/etc/pgcellar/pgcellar.env
+# A crash restarts the service. After an automatic update, each restart of
+# the new version is counted; at the third start it rolls back by itself.
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/pgcellar/bin /var/lib/pgcellar /etc/pgcellar /etc/barman.d /var/lib/barman
+
+[Install]
+WantedBy=multi-user.target

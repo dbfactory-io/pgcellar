@@ -22,7 +22,7 @@ After the start:
 - Alerts are silent for the first two minutes.
 - `docker compose logs --tail 50 pgcellar` shows `pgcellar <version> listening on ...`.
 
-If you run the binary without Docker, replace it and restart the service (`deploy/pgcellar.service` is a systemd unit that runs as the `barman` user).
+If you run the binary without Docker, replace it and restart the service (`deploy/systemd/pgcellar.service` is a systemd unit that runs as the `barman` user).
 
 **Pin what you can.** The image takes Barman from the PGDG repository at build time. Rebuilding on another day may bring a newer Barman. Read its release notes before a rebuild on a production backup host, and keep the previous image (`docker tag pgcellar:dev pgcellar:previous`) so you can go back.
 
