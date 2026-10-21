@@ -16,7 +16,7 @@ test runner and the fake docker drive it without restarting it:
   ready       "200" or "409" (inside or outside the window, or busy)
   busy        when present, /ready says 409 even with ?now=1
   queries     appended by the server: every /ready query string seen
-  broken      a version whose /healthz never answers 200 (bad release)
+  broken      versions (one per line) whose /healthz never answers 200
 """
 import json
 import os
@@ -49,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         running = read("running")
         if self.path == "/healthz":
-            if running and running == read("broken"):
+            if running and running in read("broken").split():
                 self.send(503, b"starting\n")
             else:
                 self.send(200, b"ok\n")

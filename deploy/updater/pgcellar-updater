@@ -16,13 +16,22 @@
 #   6. wait for /healthz and for the API to report the new version
 #   7. on failure put the previous tag back, up -d again, exit 2
 #
-# Exit codes: 0 up to date, busy, or updated; 1 error, nothing changed;
-# 2 update failed and was rolled back; 3 update failed and the rollback too.
+# A version that failed (exit 2 or 3) is written to
+# $COMPOSE_DIR/.pgcellar-updater.failed, one "version date outcome" per line.
+# Later runs do not try it again (exit 0, nothing done), so a bad release does
+# not take pgCellar down every 15 minutes; a newer release is tried as usual.
+# Delete the line, or run once with --retry-failed, to try it again.
 #
-# Usage: pgcellar-updater [--now] [--dry-run]
-#   --now      ignore updates.window (an update started by hand); pgCellar
-#              still refuses while a backup, restore or drill runs
-#   --dry-run  say what would be done, change nothing (same as DRY_RUN=1)
+# Exit codes: 0 up to date, busy, updated, or latest version known to fail;
+# 1 error, nothing changed; 2 update failed and was rolled back; 3 update
+# failed and the rollback too.
+#
+# Usage: pgcellar-updater [--now] [--dry-run] [--retry-failed]
+#   --now           ignore updates.window (an update started by hand);
+#                   pgCellar still refuses while a backup, restore or drill runs
+#   --dry-run       say what would be done, change nothing (same as DRY_RUN=1)
+#   --retry-failed  try the latest version even if it failed before (same as
+#                   RETRY_FAILED=1); on success it leaves the failed list
 #
 # Configuration: /etc/pgcellar/updater.env (see updater.env.example), or the
 # file named by UPDATER_CONFIG. The API key is read from API_KEY_FILE and never
@@ -31,10 +40,12 @@ set -euo pipefail
 
 ready_query=""
 cli_dry_run=0
+cli_retry_failed=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --now) ready_query="?now=1" ;;
     --dry-run) cli_dry_run=1 ;;
+    --retry-failed) cli_retry_failed=1 ;;
     -h | --help) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'pgcellar-updater: unknown option %s (try --help)\n' "$1" >&2; exit 1 ;;
   esac
@@ -42,7 +53,7 @@ while [ $# -gt 0 ]; do
 done
 
 UPDATER_CONFIG=${UPDATER_CONFIG:-/etc/pgcellar/updater.env}
-SETTINGS="COMPOSE_DIR SERVICE ENV_FILE TAG_VAR API_URL API_KEY_FILE HEALTH_TIMEOUT DRY_RUN DOCKER LOCK_FILE POLL_INTERVAL"
+SETTINGS="COMPOSE_DIR SERVICE ENV_FILE TAG_VAR API_URL API_KEY_FILE HEALTH_TIMEOUT DRY_RUN DOCKER LOCK_FILE POLL_INTERVAL RETRY_FAILED"
 if [ -f "$UPDATER_CONFIG" ]; then
   # A variable already set in the environment wins over the file, so that
   # "DRY_RUN=1 pgcellar-updater" works by hand.
@@ -67,7 +78,11 @@ DOCKER=${DOCKER:-docker}
 LOCK_FILE=${LOCK_FILE:-/run/lock/pgcellar-updater.lock}
 # Seconds between two health probes (tests lower it).
 POLL_INTERVAL=${POLL_INTERVAL:-5}
+RETRY_FAILED=${RETRY_FAILED:-0}
 if [ "$cli_dry_run" = 1 ]; then DRY_RUN=1; fi
+if [ "$cli_retry_failed" = 1 ]; then RETRY_FAILED=1; fi
+# Versions that failed and were rolled back: not tried again (see the header).
+FAILED_FILE=${COMPOSE_DIR:+$COMPOSE_DIR/.pgcellar-updater.failed}
 
 # The only repository an update may come from. Not configurable on purpose.
 ALLOWED_REPO=ghcr.io/dbfactory-io/pgcellar
@@ -105,6 +120,17 @@ else
   if ! mkdir "$LOCK_FILE.d" 2>/dev/null; then
     log "another run is in progress, skipping"
     exit 0
+  fi
+fi
+
+if [ "$DRY_RUN" = 1 ]; then
+  if [ -s "$FAILED_FILE" ]; then
+    while read -r f_version f_date f_outcome; do
+      [ -n "$f_version" ] || continue
+      log "dry run: not retried (in $FAILED_FILE): $f_version, failed on ${f_date:-unknown date} (${f_outcome:-rolled-back})"
+    done <"$FAILED_FILE"
+  else
+    log "dry run: no version on the failed list ($FAILED_FILE)"
   fi
 fi
 
@@ -170,6 +196,32 @@ write_tag() {
   mv -f "$tmp" "$ENV_FILE"
 }
 
+# ---------------------------------------------------------------- failed list
+# failed_entry VERSION: the line of FAILED_FILE for VERSION, empty if none.
+failed_entry() {
+  [ -f "$FAILED_FILE" ] || return 0
+  awk -v v="$1" '$1 == v { line = $0 } END { if (line != "") print line }' "$FAILED_FILE"
+}
+
+# failed_rewrite VERSION [OUTCOME]: drop VERSION from FAILED_FILE and, with an
+# OUTCOME, add it back with today's date. Temporary file renamed over the
+# original (atomic), mode 0644: it holds no secret.
+failed_rewrite() {
+  local version=$1 outcome=${2:-} tmp
+  tmp=$(mktemp "$COMPOSE_DIR/.updater-failed.XXXXXX") || return 1
+  if [ -f "$FAILED_FILE" ]; then
+    awk -v v="$version" '$1 != v && NF > 0' "$FAILED_FILE" >"$tmp" || { rm -f "$tmp"; return 1; }
+  fi
+  if [ -n "$outcome" ]; then
+    printf '%s %s %s\n' "$version" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$outcome" >>"$tmp"
+  fi
+  chmod 644 "$tmp" && mv -f "$tmp" "$FAILED_FILE"
+}
+
+mark_failed() {
+  failed_rewrite "$1" "$2" || err "could not record $1 in $FAILED_FILE; the next run will try it again"
+}
+
 compose_up() {
   # shellcheck disable=SC2086 # SERVICE may list several services
   (cd "$COMPOSE_DIR" && "$DOCKER" compose --env-file "$ENV_FILE" up -d $SERVICE)
@@ -213,6 +265,23 @@ if [ "$available" != true ]; then
     log "up to date (${current:-unknown version})"
   fi
   exit 0
+fi
+
+# A release that already failed here is not tried again, unless asked.
+latest=$(jq -r '.latest // empty' "$workdir/status.json" | sed 's/^v//')
+if [ -n "$latest" ]; then
+  entry=$(failed_entry "$latest")
+  if [ -n "$entry" ]; then
+    read -r _ f_date f_outcome <<<"$entry"
+    if [ "$RETRY_FAILED" = 1 ]; then
+      log "version $latest failed on ${f_date:-unknown date}; trying it again (--retry-failed)"
+    else
+      how="was rolled back"
+      [ "$f_outcome" = rollback-failed ] && how="its rollback failed too"
+      log "version $latest failed on ${f_date:-unknown date} and $how; not retrying. Remove it from $FAILED_FILE to try again (or run once with --retry-failed)."
+      exit 0
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------- 2. ready?
@@ -299,6 +368,13 @@ compose_up || up_ok=0
 # ---------------------------------------------------------------- 6. verify
 if [ "$up_ok" = 1 ] && wait_for "$target"; then
   log "updated from $prev to $target"
+  if [ -n "$(failed_entry "$target")" ]; then
+    if failed_rewrite "$target"; then
+      log "$target removed from $FAILED_FILE"
+    else
+      err "could not remove $target from $FAILED_FILE"
+    fi
+  fi
   exit 0
 fi
 
@@ -307,7 +383,10 @@ err "update to $target failed (no health or version $target within ${HEALTH_TIME
 write_tag "$prev"
 if compose_up && wait_for ""; then
   err "rolled back: $TAG_VAR=$prev, pgCellar is healthy again; update to $target NOT applied"
+  mark_failed "$target" rolled-back
+  err "$target recorded in $FAILED_FILE: later runs will not try it again (--retry-failed to force)"
   exit 2
 fi
+mark_failed "$target" rollback-failed
 err "ROLLBACK FAILED: $TAG_VAR=$prev is written in $ENV_FILE but pgCellar is not healthy; check 'docker compose ps' and logs in $COMPOSE_DIR"
 exit 3

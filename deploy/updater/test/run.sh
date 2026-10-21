@@ -76,6 +76,8 @@ run() {
 tag()     { sed -n 's/^PGCELLAR_TAG=//p' "$tmp/compose/.env"; }
 dlog()    { cat "$state/docker.log"; }
 no_key()  { ! printf '%s' "$out" | grep -qF "$KEY"; }
+failed="$tmp/compose/.pgcellar-updater.failed"
+failed_lines() { [ -f "$failed" ] && awk -v v="$1" '$1 == v' "$failed" | wc -l | tr -d ' ' || echo 0; }
 
 echo "1. up to date"
 reset; echo 0.1.1 >"$state/running"
@@ -154,6 +156,53 @@ check "old tag restored" '[ "$(tag)" = 0.1.0 ]'
 check "old version running" '[ "$(cat "$state/running")" = 0.1.0 ]'
 check "compose up twice" '[ "$(dlog | grep -c "compose")" = 2 ]'
 check "other lines of .env kept" 'grep -qx "OTHER_SECRET=keepme" "$tmp/compose/.env"'
+check "0.1.1 recorded as failed, one line" '[ "$(failed_lines 0.1.1)" = 1 ] && grep -q "^0.1.1 20[0-9-]*T[0-9:]*Z rolled-back$" "$failed"'
+check "failed list mode 0644, no temporary file left" '[ "$(ls -l "$failed" | cut -c1-10)" = "-rw-r--r--" ] && [ -z "$(ls -A "$tmp/compose" | grep updater-failed)" ]'
+
+echo "6b. next run: the failed version is not tried again"
+: >"$state/docker.log"; rm -f "$state/queries"
+run
+check "exit 0" '[ "$rc" = 0 ]'
+check "says failed, rolled back, not retrying, how to retry" 'printf "%s" "$out" | grep -q "version 0.1.1 failed on .* and was rolled back; not retrying. Remove it from $failed to try again"'
+check "no pull, no compose, /ready not asked" '[ ! -s "$state/docker.log" ] && [ ! -s "$state/queries" ]'
+check "still on 0.1.0" '[ "$(tag)" = 0.1.0 ] && [ "$(cat "$state/running")" = 0.1.0 ]'
+run --now
+check "--now does not bypass the list" '[ "$rc" = 0 ] && [ ! -s "$state/docker.log" ]'
+run --dry-run
+check "--dry-run lists the skipped version" '[ "$rc" = 0 ] && printf "%s" "$out" | grep -q "dry run: not retried (in $failed): 0.1.1, failed on .* (rolled-back)"'
+
+echo "6c. a newer release is tried normally"
+echo 0.1.2 >"$state/latest"; echo ghcr.io/dbfactory-io/pgcellar:0.1.2 >"$state/image"
+run
+check "exit 0, updated to 0.1.2" '[ "$rc" = 0 ] && printf "%s" "$out" | grep -q "updated from 0.1.0 to 0.1.2" && [ "$(tag)" = 0.1.2 ]'
+check "0.1.1 stays on the list" '[ "$(failed_lines 0.1.1)" = 1 ]'
+
+echo "6d. --retry-failed"
+reset; echo 0.1.1 >"$state/broken"
+run
+check "first failure: exit 2, listed" '[ "$rc" = 2 ] && [ "$(failed_lines 0.1.1)" = 1 ]'
+: >"$state/docker.log"
+run --retry-failed
+check "retried and failed again: exit 2, pulled again" '[ "$rc" = 2 ] && dlog | grep -q "^docker pull ghcr.io/dbfactory-io/pgcellar:0.1.1$"'
+check "still listed once" '[ "$(failed_lines 0.1.1)" = 1 ]'
+rm -f "$state/broken"
+run --retry-failed
+check "retried, release fixed: exit 0, on 0.1.1" '[ "$rc" = 0 ] && printf "%s" "$out" | grep -q "trying it again" && [ "$(tag)" = 0.1.1 ]'
+check "removed from the list" '[ "$(failed_lines 0.1.1)" = 0 ] && printf "%s" "$out" | grep -q "0.1.1 removed from"'
+reset; echo 0.1.1 >"$state/broken"
+run
+rm -f "$state/broken"
+rc=0; out=$(RETRY_FAILED=1 UPDATER_CONFIG="$tmp/updater.env" FAKE_STATE="$state" POLL_INTERVAL=0.2 "$updater" 2>&1) || rc=$?
+check "RETRY_FAILED=1 works like --retry-failed" '[ "$rc" = 0 ] && [ "$(tag)" = 0.1.1 ] && [ "$(failed_lines 0.1.1)" = 0 ]'
+
+echo "6e. rollback fails too: exit 3, recorded"
+reset; printf '0.1.1\n0.1.0\n' >"$state/broken"
+run
+check "exit 3" '[ "$rc" = 3 ] && printf "%s" "$out" | grep -q "ROLLBACK FAILED"'
+check "recorded as rollback-failed" 'grep -q "^0.1.1 .* rollback-failed$" "$failed"'
+rm -f "$state/broken"; : >"$state/docker.log"
+run
+check "next run: not retried, says the rollback failed" '[ "$rc" = 0 ] && printf "%s" "$out" | grep -q "its rollback failed too; not retrying" && [ ! -s "$state/docker.log" ]'
 
 echo "7. extra: wrong key, dry run, lock"
 reset; echo pgc_other >"$state/key"
@@ -168,6 +217,7 @@ check "dry run (environment wins over DRY_RUN=0 in the file)" '[ "$rc" = 0 ] && 
 reset
 run --dry-run
 check "dry run (--dry-run)" '[ "$rc" = 0 ] && printf "%s" "$out" | grep -q "dry run" && [ ! -s "$state/docker.log" ] && [ "$(tag)" = 0.1.0 ]'
+check "dry run: says the failed list is empty" 'printf "%s" "$out" | grep -q "no version on the failed list"'
 run --bogus
 check "unknown option: exit 1" '[ "$rc" = 1 ]'
 reset
