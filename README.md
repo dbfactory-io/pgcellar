@@ -35,13 +35,16 @@ git clone https://github.com/dbfactory-io/pgcellar.git
 cd pgcellar/deploy
 mkdir etc-pgcellar etc-barman.d
 cp pgcellar.example.yaml etc-pgcellar/pgcellar.yaml
-docker compose build
+cp .env.example .env && chmod 600 .env     # PGCELLAR_TAG = the version you run
+docker compose pull
 ```
 
-Create the password of the admin user, paste the hash printed by the last command into `users:` in `etc-pgcellar/pgcellar.yaml` (replace the fake `password_hash`), and set `base_url`:
+The image is `ghcr.io/dbfactory-io/pgcellar:<version>` (linux/amd64, linux/arm64); `PGCELLAR_TAG` in `.env` pins the version. To build it from the checkout instead, `docker compose build`.
+
+Create the password of the admin user, paste the hash printed by the command into `users:` in `etc-pgcellar/pgcellar.yaml` (replace the fake `password_hash`), and set `base_url`:
 
 ```
-read -rs PW; printf '%s\n' "$PW" | docker run -i --rm pgcellar:dev hash-password
+read -rs PW; printf '%s\n' "$PW" | docker compose run -T --rm pgcellar hash-password
 ```
 
 Remove the example servers from `servers:` (you add yours from the interface), then:
@@ -52,7 +55,11 @@ docker compose up -d
 
 Open http://localhost:8080, sign in as `admin`, and use **Add a server**. The form explains what the PostgreSQL side needs (a backup role, a replication role, `pg_hba.conf`). To try everything without a PostgreSQL server, run the demo on a fake Barman: `make run` (login `admin` / `admin`).
 
-To run the binary without Docker, put `pgcellar` next to a working Barman and start `pgcellar serve --config /etc/pgcellar/pgcellar.yaml`. Archives for linux amd64, linux arm64 and macOS arm64 are built by `make release-dry`.
+To run the binary without Docker, take the archive for your platform from the [releases](https://github.com/dbfactory-io/pgcellar/releases) (linux amd64, linux arm64, macOS arm64, with `checksums.txt`), put it in `/opt/pgcellar/bin` next to a working Barman, and run it with the systemd unit `deploy/systemd/pgcellar.service` (as the `barman` user). The manual, chapter 1, has the steps.
+
+## Updates
+
+pgCellar checks once a day for a new release and says so (Updates page, Status, an alert, a metric); it sends nothing but its version. Docker installs are updated from the host by `pgcellar-updater` (`deploy/updater/`, a systemd timer), binary installs can update themselves with `updates.auto: true`; both wait for `updates.window` and for running jobs, and roll back a version that does not come up. See the manual, chapter 16.
 
 ## Files are the truth
 

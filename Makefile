@@ -21,8 +21,10 @@ run: build
 demo: build
 	./pgcellar serve --demo --listen 127.0.0.1:8080
 
+# The image from this checkout, under the local name pgcellar:dev (deploy/demo) and
+# under the name of the published image with the tag dev.
 docker:
-	docker build -f deploy/Dockerfile -t pgcellar:dev --build-arg VERSION=$(VERSION) .
+	docker build -f deploy/Dockerfile -t pgcellar:dev -t ghcr.io/dbfactory-io/pgcellar:dev --build-arg VERSION=$(VERSION) .
 
 # Build the release archives locally (linux amd64/arm64, darwin arm64) and their
 # checksums into dist/, publish nothing. Falls back to plain cross builds when

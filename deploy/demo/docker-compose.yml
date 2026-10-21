@@ -1,5 +1,9 @@
 # Public demonstration of pgCellar: fictional data, read-only, nothing to keep.
 # Same image as the real thing (deploy/Dockerfile), started with --demo.
+# Built from this checkout on purpose: the demo shows the code of the checkout,
+# not the latest release, and pgcellar-updater does not touch it. To run a
+# published release instead, replace the build: section and the image line with
+#   image: ghcr.io/dbfactory-io/pgcellar:<version>
 #
 #   docker compose up -d --build        (from this directory)
 #
