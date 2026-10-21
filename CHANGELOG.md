@@ -12,6 +12,7 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 
 - `pgcellar serve --demo`: a public, read-only demonstration instance with fictional data (Northwind Logistics), meant to be put on the internet; compose file, nginx vhost and README in `deploy/demo/`, `make demo` to try it locally.
 - Sign-in attempts are limited to 10 a minute per address (the address comes from `X-Real-IP` when the request reaches pgCellar through a proxy on a private or loopback address).
+- Release pipeline: a `v*` tag builds a GitHub Release with the binaries (linux amd64 and arm64, macOS arm64) and `checksums.txt`, the multi-arch image `ghcr.io/dbfactory-io/pgcellar` (linux/amd64, linux/arm64) and a `manifest.json` for update checks; notes come from this file (`make release-notes`). Manual chapter 16, Releases and updates.
 
 ## [0.1.0] - 2026-10-21
 

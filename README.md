@@ -136,6 +136,13 @@ make release-dry
 
 Go 1.25 or later. Barman is not needed for the tests: a shell script mimics its command line.
 
+## Release
+
+1. Write the `## [X.Y.Z] - date` section in `CHANGELOG.md` (`make -s release-notes VERSION=X.Y.Z` shows what the notes will be).
+2. Commit it on `main`.
+3. `git tag -a vX.Y.Z -m "pgCellar X.Y.Z"`
+4. `git push origin main --tags`. The rest is automatic: binaries, checksums, the multi-arch image on `ghcr.io/dbfactory-io/pgcellar` and `manifest.json` (see `docs/manual/16-releases-and-updates.md`).
+
 ## Licence
 
 Functional Source License 1.1, Apache-2.0 future licence (FSL-1.1-Apache-2.0, see `LICENSE`). Free for internal use. You cannot sell a competing hosted service with it. Each version becomes Apache-2.0 two years after its release.
