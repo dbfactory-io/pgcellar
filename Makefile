@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 LDFLAGS := -X main.Version=$(VERSION)
 
-.PHONY: build test lint run demo docker release-dry release-notes version-check clean docs docs-pdf og
+.PHONY: build test lint run demo docker release-dry release-notes version-check clean docs docs-pdf og vault-test
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o pgcellar ./cmd/pgcellar
@@ -13,6 +13,11 @@ lint:
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	go vet ./...
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint not found, skipped"; fi
+
+# The off-site copy against a throwaway MinIO (Podman or Docker) and the real
+# restic: copy, restore and compare, drill from the vault, prune with Object Lock.
+vault-test:
+	tools/vault-s3-test.sh
 
 run: build
 	PATH="$(CURDIR)/internal/barman/testdata:$$PATH" ./pgcellar serve --config deploy/pgcellar.example.yaml --dev
