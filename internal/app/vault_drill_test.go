@@ -60,6 +60,9 @@ func TestDrillFromVault(t *testing.T) {
 	if !strings.Contains(restic, "--include "+filepath.Join(e.Home, "pg-main")+"/base/*/backup.info") || !strings.Contains(restic, "snapshots --json --host pgcellar --latest 1") {
 		t.Errorf("restic calls:\n%s", restic)
 	}
+	if run, _ := a.Run(d.RunID); run == nil || !strings.Contains(run.Stdout, "$ barman -c "+fetch) {
+		t.Errorf("the journal shows the configuration of the copy")
+	}
 	// The fetched copy is gone, the kept data directory is the restored one.
 	left, _ := filepath.Glob(filepath.Join(a.Config().Recoveries.Dir, "pg-main", "vault-*"))
 	if len(left) != 0 {

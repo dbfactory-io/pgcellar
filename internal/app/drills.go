@@ -467,11 +467,11 @@ func (r *drillRun) execute() (failed string) {
 			return "", err
 		}
 		r.det.DataDir = dest
-		inner := a.Runner
-		if r.barmanConf != "" {
-			inner = configRunner{inner: a.Runner, conf: r.barmanConf}
+		var run barman.Runner = &journalRunner{r: r, inner: a.Runner}
+		if r.barmanConf != "" { // the journal shows the -c of the fetched copy
+			run = configRunner{inner: run, conf: r.barmanConf}
 		}
-		eng := barman.NewEngine(&journalRunner{r: r, inner: inner})
+		eng := barman.NewEngine(run)
 		if _, err := eng.Recover(r.ctx, r.server, r.in.BackupID, dest, r.opts); err != nil {
 			return "", err
 		}

@@ -185,7 +185,7 @@ func (r *drillRun) fetchFromVault() (string, error) {
 	}
 	chownBarman(cfg, filepath.Join(dir, "barman"), conf, filepath.Join(dir, "barman", "barman.d"), filepath.Join(dir, "barman", "locks"))
 	r.barmanConf = conf
-	eng := barman.NewEngine(&journalRunner{r: r, inner: configRunner{inner: a.Runner, conf: conf}})
+	eng := barman.NewEngine(configRunner{inner: &journalRunner{r: r, inner: a.Runner}, conf: conf})
 	if _, err := eng.RebuildXlogDB(r.ctx, r.server); err != nil {
 		var re *barman.RunError
 		if errors.As(err, &re) || r.ctx.Err() == nil {
