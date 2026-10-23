@@ -71,6 +71,34 @@ func TestFixturesLoaded(t *testing.T) {
 		t.Errorf("analytics: last backup age %v, want about 31 h", got)
 	}
 
+	// The off-site copy: every server but staging, all fresh, one hiccup on crm-prod.
+	for _, n := range []string{ErpProd, CrmProd, Analytics, Legacy9} {
+		v := by[n].Vault
+		if v == nil || !v.Copied || v.Last == nil || !v.Last.OK || v.Stale || v.UsedBytes == 0 {
+			t.Errorf("%s vault: %+v", n, v)
+		}
+	}
+	if v := by[ShopStaging].Vault; v == nil || v.Copied {
+		t.Errorf("shop-staging is not copied: %+v", v)
+	}
+	vv := a.VaultStatus()
+	if !vv.Enabled || !vv.Lock.Locked() || vv.Lock.Days != 30 || vv.QuotaLevel != app.LevelOK || vv.UsedPct() < 40 || vv.UsedPct() > 60 || vv.KeyDownloadedBy != "maria" || vv.LastTest == nil {
+		t.Errorf("vault view: %+v", vv)
+	}
+	if line := a.VaultSummary(states); line == nil || line.Text != "🔐 Off-site copy: 4 of 4 servers up to date · 252.6 GB of 500 GB used (51 %) · locked 30 days" {
+		t.Errorf("vault line: %+v", line)
+	}
+	copies, _ := a.ListVaultCopies(CrmProd, 200, false)
+	failed := 0
+	for _, c := range copies {
+		if !c.OK {
+			failed++
+		}
+	}
+	if len(copies) < 90 || failed != 1 {
+		t.Errorf("crm-prod: %d copies, %d failed", len(copies), failed)
+	}
+
 	// The schedule: analytics runs daily, legacy-9 is off.
 	d1, _ := a.GetServer(context.Background(), Legacy9)
 	if d1.Schedule.IsEnabled() {
@@ -137,7 +165,7 @@ func TestFixturesLoaded(t *testing.T) {
 		t.Errorf("recoveries %+v", recs)
 	}
 	hist, err := a.History(20)
-	if err != nil || len(hist) != 6 {
+	if err != nil || len(hist) != 7 {
 		t.Errorf("history: %d commits, err %v", len(hist), err)
 	}
 	if len(hist) > 0 && !strings.Contains(hist[0].Message, "Change retention of analytics to 14 days") {

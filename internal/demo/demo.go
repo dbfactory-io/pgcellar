@@ -279,10 +279,19 @@ func (d *Demo) writeConfig(root, baseURL, licenseKey, hash string, now time.Time
 		{44 * 24 * time.Hour, "maria", "Add server analytics", 3, 30},
 		{33 * 24 * time.Hour, "tom", "Add server shop-staging", 4, 30},
 		{27 * 24 * time.Hour, "tom", "Add server legacy-9", 5, 30},
+		{vaultAge, "maria", "vault: settings changed", 5, 30},
 		{9 * 24 * time.Hour, "maria", "Change retention of analytics to 14 days", 5, 14},
 	}
 	for _, c := range commits {
 		cfg := d.config(root, baseURL, licenseKey, hash, c.n, c.days)
+		if c.ago <= vaultAge {
+			cfg.Vault = vaultConfig()
+			for i := range cfg.Servers {
+				if cfg.Servers[i].Name == ShopStaging {
+					cfg.Servers[i].Vault = config.Ptr(false)
+				}
+			}
+		}
 		if err := config.Save(path, cfg); err != nil {
 			return "", err
 		}
@@ -370,6 +379,9 @@ func (d *Demo) rebuildHistory(now time.Time, force bool) error {
 	}
 	st := d.App.Store
 	if err := st.ReplaceSnapshot(h.Snapshot); err != nil {
+		return err
+	}
+	if err := d.seedVault(now); err != nil {
 		return err
 	}
 	for key, rec := range h.Last {

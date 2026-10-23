@@ -63,7 +63,7 @@
 
 <section>
   <h2>{{t "vault.test"}}</h2>
-  {{with .LastTest}}<p>{{if .OK}}<span aria-hidden="true">✅</span>{{else}}<span aria-hidden="true">❌</span>{{end}} {{when .At}} {{t "vault.key_by"}} {{actor .Actor}}: {{if .OK}}{{t "vault.lock"}} {{.LockText}}{{else}}{{.Error}}{{end}}</p>{{else}}<p class="muted">{{t "vault.test_none"}}</p>{{end}}
+  {{with .LastTest}}<p>{{if .OK}}<span aria-hidden="true">✅</span>{{else}}<span aria-hidden="true">❌</span>{{end}} {{when .At}} {{t "vault.key_by"}} {{actor .Actor}}: {{if .OK}}{{.LockText}}{{else}}{{.Error}}{{end}}</p>{{else}}<p class="muted">{{t "vault.test_none"}}</p>{{end}}
 </section>
 
 <section>

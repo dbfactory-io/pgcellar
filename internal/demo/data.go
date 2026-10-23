@@ -291,6 +291,9 @@ func (p plan) history(all []server, now time.Time, recDir string, fps map[string
 	add(st.Add(-3*24*time.Hour), maria, "login", "", "from 10.20.0.9")
 	add(st.Add(-22*time.Hour), maria, "login", "", "from 10.20.0.9")
 	add(st.Add(-20*time.Hour), maria, "switch-wal", ShopStaging, "exit=1")
+	add(st.Add(-vaultAge), maria, "vault.settings", "", "enabled=true bucket="+vaultBucket)
+	add(st.Add(-vaultAge).Add(4*time.Minute), maria, "vault.test", vaultEndpoint+"/"+vaultBucket+"/pgcellar", "ok=true")
+	add(st.Add(-vaultAge).Add(11*time.Minute), maria, "vault.key.download", "", "recovery key downloaded")
 
 	// The newest 40 lines.
 	sort.SliceStable(evs, func(i, j int) bool { return evs[i].at.Before(evs[j].at) })
@@ -335,6 +338,7 @@ func (p plan) history(all []server, now time.Time, recDir string, fps map[string
 	for i := range h.Snapshot.Alerts {
 		h.Snapshot.Alerts[i].ID = int64(i + 1)
 	}
+	h.Snapshot.VaultCopies = p.vaultCopies(all, cats, now)
 	h.renumber()
 	return h
 }
