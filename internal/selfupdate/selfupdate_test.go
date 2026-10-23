@@ -556,13 +556,17 @@ func TestRunFollowsIsEnabled(t *testing.T) {
 	mu.Lock()
 	on = true
 	mu.Unlock()
+	// The loop keeps trying every 10 ms: the status is read while it runs,
+	// not after cancel(), when an attempt cut short by the cancellation
+	// ("context canceled") may have replaced the error we look for.
+	var st Status
 	deadline := time.Now().Add(5 * time.Second)
-	for u.Status().LastError == "" && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	for st = u.Status(); !strings.Contains(st.LastError, "stop here") && time.Now().Before(deadline); st = u.Status() {
+		time.Sleep(5 * time.Millisecond)
 	}
 	cancel()
 	<-done
-	if st := u.Status(); st.LastAttempt == nil || !strings.Contains(st.LastError, "stop here") {
+	if st.LastAttempt == nil || !strings.Contains(st.LastError, "stop here") {
 		t.Fatalf("on: %+v", st)
 	}
 }
