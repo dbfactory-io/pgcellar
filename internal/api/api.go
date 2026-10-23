@@ -301,7 +301,7 @@ func (a *API) backups(w http.ResponseWriter, r *http.Request, p principal) {
 
 func (a *API) status(w http.ResponseWriter, r *http.Request, p principal) {
 	states, at, errMsg := a.app.States()
-	out := map[string]any{"servers": states, "updated_at": at}
+	out := map[string]any{"servers": states, "updated_at": at, "alerts_delivery": a.app.AlertsDelivery()}
 	if errMsg != "" {
 		out["error"] = errMsg
 	}

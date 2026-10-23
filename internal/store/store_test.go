@@ -390,3 +390,34 @@ func TestVaultCopies(t *testing.T) {
 		t.Errorf("snapshot: %+v", all)
 	}
 }
+
+func TestAlertDeliveries(t *testing.T) {
+	s := newStore(t)
+	t0 := time.Date(2026, 10, 21, 1, 0, 0, 0, time.UTC)
+	add := func(min int, ch string, ok bool, why string) {
+		t.Helper()
+		if err := s.AddAlert(AlertSent{At: t0.Add(time.Duration(min) * time.Minute), Channel: ch, Kind: "test", Level: "ok", Text: "x", OK: ok, Error: why}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add(0, "mail", false, "old failure")
+	add(1, "mail", true, "")
+	add(2, "telegram", false, "first")
+	add(3, "mail", false, "smtp: 421")
+	add(4, "telegram", false, "second")
+	add(5, "mail", false, "smtp: 450")
+	got, err := s.AlertDeliveries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	m, tg := got[0], got[1]
+	if m.Channel != "mail" || !m.LastOK.Equal(t0.Add(time.Minute)) || m.Failures != 2 || !m.FirstFailAt.Equal(t0.Add(3*time.Minute)) || !m.LastFailAt.Equal(t0.Add(5*time.Minute)) || m.LastError != "smtp: 450" {
+		t.Errorf("mail: %+v", m)
+	}
+	if tg.Channel != "telegram" || !tg.LastOK.IsZero() || tg.Failures != 2 || !tg.FirstFailAt.Equal(t0.Add(2*time.Minute)) || tg.LastError != "second" {
+		t.Errorf("telegram: %+v", tg)
+	}
+}

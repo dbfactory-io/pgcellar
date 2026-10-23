@@ -14,6 +14,11 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 - API: `GET`/`PUT /api/v1/vault`, `POST /api/v1/vault/test`, `POST /api/v1/vault/copy`, `GET /api/v1/vault/copies`, `GET /api/v1/vault/copies/{id}`, `GET /api/v1/vault/recovery-key`; `vault` in the state of every server.
 - The Docker image ships restic 0.19.1, the official binary checked against its published SHA-256.
 - The public demo shows the vault of Northwind.
+- "Your alerts are not getting through": pgCellar reads its own journal of sends and knows, per channel, the last message that went through, the last failure and its reason, and the failures in a row. A channel is failing after 3 refused sends in a row, or after 1 when nothing went through for 24 hours. The Status page then opens with a red line ("⚠️ Your alerts are not getting through: Telegram answered 404 Not Found since 21 Oct 01:00 (12 messages lost)") with **Send a test** and a link to the Alerts page; administrators get a short reminder on every other page; the Alerts page shows ✅ delivering or ❌ failing since ... for each channel. It goes away as soon as one message gets through. Also in `GET /api/v1/status` and `GET /api/v1/alerts` (`alerts_delivery`) and in the metrics `pgcellar_alert_channel_failing` and `pgcellar_alert_channel_consecutive_failures`. `/healthz` is unchanged and stays 200. Without any channel, the Status page says "No alert channel configured" once per browser session. Manual, chapter 8.
+
+### Fixed
+
+- A test of the self-update loop could fail under load: it read the status after stopping the loop, when an attempt cut short by the stop had replaced the error it looked for.
 
 ## [0.2.1] - 2026-10-23
 

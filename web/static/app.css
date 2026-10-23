@@ -273,3 +273,9 @@ svg.tl{display:block;width:100%;min-width:28rem;height:auto;font-family:var(--sa
 .lbl small{display:block;font-weight:400;margin-top:.25rem}
 .inline{display:flex;flex-wrap:wrap;gap:.2rem 1rem;margin-top:.4rem}
 .inline label{flex:1 1 5.5rem;font-weight:400;margin-bottom:0}
+.alerts-banner p{margin:0}
+.alerts-banner .actions{margin-top:.5rem;display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
+.alerts-down{margin:0 0 1rem;font-size:.9rem;font-weight:600}
+.alerts-down a{color:var(--bad)}
+.flash.nochannel{color:var(--mut)}
+.delivery{margin-top:.3rem;font-size:.9rem}

@@ -209,6 +209,16 @@ var messages = map[string]string{
 	"alerts.journal_empty":        "Nothing sent yet.",
 	"alerts.sent":                 "sent",
 	"alerts.failed":               "failed",
+	"alerts.banner_link":          "Open the Alerts page",
+	"alerts.down_note":            "⚠️ Your alerts are not getting through. Open the Alerts page to see why.",
+	"alerts.no_channel_note":      "🔕 No alert channel configured: if a backup fails tonight, nobody will hear about it. Add telegram, mail or webhook under alerts: in pgcellar.yaml.",
+	"alerts.delivering":           "✅ delivering",
+	"alerts.failing_since":        "❌ failing since",
+	"alerts.shaky":                "⚠️ last send failed",
+	"alerts.untested":             "nothing sent yet",
+	"alerts.last_ok":              "last message through",
+	"alerts.never_ok":             "never delivered a message",
+	"btn.alert_test_short":        "Send a test",
 	"license.banner_title":        "Licence",
 }
 

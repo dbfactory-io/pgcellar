@@ -13,7 +13,7 @@ func (a *API) alerts(w http.ResponseWriter, r *http.Request, p principal) {
 		a.fail(w, r, err)
 		return
 	}
-	writeData(w, http.StatusOK, map[string]any{"channels": a.app.AlertChannels(), "sent": journal})
+	writeData(w, http.StatusOK, map[string]any{"channels": a.app.AlertChannels(), "delivery": a.app.AlertsDelivery(), "sent": journal})
 }
 
 func (a *API) alertsTest(w http.ResponseWriter, r *http.Request, p principal) {

@@ -171,6 +171,30 @@ The **Alerts** page (admin) shows which channels are configured, whether each en
 
 A send has a 10-second limit. A failure is logged and written to the journal, never fatal, and the Telegram token is removed from error texts.
 
+## When the alerts do not get through
+
+An alert channel can die quietly: a Telegram bot token revoked, an SMTP password changed, a webhook moved. pgCellar keeps detecting problems and keeps writing messages, and the channel keeps refusing them. On our own test bed, two nights went by without a backup and 42 messages were refused by Telegram (404, dead token). Only the journal knew.
+
+So pgCellar reads its own journal. For each configured channel it knows the last message that went through, the last one that failed and why, and how many failed in a row since. A channel is **failing**:
+
+- after 3 failed sends in a row, or
+- after a single one when nothing went through it for 24 hours, or never did.
+
+One or two failures after a recent success are a hiccup: the Alerts page shows them in orange, nothing else changes.
+
+When a channel is failing:
+
+- The **Status** page opens with a red line: "⚠️ Your alerts are not getting through: Telegram answered 404 Not Found since 21 Oct 01:00 (12 messages lost)", a **Send a test** button (administrators) and a link to the Alerts page. When several channels are configured and only some fail, the line is orange and names them ("Your Telegram alerts are not getting through: ...").
+- Every other page shows administrators a short reminder under the menu.
+- The **Alerts** page puts the state of each channel first: ✅ delivering, ⚠️ last send failed, or ❌ failing since a date, with the reason, the messages lost and the last one that went through.
+- `GET /api/v1/status` and `GET /api/v1/alerts` carry `alerts_delivery` (`configured`, `failing`, `all_failing`, and per channel `state`, `last_ok`, `last_failure`, `last_error`, `consecutive_failures`, `failing_since`, `reason`).
+- `/metrics` exposes `pgcellar_alert_channel_failing{channel}` (0 or 1) and `pgcellar_alert_channel_consecutive_failures{channel}`. Point another monitoring system at it: pgCellar cannot warn you through a channel that is down.
+- `/healthz` stays `200`. A dead token is no reason for Docker or the updater to restart or roll back pgCellar.
+
+Everything goes back to normal as soon as one message goes through: fix the token or the password, press **Send a test**, and the red line is gone.
+
+When no channel is configured at all, the Status page says so once per browser session, softly: "🔕 No alert channel configured". It is a choice you may have made; it is not an error.
+
 ## Thresholds
 
 | Key | Default | Effect |

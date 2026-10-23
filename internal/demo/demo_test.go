@@ -179,6 +179,9 @@ func TestFixturesLoaded(t *testing.T) {
 	if len(journal) != 5 {
 		t.Errorf("%d alerts sent, want 5", len(journal))
 	}
+	if d := a.AlertsDelivery(); !d.Configured || d.Failing {
+		t.Errorf("the demo must show its alerts getting through (the refused mail is followed by one that went through): %+v", d)
+	}
 	chans := a.AlertChannels()
 	if len(chans) != 2 || !chans[0].Ready || !chans[1].Ready {
 		t.Errorf("channels %+v", chans)

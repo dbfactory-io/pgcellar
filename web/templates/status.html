@@ -1,3 +1,5 @@
 {{define "content"}}
+{{if .Data.NoChannel}}<div class="flash nochannel" role="status">{{t "alerts.no_channel_note"}} {{if .CanAdmin}}<a href="/alerts">{{t "alerts.banner_link"}}</a>{{end}}</div>{{end}}
+<div id="alert-test" aria-live="polite"></div>
 {{template "status_table" .Data}}
 {{end}}

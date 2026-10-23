@@ -101,6 +101,7 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(&b, "pgcellar_recoveries_total{server=\"%s\"} %d\n", promEscape(st.Name), done[st.Name])
 	}
 	s.alertCounts(&b)
+	s.alertDeliveryMetrics(&b)
 	s.licenseMetrics(&b)
 	s.updateMetrics(&b)
 	vaultMetrics(&b, states)

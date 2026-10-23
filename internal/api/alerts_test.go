@@ -41,11 +41,25 @@ func TestAlertsAndLicenseAPI(t *testing.T) {
 	if code != 200 || len(res) != 1 || res[0].(map[string]any)["ok"] != false {
 		t.Fatalf("test without secret: %d %v", code, out)
 	}
+	// one refused send and never a success: the channel is failing, and
+	// /status says so to a viewer
+	delivery := func() map[string]any {
+		t.Helper()
+		_, out := f.call(t, "GET", "/status", f.env.Keys["viewer"], "")
+		d, _ := out["data"].(map[string]any)["alerts_delivery"].(map[string]any)
+		return d
+	}
+	if d := delivery(); d["all_failing"] != true || d["channels"].([]any)[0].(map[string]any)["consecutive_failures"] != float64(1) {
+		t.Errorf("alerts_delivery after a refusal: %v", d)
+	}
 	t.Setenv("PGC_API_HOOK", "x")
 	code, out = f.call(t, "POST", "/alerts/test", f.env.Keys["admin"], "")
 	res = out["data"].([]any)
 	if code != 200 || len(res) != 1 || res[0].(map[string]any)["ok"] != true || hits != 1 {
 		t.Fatalf("test: %d %v hits=%d", code, out, hits)
+	}
+	if d := delivery(); d["failing"] != false || d["channels"].([]any)[0].(map[string]any)["state"] != "delivering" {
+		t.Errorf("alerts_delivery after a success: %v", d)
 	}
 	if code, _ := f.call(t, "POST", "/alerts/test", f.env.Keys["admin"], `{"channel":"mail"}`); code != 404 {
 		t.Errorf("unknown channel: %d", code)

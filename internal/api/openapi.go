@@ -122,7 +122,7 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 				"get": op("Download the PDF report of a drill (operator role). 404 when no report was written.", "operator", m{"parameters": []m{recoveryParam()}, "responses": m{"200": m{"description": "The report", "content": m{"application/pdf": m{"schema": m{"type": "string", "format": "binary"}}}}, "404": errResp}}),
 			},
 			"/status": m{
-				"get": op("Cached status of every server (refreshed every status interval)", "viewer", m{"responses": m{"200": resp("Status", dataOf(m{"type": "object", "properties": m{"servers": m{"type": "array", "items": ref("ServerState")}, "updated_at": m{"type": "string", "format": "date-time"}}}))}}),
+				"get": op("Cached status of every server (refreshed every status interval)", "viewer", m{"responses": m{"200": resp("Status", dataOf(m{"type": "object", "properties": m{"servers": m{"type": "array", "items": ref("ServerState")}, "updated_at": m{"type": "string", "format": "date-time"}, "alerts_delivery": ref("AlertsDelivery")}}))}}),
 			},
 			"/runs": m{
 				"get": op("Recent runs, newest first", "viewer", m{"parameters": []m{{"name": "server", "in": "query", "schema": m{"type": "string"}}, {"name": "limit", "in": "query", "schema": m{"type": "integer"}}}, "responses": m{"200": resp("Runs", dataOf(m{"type": "array", "items": ref("Run")}))}}),
@@ -320,6 +320,14 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"bytes_added": m{"type": "integer"}, "bytes_total": m{"type": "integer"}, "files_new": m{"type": "integer"}, "duration_ms": m{"type": "integer"},
 					"error": m{"type": "string"}, "warnings": m{"type": "array", "items": m{"type": "string"}}, "unchanged": m{"type": "boolean"}, "initialised": m{"type": "boolean"},
 					"pruned": m{"type": "boolean"}, "prune_error": m{"type": "string"}, "journal": m{"type": "string"},
+				}},
+				"AlertsDelivery": m{"type": "object", "description": "Whether the alert channels get their messages through, from the journal of sends. A channel is failing after 3 refused sends in a row, or after 1 when nothing went through for 24 hours.", "properties": m{
+					"configured": m{"type": "boolean"}, "failing": m{"type": "boolean"}, "all_failing": m{"type": "boolean"},
+					"channels": m{"type": "array", "items": m{"type": "object", "properties": m{
+						"channel": m{"type": "string"}, "state": m{"type": "string", "enum": []string{"delivering", "failing", "shaky", "unknown"}}, "failing": m{"type": "boolean"},
+						"last_ok": m{"type": "string", "format": "date-time"}, "last_failure": m{"type": "string", "format": "date-time"}, "failing_since": m{"type": "string", "format": "date-time"},
+						"last_error": m{"type": "string"}, "consecutive_failures": m{"type": "integer"}, "reason": m{"type": "string"},
+					}}},
 				}},
 				"Run": m{"type": "object", "properties": m{
 					"id": m{"type": "integer"}, "server": m{"type": "string"}, "kind": m{"type": "string"}, "status": m{"type": "string", "enum": []string{"running", "ok", "failed"}},

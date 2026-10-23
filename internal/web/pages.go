@@ -29,20 +29,55 @@ type statusData struct {
 	License string         // discreet banner: over the quota, or expired
 	Update  string         // discreet banner: a newer pgCellar exists
 	Vault   *app.VaultLine // the off-site copy, nil when it is off
+	Alerts  deliveryBanner // the alerts do not get through
+	// NoChannel: no alert channel is configured; said softly, once per
+	// browser session, outside the part that refreshes.
+	NoChannel bool
 }
 
-func (s *Server) statusData() statusData {
+// deliveryBanner is the red (or orange) line of the Status page when the
+// alert channels refuse the messages.
+type deliveryBanner struct {
+	Text     string
+	Class    string // "bad" when nothing gets through, "warn" when one channel of several fails
+	CanAdmin bool   // shows "Send a test" and the link to the Alerts page
+}
+
+func (s *Server) deliveryBanner(d app.AlertsDelivery, u *userCtx) deliveryBanner {
+	b := deliveryBanner{Text: app.DeliveryBanner(d, shortDate), Class: "warn", CanAdmin: u != nil && s.canAdmin(u)}
+	if d.AllFailing {
+		b.Class = "bad"
+	}
+	return b
+}
+
+// shortDate is "21 Oct 01:00" in the zone of the process.
+func shortDate(t time.Time) string { return t.Local().Format("2 Jan 15:04") }
+
+func (s *Server) statusData(u *userCtx) statusData {
 	states, at, errMsg := s.app.States()
 	stale := s.app.CacheStale()
-	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states), License: s.app.LicenseInfo().Banner, Update: s.updateBanner(), Vault: s.app.VaultSummary(states)}
+	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states), License: s.app.LicenseInfo().Banner, Update: s.updateBanner(), Vault: s.app.VaultSummary(states),
+		Alerts: s.deliveryBanner(s.app.AlertsDelivery(), u)}
 }
 
+// noChannelCookie remembers, for the browser session, that the note about
+// missing alert channels was shown.
+const noChannelCookie = "pgcellar_nochannel_seen"
+
 func (s *Server) statusPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
-	s.render(w, http.StatusOK, "status", s.newPage(r, u, tr("status.title"), "status", s.statusData()))
+	d := s.statusData(u)
+	if !s.app.Demo && len(s.app.AlertChannels()) == 0 {
+		if _, err := r.Cookie(noChannelCookie); err != nil {
+			d.NoChannel = true
+			http.SetCookie(w, &http.Cookie{Name: noChannelCookie, Value: "1", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isHTTPS(r)})
+		}
+	}
+	s.render(w, http.StatusOK, "status", s.newPage(r, u, tr("status.title"), "status", d))
 }
 
 func (s *Server) statusTable(w http.ResponseWriter, r *http.Request, u *userCtx) {
-	s.fragment(w, http.StatusOK, "status_table", s.statusData())
+	s.fragment(w, http.StatusOK, "status_table", s.statusData(u))
 }
 
 // ---- servers ----

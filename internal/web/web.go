@@ -227,7 +227,11 @@ type page struct {
 	Version        string
 	LicenseFooter  string
 	Msg, Warn, Err string
-	Data           any
+	// AlertsDown is the discreet reminder, for administrators, that the
+	// alert channels refuse the messages (every page but Status, which has
+	// the full banner).
+	AlertsDown string
+	Data       any
 }
 
 func (s *Server) newPage(r *http.Request, u *userCtx, title, active string, data any) page {
@@ -237,6 +241,11 @@ func (s *Server) newPage(r *http.Request, u *userCtx, title, active string, data
 		p.User, p.Role, p.CSRF = u.Name, u.Role, u.CSRF
 		p.CanOperate = s.canOperate(u)
 		p.CanAdmin = s.canAdmin(u)
+		if p.CanAdmin && active != "status" {
+			if d := s.app.AlertsDelivery(); d.Failing {
+				p.AlertsDown = tr("alerts.down_note")
+			}
+		}
 	}
 	if r != nil {
 		switch r.URL.Query().Get("ok") {

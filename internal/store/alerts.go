@@ -83,3 +83,66 @@ func (s *Store) PruneAlerts(keep int) error {
 	_, err := s.db.Exec(`DELETE FROM alerts_sent WHERE id <= (SELECT COALESCE(MAX(id), 0) FROM alerts_sent) - ?`, keep)
 	return err
 }
+
+// AlertDelivery is what the journal says about one channel: its last
+// successful send and the failures since then.
+type AlertDelivery struct {
+	Channel     string
+	LastOK      time.Time // zero when the channel never delivered anything
+	Failures    int       // sends that failed after LastOK, in a row
+	FirstFailAt time.Time // the first of those failures
+	LastFailAt  time.Time
+	LastError   string
+}
+
+// AlertDeliveries reads the journal channel by channel. Every row after the
+// last successful one is a failure by construction, so the run of failures
+// is simply what comes after it.
+func (s *Store) AlertDeliveries() ([]AlertDelivery, error) {
+	rows, err := s.db.Query(`SELECT channel, COALESCE(MAX(CASE WHEN ok = 1 THEN id END), 0) FROM alerts_sent GROUP BY channel ORDER BY channel`)
+	if err != nil {
+		return nil, err
+	}
+	type head struct {
+		channel string
+		okID    int64
+	}
+	var heads []head
+	for rows.Next() {
+		var h head
+		if err := rows.Scan(&h.channel, &h.okID); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		heads = append(heads, h)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	out := make([]AlertDelivery, 0, len(heads))
+	for _, h := range heads {
+		d := AlertDelivery{Channel: h.channel}
+		if h.okID > 0 {
+			var at string
+			if err := s.db.QueryRow(`SELECT at FROM alerts_sent WHERE id = ?`, h.okID).Scan(&at); err != nil {
+				return nil, err
+			}
+			d.LastOK = parseTS(at)
+		}
+		var first, last, lastErr string
+		var n int
+		err := s.db.QueryRow(`SELECT COUNT(*), COALESCE(MIN(at), ''),
+			COALESCE((SELECT at FROM alerts_sent WHERE channel = ? AND id > ? ORDER BY id DESC LIMIT 1), ''),
+			COALESCE((SELECT error FROM alerts_sent WHERE channel = ? AND id > ? ORDER BY id DESC LIMIT 1), '')
+			FROM alerts_sent WHERE channel = ? AND id > ?`, h.channel, h.okID, h.channel, h.okID, h.channel, h.okID).Scan(&n, &first, &last, &lastErr)
+		if err != nil {
+			return nil, err
+		}
+		d.Failures, d.LastError = n, lastErr
+		if n > 0 {
+			d.FirstFailAt, d.LastFailAt = parseTS(first), parseTS(last)
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}

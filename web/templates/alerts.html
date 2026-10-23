@@ -9,7 +9,8 @@
   <ul class="rows">
   {{range .Channels}}
     <li class="row">
-      <div class="grow"><strong>{{.Name}}</strong> <span class="muted">{{.Target}}</span></div>
+      <div class="grow"><strong>{{.Name}}</strong> <span class="muted">{{.Target}}</span>{{with $.Data.Delivery.Channel .Name}}
+        <div class="delivery">{{if eq .State "failing"}}<span class="pill bad">{{t "alerts.failing_since"}} {{when .FailingSince}}</span> {{.Reason}} &middot; {{.ConsecutiveFailures}} {{if eq .ConsecutiveFailures 1}}message{{else}}messages{{end}} lost &middot; {{if .LastOK}}{{t "alerts.last_ok"}} {{when .LastOK}}{{else}}{{t "alerts.never_ok"}}{{end}}{{else if eq .State "shaky"}}<span class="pill warn">{{t "alerts.shaky"}}</span> {{.Reason}} &middot; {{t "alerts.last_ok"}} {{when .LastOK}}{{else if eq .State "delivering"}}<span class="pill ok">{{t "alerts.delivering"}}</span> <span class="muted">{{t "alerts.last_ok"}} {{when .LastOK}}</span>{{else}}<span class="pill">{{t "alerts.untested"}}</span>{{end}}</div>{{end}}</div>
       <div class="meta">{{range .Env}}<code>{{.Name}}</code> {{if .Set}}{{t "alerts.env_set"}}{{else}}<strong>{{t "alerts.env_missing"}}</strong>{{end}} {{end}}</div>
       <div><button class="btn alt" hx-post="/alerts/test" hx-vals='{"channel": "{{.Name}}"}' hx-target="#alert-test" hx-swap="innerHTML" hx-disabled-elt="this">{{t "btn.alert_test"}}</button></div>
     </li>

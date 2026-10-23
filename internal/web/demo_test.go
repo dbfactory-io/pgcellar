@@ -146,6 +146,9 @@ func TestDemoPagesReadableByViewer(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), "Northwind") && !strings.Contains(rec.Body.String(), "erp-prod") && !strings.Contains(rec.Body.String(), "crm-prod") {
 			t.Errorf("GET %s: no fictional data in the page", p)
 		}
+		if b := rec.Body.String(); strings.Contains(b, "not getting through") || strings.Contains(b, "No alert channel configured") {
+			t.Errorf("GET %s: the demo must keep its alerts green", p)
+		}
 	}
 	// The PDF of a drill is fictional and can be downloaded; archives cannot.
 	rec := f.do("GET", "/drills/1/report", true)

@@ -16,6 +16,7 @@ type alertsData struct {
 	OnDrillSuccess bool
 	DailySummary   string
 	BaseURLSet     bool
+	Delivery       app.AlertsDelivery
 }
 
 func (s *Server) alertsData() (alertsData, error) {
@@ -25,7 +26,7 @@ func (s *Server) alertsData() (alertsData, error) {
 	}
 	cfg := s.app.Config()
 	d := alertsData{Channels: s.app.AlertChannels(), Journal: j, OnDrillSuccess: cfg.Alerts.OnDrillSuccess,
-		DailySummary: strings.TrimSpace(cfg.Alerts.DailySummary), BaseURLSet: strings.TrimSpace(cfg.BaseURL) != ""}
+		DailySummary: strings.TrimSpace(cfg.Alerts.DailySummary), BaseURLSet: strings.TrimSpace(cfg.BaseURL) != "", Delivery: s.app.AlertsDelivery()}
 	if cfg.Alerts.EffectiveRepeatEvery() > 0 {
 		d.RepeatEvery = app.HumanDuration(cfg.Alerts.EffectiveRepeatEvery())
 	}
@@ -85,6 +86,24 @@ func (s *Server) alertCounts(b *strings.Builder) {
 				_, _ = fmt.Fprintf(b, "pgcellar_alerts_sent_total{channel=\"%s\",ok=\"%t\"} 0\n", promEscape(c.Name), ok)
 			}
 		}
+	}
+}
+
+// alertDeliveryMetrics says whether each configured channel gets its
+// messages through, from the journal.
+func (s *Server) alertDeliveryMetrics(b *strings.Builder) {
+	d := s.app.AlertsDelivery()
+	_, _ = b.WriteString("# HELP pgcellar_alert_channel_failing 1 when an alert channel refuses the messages (3 failures in a row, or 1 after a day without a successful send), else 0.\n# TYPE pgcellar_alert_channel_failing gauge\n")
+	for _, c := range d.Channels {
+		v := 0
+		if c.Failing {
+			v = 1
+		}
+		_, _ = fmt.Fprintf(b, "pgcellar_alert_channel_failing{channel=\"%s\"} %d\n", promEscape(c.Channel), v)
+	}
+	_, _ = b.WriteString("# HELP pgcellar_alert_channel_consecutive_failures Sends that failed in a row on an alert channel since its last successful one.\n# TYPE pgcellar_alert_channel_consecutive_failures gauge\n")
+	for _, c := range d.Channels {
+		_, _ = fmt.Fprintf(b, "pgcellar_alert_channel_consecutive_failures{channel=\"%s\"} %d\n", promEscape(c.Channel), c.ConsecutiveFailures)
 	}
 }
 

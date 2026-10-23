@@ -87,12 +87,14 @@ Global:
 |---|---|
 | `pgcellar_fs_free_bytes`, `pgcellar_fs_size_bytes` (label `path`) | File system holding backups and restores |
 | `pgcellar_alerts_sent_total` | Messages sent, by channel and outcome |
+| `pgcellar_alert_channel_failing` (label `channel`) | 1 when the channel refuses the messages (chapter 8), else 0 |
+| `pgcellar_alert_channel_consecutive_failures` (label `channel`) | Failed sends in a row since the last one that went through |
 | `pgcellar_license_servers_max`, `pgcellar_license_servers_used` | Licence quota and use |
 | `pgcellar_build_info` | Version |
 
-Useful alerts in Prometheus: `pgcellar_last_backup_age_seconds > 90000`, `pgcellar_check_ok == 0`, `pgcellar_last_drill_ok == 0`, `pgcellar_setup_level == 2`.
+Useful alerts in Prometheus: `pgcellar_last_backup_age_seconds > 90000`, `pgcellar_check_ok == 0`, `pgcellar_last_drill_ok == 0`, `pgcellar_setup_level == 2`, and `pgcellar_alert_channel_failing == 1`: the one that tells you pgCellar can no longer tell you anything.
 
-`GET /healthz` answers `ok` when the database is reachable, `503` otherwise. Use it as the container health check.
+`GET /healthz` answers `ok` when the database is reachable, `503` otherwise. Use it as the container health check. It stays `200` when the alert channels fail: a refused Telegram message is no reason to restart pgCellar. That state is in `GET /api/v1/status` (`alerts_delivery`) and in the metrics above.
 
 ## Logs
 

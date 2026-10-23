@@ -53,9 +53,15 @@
 </div>
 {{end}}
 
+{{define "alerts_banner"}}{{if .Text}}<div class="flash {{.Class}} alerts-banner" role="alert">
+  <p><strong>{{.Text}}</strong></p>
+  <p class="actions">{{if .CanAdmin}}<button class="btn alt" hx-post="/alerts/test" hx-target="#alert-test" hx-swap="innerHTML" hx-disabled-elt="this">{{t "btn.alert_test_short"}}</button> {{end}}<a href="/alerts">{{t "alerts.banner_link"}}</a></p>
+</div>{{end}}{{end}}
+
 {{define "status_table"}}
 <div id="status-table" hx-get="/status/table" hx-trigger="every 30s" hx-swap="outerHTML">
 {{if .Err}}<div class="flash bad" role="alert">{{.Err}}</div>{{end}}
+{{template "alerts_banner" .Alerts}}
 {{if .License}}<div class="flash warn licence-note" role="status">{{.License}}</div>{{end}}
 {{if .Update}}<div class="flash update-note" role="status">{{.Update}} <a href="/updates">{{t "updates.banner_link"}}</a></div>{{end}}
 <div class="headline {{.Summary.Level}}" role="status">
