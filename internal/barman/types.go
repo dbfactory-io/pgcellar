@@ -149,6 +149,12 @@ type BinaryRunner interface {
 	RunBinary(ctx context.Context, binary string, args ...string) (stdout, stderr []byte, err error)
 }
 
+// EnvRunner is a BinaryRunner that can also hand environment variables to
+// the program (restic and its S3 credentials). CLIRunner is one.
+type EnvRunner interface {
+	RunBinaryEnv(ctx context.Context, env []string, binary string, args ...string) (stdout, stderr []byte, err error)
+}
+
 // Audit receives one entry per executed command.
 type Audit func(entry AuditEntry)
 

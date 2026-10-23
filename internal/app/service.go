@@ -549,6 +549,9 @@ func (a *App) StartBackup(ctx context.Context, actor, name string) (int64, error
 		a.runMu.Lock()
 		delete(a.running, name)
 		a.runMu.Unlock()
+		if code == 0 {
+			a.vaultAfterBackup(name, actor)
+		}
 		a.refreshServer(bctx, name)
 	}()
 	return id, nil

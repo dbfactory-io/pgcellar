@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# fake-restic: a stand-in for restic, used by the tests and by `pgcellar serve
+# --dev`. A repository "s3:<url>" is a directory under $FAKE_RESTIC_ROOT; a
+# snapshot is a plain copy of the paths it was given (absolute paths kept), so
+# a restore gives back exactly what was copied. Encryption is not simulated;
+# the password file is checked against the one the repository was made with.
+#
+# Supports: init, cat config, backup, snapshots, forget, stats, restore,
+# unlock, version, with the global options pgCellar uses (-r, --password-file,
+# --cache-dir, -o, --json, -q). The S3 credentials must be in the environment
+# (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY), as with the real restic.
+#
+# FAKE_RESTIC_LOG: every call is appended to this file.
+# FAKE_RESTIC_FAIL=1: every command that touches the repository fails like an
+#   unreachable endpoint. FAKE_RESTIC_PARTIAL=1: backup exits 3 (a file vanished).
+# FAKE_RESTIC_DELAY (seconds): a slow backup.
+set -u
+[ -n "${FAKE_RESTIC_LOG:-}" ] && printf '%s\n' "$*" >>"$FAKE_RESTIC_LOG"
+root="${FAKE_RESTIC_ROOT:-${TMPDIR:-/tmp}/fake-restic}"
+
+repo=""; pwfile=""; json=0; cmd=""; sub=""
+target=""; latest=0; host=""; skip_unchanged=0
+paths=(); tags=(); includes=(); excludes=(); positional=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -r|--repo) repo="${2:-}"; shift 2 ;;
+    --password-file|-p) pwfile="${2:-}"; shift 2 ;;
+    --cache-dir|-o|--option|--keep-last|--keep-daily|--keep-weekly|--keep-monthly|--keep-yearly|--mode|--group-by|--limit-upload|--limit-download) shift 2 ;;
+    --json) json=1; shift ;;
+    -q|--quiet|--no-cache|--prune|--no-lock|--verify|--remove-all) shift ;;
+    --host) host="${2:-}"; shift 2 ;;
+    --tag) tags+=("${2:-}"); shift 2 ;;
+    --target|-t) target="${2:-}"; shift 2 ;;
+    --latest) latest="${2:-}"; shift 2 ;;
+    --include|-i) includes+=("${2:-}"); shift 2 ;;
+    --exclude|-e) excludes+=("${2:-}"); shift 2 ;;
+    --skip-if-unchanged) skip_unchanged=1; shift ;;
+    -*) echo "unknown flag: $1" >&2; exit 1 ;;
+    *) if [ -z "$cmd" ]; then cmd="$1"; else positional+=("$1"); fi; shift ;;
+  esac
+done
+
+if [ "$cmd" = version ]; then echo "restic 0.19.1 compiled with go1.26.4 on fake/fake"; exit 0; fi
+[ -n "$cmd" ] || { echo "Usage: restic [command]" >&2; exit 1; }
+[ -n "$repo" ] || { echo "Fatal: Please specify repository location (-r or --repository-file)" >&2; exit 1; }
+[ -n "$pwfile" ] && [ -s "$pwfile" ] || { echo "Fatal: an empty password is not allowed by default" >&2; exit 1; }
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+  echo "Fatal: unable to open config file: Stat: The AWS Access Key Id you provided does not exist in our records." >&2; exit 1
+fi
+if [ -n "${FAKE_RESTIC_FAIL:-}" ]; then
+  echo "Fatal: unable to open config file: Stat: Get \"${repo#s3:}/config\": dial tcp: lookup s3.example.com: no such host" >&2; exit 1
+fi
+
+dir="$root/$(printf '%s' "${repo#s3:}" | tr '/:' '__')"
+need_repo() {
+  if [ ! -f "$dir/config" ]; then
+    echo "Fatal: repository does not exist: unable to open config file: Stat: The specified key does not exist." >&2
+    echo "Is there a repository at the following location?" >&2
+    echo "$repo" >&2
+    exit 10
+  fi
+  cmp -s "$pwfile" "$dir/password" || { echo "Fatal: wrong password or no key found" >&2; exit 12; }
+}
+
+# size DIR: total bytes of the regular files under DIR.
+size() { find "$1" -type f -exec cat {} + 2>/dev/null | wc -c | tr -d ' '; }
+
+now() { date -u +%Y-%m-%dT%H:%M:%S.000000000Z; }
+
+case "$cmd" in
+  init)
+    [ -f "$dir/config" ] && { echo "Fatal: create repository at $repo failed: config file already exists" >&2; exit 1; }
+    mkdir -p "$dir/snapshots" && cp "$pwfile" "$dir/password" && echo '{"version":2}' >"$dir/config"
+    if [ "$json" = 1 ]; then printf '{"message_type":"initialized","id":"fake%060d","repository":"%s"}\n' 0 "$repo"; else echo "created restic repository at $repo"; fi
+    ;;
+  cat)
+    need_repo
+    cat "$dir/config"
+    ;;
+  unlock)
+    need_repo
+    echo "successfully removed 0 locks"
+    ;;
+  backup)
+    need_repo
+    if [ -n "${FAKE_RESTIC_DELAY:-}" ]; then sleep "$FAKE_RESTIC_DELAY"; fi
+    n=$(( $(ls "$dir/snapshots" | wc -l) + 1 ))
+    id=$(printf '%08x%056d' "$n" 0)
+    snap="$dir/snapshots/$id"
+    mkdir -p "$snap/files"
+    for p in ${positional[@]+"${positional[@]}"}; do
+      [ -e "$p" ] || { echo "{\"message_type\":\"error\",\"error\":{\"message\":\"lstat $p: no such file or directory\"},\"during\":\"scan\",\"item\":\"$p\"}"; continue; }
+      mkdir -p "$snap/files$(dirname "$p")"
+      cp -R "$p" "$snap/files$(dirname "$p")/"
+    done
+    for e in ${excludes[@]+"${excludes[@]}"}; do
+      for m in $snap/files$e; do [ -e "$m" ] && rm -rf "$m"; done
+    done
+    files=$(find "$snap/files" -type f | wc -l | tr -d ' ')
+    bytes=$(size "$snap/files")
+    prev=$(ls "$dir/snapshots" | grep -v "^$id$" | sort | tail -1)
+    if [ "$skip_unchanged" = 1 ] && [ -n "$prev" ] && diff -r -q "$dir/snapshots/$prev/files" "$snap/files" >/dev/null 2>&1; then
+      rm -rf "$snap"
+      printf '{"message_type":"summary","files_new":0,"files_changed":0,"files_unmodified":%s,"data_added":0,"data_added_packed":0,"total_files_processed":%s,"total_bytes_processed":%s,"total_duration":0.2}\n' "$files" "$files" "$bytes"
+      exit 0
+    fi
+    added=$bytes
+    [ -n "$prev" ] && added=$(( bytes / 10 ))
+    tagjson=""; for t in ${tags[@]+"${tags[@]}"}; do tagjson="$tagjson${tagjson:+,}\"$t\""; done
+    pathjson=""; for p in ${positional[@]+"${positional[@]}"}; do pathjson="$pathjson${pathjson:+,}\"$p\""; done
+    printf '{"id":"%s","short_id":"%s","time":"%s","hostname":"%s","paths":[%s],"tags":[%s]}' "$id" "${id:0:8}" "$(now)" "${host:-fake}" "$pathjson" "$tagjson" >"$snap/meta.json"
+    printf '{"message_type":"status","percent_done":1}\n'
+    if [ -n "${FAKE_RESTIC_PARTIAL:-}" ]; then
+      printf '{"message_type":"error","error":{"message":"open %s/streaming/000000010000000000000009.partial: no such file or directory"},"during":"archival","item":"%s/streaming/000000010000000000000009.partial"}\n' "${positional[0]}" "${positional[0]}"
+    fi
+    printf '{"message_type":"summary","files_new":%s,"files_changed":0,"files_unmodified":0,"data_added":%s,"data_added_packed":%s,"total_files_processed":%s,"total_bytes_processed":%s,"total_duration":1.5,"snapshot_id":"%s"}\n' "$files" "$added" "$(( added * 9 / 10 ))" "$files" "$bytes" "$id"
+    if [ -n "${FAKE_RESTIC_PARTIAL:-}" ]; then echo "Warning: at least one source file could not be read" >&2; exit 3; fi
+    ;;
+  snapshots)
+    need_repo
+    list=$(ls "$dir/snapshots" | sort)
+    [ "$latest" -gt 0 ] 2>/dev/null && list=$(printf '%s\n' "$list" | tail -n "$latest")
+    out=""
+    for s in $list; do [ -f "$dir/snapshots/$s/meta.json" ] && out="$out${out:+,}$(cat "$dir/snapshots/$s/meta.json")"; done
+    echo "[$out]"
+    ;;
+  forget)
+    need_repo
+    # Keeps the 7 newest snapshots, whatever the policy says.
+    total=$(ls "$dir/snapshots" | wc -l | tr -d ' ')
+    ls "$dir/snapshots" | sort | awk -v n="$total" 'NR <= n - 7' | while read -r s; do rm -rf "${dir:?}/snapshots/$s"; done
+    if [ "$json" = 1 ]; then echo '[]'; else echo "applying policy"; fi
+    ;;
+  stats)
+    need_repo
+    b=$(size "$dir/snapshots")
+    printf '{"total_size":%s,"total_uncompressed_size":%s,"snapshots_count":%s}\n' "$(( b * 9 / 10 ))" "$b" "$(ls "$dir/snapshots" | wc -l | tr -d ' ')"
+    ;;
+  restore)
+    need_repo
+    s="${positional[0]:-latest}"
+    [ "$s" = latest ] && s=$(ls "$dir/snapshots" | sort | tail -1)
+    [ -n "$s" ] && [ -d "$dir/snapshots/$s" ] || { echo "Fatal: no matching ID found for prefix \"$s\"" >&2; exit 1; }
+    [ -n "$target" ] || { echo "Fatal: Please specify a directory to restore to (--target)" >&2; exit 1; }
+    src="$dir/snapshots/$s/files"
+    count=0
+    while IFS= read -r f; do
+      rel="${f#$src}"
+      keep=1
+      if [ ${#includes[@]} -gt 0 ]; then
+        keep=0
+        for i in ${includes[@]+"${includes[@]}"}; do
+          case "$rel" in $i|$i/*) keep=1 ;; esac
+        done
+      fi
+      for e in ${excludes[@]+"${excludes[@]}"}; do
+        case "$rel" in $e|$e/*) keep=0 ;; esac
+      done
+      [ "$keep" = 1 ] || continue
+      mkdir -p "$target$(dirname "$rel")" && cp -p "$f" "$target$rel" && count=$((count+1))
+    done < <(find "$src" -type f)
+    if [ "$json" = 1 ]; then printf '{"message_type":"summary","files_restored":%s}\n' "$count"; else echo "restoring snapshot $s to $target"; fi
+    ;;
+  *)
+    echo "unknown command \"$cmd\" for \"restic\"" >&2; exit 1 ;;
+esac
+exit 0

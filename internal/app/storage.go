@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -415,4 +416,23 @@ func (a *App) applyStorage(st *ServerState, level string) string {
 		}
 	}
 	return level
+}
+
+// FormatDecimalSize renders a size in powers of 1000, the way storage is
+// sold: "500 GB", "1.2 TB", "8.5 kB".
+func FormatDecimalSize(n int64) string {
+	if n <= 0 {
+		return "0 B"
+	}
+	if n < 1000 {
+		return fmt.Sprintf("%d B", n)
+	}
+	v, exp := float64(n), -1
+	for v >= 1000 && exp < 5 {
+		v /= 1000
+		exp++
+	}
+	s := strconv.FormatFloat(v, 'f', 1, 64)
+	s = strings.TrimSuffix(s, ".0")
+	return s + " " + []string{"kB", "MB", "GB", "TB", "PB", "EB"}[exp]
 }

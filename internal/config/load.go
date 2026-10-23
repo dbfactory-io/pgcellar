@@ -305,6 +305,7 @@ func ValidateWith(cfg *Config, allowNoAdmin bool) []string {
 	}
 
 	p = append(p, validateUpdates(cfg.Updates)...)
+	p = append(p, validateVault(cfg)...)
 
 	if cfg.Drills.Timeout <= 0 {
 		add("drills.timeout must be positive (for example \"30m\")")
@@ -317,6 +318,15 @@ func ValidateWith(cfg *Config, allowNoAdmin bool) []string {
 	}
 	if !filepath.IsAbs(cfg.Drills.BinDir) {
 		add("drills.bin_dir must be an absolute path (default %s)", DefaultPGBinDir)
+	}
+	switch cfg.Drills.EffectiveSource() {
+	case DrillSourceLocal:
+	case DrillSourceVault:
+		if !cfg.Vault.Enabled {
+			add("drills.source is vault but the vault is not enabled (vault.enabled: true)")
+		}
+	default:
+		add("drills.source %q is unknown: use local or vault", cfg.Drills.Source)
 	}
 	for _, s := range cfg.Servers {
 		if strings.TrimSpace(s.Drills.Schedule) != "" {

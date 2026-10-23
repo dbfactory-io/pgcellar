@@ -114,3 +114,30 @@ func TestOnlyUnderRefusesOtherPrograms(t *testing.T) {
 		t.Fatalf("a program outside the directory ran: %v", err)
 	}
 }
+
+func TestRunBinaryEnv(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	var entries []AuditEntry
+	r := CLIRunner{Audit: func(e AuditEntry) { entries = append(entries, e) }}
+	out, _, err := r.RunBinaryEnv(context.Background(), []string{"PGC_SECRET=s3cr3t"}, "sh", "-c", "echo $PGC_SECRET")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(out)) != "s3cr3t" {
+		t.Errorf("the program did not get its variable: %q", out)
+	}
+	if len(entries) != 1 || strings.Contains(entries[0].Command, "s3cr3t") {
+		t.Errorf("the value must never reach the audit: %+v", entries)
+	}
+
+	// Through sudo, the names (never the values) are kept with --preserve-env.
+	old := currentUser
+	currentUser = func() string { return "root" }
+	defer func() { currentUser = old }()
+	got := strings.Join(CLIRunner{User: "barman"}.argvEnv("restic", []string{"snapshots"}, []string{"A=1", "B=2"}), " ")
+	if got != "sudo --preserve-env=A,B -u barman restic snapshots" {
+		t.Errorf("argv = %q", got)
+	}
+}

@@ -272,6 +272,9 @@ func (a *App) UpdateReady(now time.Time, ignoreWindow bool) (bool, string) {
 		}
 		return false, what + " in progress (backup, restore or drill); try again when it ends"
 	}
+	if running, _, _ := a.vaultActivity(); len(running) > 0 {
+		return false, "an off-site copy is in progress; try again when it ends"
+	}
 	if w := a.Config().Updates.ParsedWindow(); !ignoreWindow && !w.Contains(now) {
 		return false, fmt.Sprintf("outside the update window %s (local time of the pgCellar server, now %s)", w, now.Format("15:04"))
 	}

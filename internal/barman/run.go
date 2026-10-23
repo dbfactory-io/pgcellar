@@ -101,6 +101,21 @@ func (r CLIRunner) argvFor(bin string, args []string) []string {
 	return append(out, args...)
 }
 
+// argvEnv is argvFor; through sudo, the names of env are kept with
+// --preserve-env (sudo clears the environment otherwise).
+func (r CLIRunner) argvEnv(bin string, args, env []string) []string {
+	argv := r.argvFor(bin, args)
+	if len(env) == 0 || argv[0] != "sudo" {
+		return argv
+	}
+	names := make([]string, 0, len(env))
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		names = append(names, name)
+	}
+	return append([]string{"sudo", "--preserve-env=" + strings.Join(names, ",")}, argv[1:]...)
+}
+
 // Run executes `barman <args...>`. stdout and stderr are returned even when
 // the command fails, so callers can still parse the JSON Barman prints before
 // exiting non-zero (barman check does that). The error is a *RunError for a
@@ -118,7 +133,15 @@ func (r CLIRunner) Run(ctx context.Context, args ...string) (stdout, stderr []by
 // needs next to Barman (psql for the server setup, pg_basebackup --version);
 // nothing else in pgCellar starts a process.
 func (r CLIRunner) RunBinary(ctx context.Context, binary string, args ...string) (stdout, stderr []byte, err error) {
-	argv := r.argvFor(binary, args)
+	return r.RunBinaryEnv(ctx, nil, binary, args...)
+}
+
+// RunBinaryEnv is RunBinary with extra environment variables ("NAME=value")
+// for the program: restic reads its S3 credentials there. The values never
+// reach the command line, the audit log nor the journal; through sudo the
+// names are passed with --preserve-env.
+func (r CLIRunner) RunBinaryEnv(ctx context.Context, env []string, binary string, args ...string) (stdout, stderr []byte, err error) {
+	argv := r.argvEnv(binary, args, env)
 	command := strings.Join(argv, " ")
 	if r.OnlyUnder != "" {
 		if err := underDir(binary, r.OnlyUnder); err != nil {
@@ -126,6 +149,9 @@ func (r CLIRunner) RunBinary(ctx context.Context, binary string, args ...string)
 		}
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb

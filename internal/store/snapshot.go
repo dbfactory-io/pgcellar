@@ -7,22 +7,23 @@ import "time"
 // below is emptied and refilled in one transaction, sessions and settings are
 // left alone.
 type Snapshot struct {
-	Runs       []Run
-	Audit      []AuditEntry
-	Drills     []Drill
-	Recoveries []Recovery
-	Alerts     []AlertSent
+	Runs        []Run
+	Audit       []AuditEntry
+	Drills      []Drill
+	Recoveries  []Recovery
+	Alerts      []AlertSent
+	VaultCopies []VaultCopy
 }
 
-// ReplaceSnapshot replaces the runs, audit lines, drills, recoveries and alert
-// journal by the rows of sn, all or nothing.
+// ReplaceSnapshot replaces the runs, audit lines, drills, recoveries, alert
+// journal and off-site copies by the rows of sn, all or nothing.
 func (s *Store) ReplaceSnapshot(sn Snapshot) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	rollback := func(err error) error { _ = tx.Rollback(); return err }
-	for _, t := range []string{"runs", "audit", "drills", "recoveries", "alerts_sent"} {
+	for _, t := range []string{"runs", "audit", "drills", "recoveries", "alerts_sent", "vault_copies"} {
 		if _, err := tx.Exec(`DELETE FROM ` + t); err != nil {
 			return rollback(err)
 		}
@@ -75,6 +76,23 @@ func (s *Store) ReplaceSnapshot(sn Snapshot) error {
 		}
 		if _, err := tx.Exec(`INSERT INTO alerts_sent (id, at, channel, kind, server, level, text, ok, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			a.ID, ts(a.At), a.Channel, a.Kind, a.Server, a.Level, a.Text, ok, a.Error); err != nil {
+			return rollback(err)
+		}
+	}
+	for _, c := range sn.VaultCopies {
+		ok := 0
+		if c.OK {
+			ok = 1
+		}
+		var fin any
+		if c.FinishedAt != nil {
+			fin = ts(*c.FinishedAt)
+		}
+		if c.Details == "" {
+			c.Details = "{}"
+		}
+		if _, err := tx.Exec(`INSERT INTO vault_copies (`+vaultCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			c.ID, c.Server, c.Trigger, c.Actor, ts(c.StartedAt), fin, ok, c.SnapshotID, c.BytesAdded, c.BytesTotal, c.FilesNew, c.DurationMs, c.Error, c.Details); err != nil {
 			return rollback(err)
 		}
 	}

@@ -72,6 +72,11 @@ type App struct {
 	// copy that is recovering (0 = 2 s).
 	DrillTools        DrillTools
 	DrillPollInterval time.Duration
+	// VaultTools names restic for the off-site copy (empty = "restic" on
+	// PATH); VaultInterval is how often the vault loop looks for work (0 =
+	// 30 s).
+	VaultTools    VaultTools
+	VaultInterval time.Duration
 	// AlertOptions lets tests aim the alert channels at local servers.
 	AlertOptions alerts.Options
 	// AlertsInterval is how often the alert loop looks at the state (0 = 30 s).
@@ -104,6 +109,7 @@ type App struct {
 	alerts  alertEngine
 	lic     licenseCache
 	upd     updatesHolder
+	vault   vaultHolder
 	runMu   sync.Mutex
 	running map[string]int64 // server -> run id of the backup in progress
 
@@ -292,6 +298,7 @@ func (a *App) closeStaleRuns() {
 			_ = a.Store.FinishRun(r.ID, -1, r.StdoutTail, "interrupted: pgCellar was restarted while this run was in progress")
 		}
 	}
+	_ = a.Store.CloseUnfinishedVaultCopies("interrupted: pgCellar was restarted while this copy was in progress", a.now())
 }
 
 func (a *App) now() time.Time { return a.Now() }
@@ -342,6 +349,13 @@ func (a *App) Start(ctx context.Context) {
 		}()
 	}
 	a.startUpdates(ctx)
+	if !a.Demo {
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			a.vaultLoop(ctx)
+		}()
+	}
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -353,6 +367,7 @@ func (a *App) Start(ctx context.Context) {
 			if time.Since(lastAuditPurge) >= 24*time.Hour {
 				a.PurgeAudit()
 				a.PurgeRecoveries()
+				a.PurgeVaultCopies()
 				lastAuditPurge = time.Now()
 			}
 			select {

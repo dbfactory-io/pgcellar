@@ -31,6 +31,7 @@ type Env struct {
 	Home      string            // barman_home of the test barman.conf
 	SSHHome   string            // home whose .ssh holds the test key pair
 	SSHLog    string            // FAKE_SSH_LOG
+	ResticLog string            // FAKE_RESTIC_LOG
 	Keys      map[string]string // role -> clear API key
 	// LicenseKey issues a licence key that the App of this environment accepts.
 	LicenseKey func(edition string, servers int, expires string) string
@@ -98,6 +99,10 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 	t.Setenv("FAKE_BARMAN_LOG", logFile)
 	psqlLog := filepath.Join(t.TempDir(), "psql-calls.log")
 	t.Setenv("FAKE_PSQL_LOG", psqlLog)
+	// The fake restic keeps its repositories here; FAKE_RESTIC_LOG lists the calls.
+	t.Setenv("FAKE_RESTIC_ROOT", t.TempDir())
+	resticLog := filepath.Join(t.TempDir(), "restic-calls.log")
+	t.Setenv("FAKE_RESTIC_LOG", resticLog)
 
 	barmanDir := filepath.Join(dir, "barman.d")
 	if err := os.MkdirAll(barmanDir, 0o750); err != nil {
@@ -201,11 +206,12 @@ func NewWith(t *testing.T, mutate func(*config.Config)) *Env {
 	a.SetupTools = barman.SetupTools{Psql: "fake-psql", Basebackup: "fake-pg_basebackup"}
 	a.DrillTools = app.DrillTools{PgCtl: "fake-pg_ctl", PgIsReady: "fake-pg_isready", PgChecksums: "fake-pg_checksums"}
 	a.DrillPollInterval = 20 * time.Millisecond
+	a.VaultTools = app.VaultTools{Restic: "fake-restic"}
 	// Same instant in every zone, shown in the process zone like time.Now().
 	a.Now = func() time.Time { return Frozen.In(time.Local) }
 	t.Cleanup(func() { _ = a.Close() })
 	a.RefreshStatuses(context.Background())
-	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, SSHHome: a.SSHHome, SSHLog: sshLog, Keys: keys, LicenseKey: issue}
+	return &Env{App: a, Dir: dir, BarmanDir: barmanDir, CallLog: logFile, PsqlLog: psqlLog, Home: home, SSHHome: a.SSHHome, SSHLog: sshLog, ResticLog: resticLog, Keys: keys, LicenseKey: issue}
 }
 
 // WaitRun waits until a run has finished and returns it.

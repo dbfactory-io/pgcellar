@@ -42,6 +42,10 @@ const (
 	KindSkipped  = "skipped"       // a scheduled run could not start
 	KindSummary  = "summary"       // the daily summary
 	KindTest     = "test"          // the "send a test message" button
+	// Off-site copy (vault).
+	KindVaultFailed    = "vault_copy_failed"    // a copy to the vault failed
+	KindVaultQuotaWarn = "vault_quota_warning"  // the vault is at 80 % of its quota
+	KindVaultQuota     = "vault_quota_exceeded" // the vault is over its quota
 )
 
 // Levels, the same words as the server states.

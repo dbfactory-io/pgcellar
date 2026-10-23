@@ -45,6 +45,12 @@ type alertState struct {
 	LastDrillID int64                   `json:"last_drill_id"`
 	Skipped     map[string]string       `json:"skipped"` // "backup:srv" -> due time announced
 	DailyDate   string                  `json:"daily_date"`
+	// Off-site copy: the last copy looked at, the servers whose run of failed
+	// copies was announced, the quota level announced and when.
+	LastVaultID  int64           `json:"last_vault_id"`
+	VaultFailing map[string]bool `json:"vault_failing,omitempty"`
+	VaultQuota   string          `json:"vault_quota,omitempty"`
+	VaultQuotaAt time.Time       `json:"vault_quota_at,omitzero"`
 }
 
 type alertEngine struct {
@@ -237,6 +243,7 @@ func (a *App) AlertsTick(ctx context.Context, now time.Time) {
 	var msgs []alerts.Message
 	msgs = append(msgs, a.alertRuns(&st)...)
 	msgs = append(msgs, a.alertSkipped(&st, cfg)...)
+	msgs = append(msgs, a.alertVault(&st, cfg, now)...)
 	if !a.CacheStale() { // a state reloaded from the database says nothing
 		states, _, _ := a.States()
 		msgs = append(msgs, a.alertLevels(&st, cfg, states, now)...)

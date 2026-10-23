@@ -32,6 +32,8 @@ type Config struct {
 	License    License    `yaml:"license" json:"license"`
 	// Updates: the check for new pgCellar releases (see updates.go).
 	Updates Updates `yaml:"updates,omitempty" json:"updates"`
+	// Vault: the off-site copy of the backups to S3 (see vault.go).
+	Vault Vault `yaml:"vault,omitempty" json:"vault"`
 	// StatusInterval is how often the cached status of every server is
 	// refreshed. Each refresh runs several Barman commands per server.
 	StatusInterval time.Duration `yaml:"status_interval,omitempty" json:"status_interval"`
@@ -129,6 +131,9 @@ type Server struct {
 	Retention Retention    `yaml:"retention" json:"retention"`
 	Drills    ServerDrills `yaml:"drills" json:"drills"`
 	Tags      []string     `yaml:"tags" json:"tags"`
+	// Vault: false keeps this server out of the off-site copy. nil = absent
+	// = copied whenever the vault is enabled.
+	Vault *bool `yaml:"vault,omitempty" json:"vault,omitempty"`
 }
 
 // Schedule is human-readable and rendered into a crontab line for `barman cron`
@@ -280,6 +285,24 @@ type Drills struct {
 	// BinDir holds one directory per PostgreSQL major version, each with a
 	// bin/ (pg_ctl, psql...). Default /usr/lib/postgresql.
 	BinDir string `yaml:"bin_dir,omitempty" json:"bin_dir"`
+	// Source is where the scheduled drills restore from: "local" (the Barman
+	// directory of this host) or "vault" (the off-site copy, fetched with
+	// restic first). Absent = local.
+	Source string `yaml:"source,omitempty" json:"source"`
+}
+
+// Drill sources.
+const (
+	DrillSourceLocal = "local"
+	DrillSourceVault = "vault"
+)
+
+// EffectiveSource resolves drills.source (absent = local).
+func (d Drills) EffectiveSource() string {
+	if s := strings.ToLower(strings.TrimSpace(d.Source)); s != "" {
+		return s
+	}
+	return DrillSourceLocal
 }
 
 // IsEnabled resolves drills.enabled (absent = true).
@@ -293,9 +316,10 @@ func (d Drills) MarshalJSON() ([]byte, error) {
 	type plain Drills
 	return json.Marshal(struct {
 		plain
-		Enabled  bool `json:"enabled"`
-		KeepLast bool `json:"keep_last"`
-	}{plain(d), d.IsEnabled(), d.KeepsLast()})
+		Enabled  bool   `json:"enabled"`
+		KeepLast bool   `json:"keep_last"`
+		Source   string `json:"source"`
+	}{plain(d), d.IsEnabled(), d.KeepsLast(), d.EffectiveSource()})
 }
 
 // ServerDrills is the drill setting of one server.

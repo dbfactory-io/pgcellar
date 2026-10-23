@@ -89,6 +89,9 @@ type ServerState struct {
 	LastDataReceivedAgeSeconds *int64    `json:"last_data_received_age_seconds,omitempty"`
 	// Drill is the state of the restore drills, filled when the state is read.
 	Drill *DrillStatus `json:"drill,omitempty"`
+	// Vault is the state of the off-site copy, filled when the state is read;
+	// absent when the vault is off.
+	Vault *VaultServerStatus `json:"vault,omitempty"`
 	// Storage is what the server takes on disk and what is left (measured at
 	// each refresh).
 	Storage *StorageInfo `json:"storage,omitempty"`

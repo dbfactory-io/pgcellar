@@ -169,6 +169,23 @@ var migrations = []string{
 		error TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX alerts_sent_at ON alerts_sent (at);`,
+	`CREATE TABLE vault_copies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		server TEXT NOT NULL,
+		cause TEXT NOT NULL DEFAULT '',
+		actor TEXT NOT NULL DEFAULT '',
+		started_at TEXT NOT NULL,
+		finished_at TEXT,
+		ok INTEGER NOT NULL DEFAULT 0,
+		snapshot_id TEXT NOT NULL DEFAULT '',
+		bytes_added INTEGER NOT NULL DEFAULT 0,
+		bytes_total INTEGER NOT NULL DEFAULT 0,
+		files_new INTEGER NOT NULL DEFAULT 0,
+		duration_ms INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT '',
+		details TEXT NOT NULL DEFAULT '{}'
+	);
+	CREATE INDEX vault_copies_server_started ON vault_copies (server, started_at);`,
 }
 
 // Migrate applies pending migrations; calling it again is harmless.

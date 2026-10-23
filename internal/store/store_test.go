@@ -332,3 +332,61 @@ func TestReplaceSnapshot(t *testing.T) {
 		t.Errorf("after TrimAudit: %d lines", len(a))
 	}
 }
+
+func TestVaultCopies(t *testing.T) {
+	s := newStore(t)
+	t0 := time.Date(2026, 10, 1, 2, 0, 0, 0, time.UTC)
+	id, err := s.StartVaultCopy("pg-main", "backup", "scheduler", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.GetVaultCopy(id)
+	if err != nil || c.FinishedAt != nil || c.Trigger != "backup" || c.Actor != "scheduler" {
+		t.Fatalf("running copy: %+v %v", c, err)
+	}
+	if err := s.FinishVaultCopy(id, VaultCopy{OK: true, SnapshotID: "abc", BytesAdded: 10, BytesTotal: 100, FilesNew: 3, DurationMs: 1500}, t0.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	id2, _ := s.StartVaultCopy("pg-main", "wal", "system", t0.Add(time.Hour))
+	_ = s.FinishVaultCopy(id2, VaultCopy{Error: "unreachable"}, t0.Add(time.Hour+time.Second))
+	id3, _ := s.StartVaultCopy("other", "manual", "alice", t0.Add(2*time.Hour))
+	if err := s.FinishVaultCopy(999, VaultCopy{}, t0); err != ErrNotFound {
+		t.Errorf("unknown id: %v", err)
+	}
+
+	list, _ := s.ListVaultCopies("pg-main", 10)
+	if len(list) != 2 || list[0].ID != id2 || list[0].OK || list[0].Error != "unreachable" || list[1].SnapshotID != "abc" || list[1].BytesTotal != 100 {
+		t.Fatalf("list: %+v", list)
+	}
+	last, _ := s.LastOKVaultCopy("pg-main")
+	if last == nil || last.ID != id {
+		t.Fatalf("last ok: %+v", last)
+	}
+	if none, _ := s.LastOKVaultCopy("other"); none != nil {
+		t.Error("no successful copy of other")
+	}
+	if err := s.CloseUnfinishedVaultCopies("interrupted", t0.Add(3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	c3, _ := s.GetVaultCopy(id3)
+	if c3.FinishedAt == nil || c3.Error != "interrupted" {
+		t.Errorf("unfinished copy: %+v", c3)
+	}
+	// Pruning keeps the newest and the newest good copy of each server.
+	n, err := s.PruneVaultCopies(t0.Add(10 * time.Hour))
+	if err != nil || n != 0 {
+		t.Errorf("prune removed %d, %v", n, err)
+	}
+	id4, _ := s.StartVaultCopy("pg-main", "wal", "system", t0.Add(4*time.Hour))
+	_ = s.FinishVaultCopy(id4, VaultCopy{OK: true}, t0.Add(4*time.Hour))
+	n, _ = s.PruneVaultCopies(t0.Add(10 * time.Hour))
+	if n != 2 {
+		t.Errorf("prune removed %d, want the two older pg-main copies", n)
+	}
+	if err := s.ReplaceSnapshot(Snapshot{VaultCopies: []VaultCopy{{ID: 7, Server: "x", Trigger: "wal", StartedAt: t0, FinishedAt: &t0, OK: true}}}); err != nil {
+		t.Fatal(err)
+	}
+	if all, _ := s.ListVaultCopies("", 0); len(all) != 1 || all[0].ID != 7 {
+		t.Errorf("snapshot: %+v", all)
+	}
+}
