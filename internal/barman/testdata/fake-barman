@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
     --format=*) format="${1#--format=}"; shift ;;
     -c|--config|--log-level) shift 2 ;;
     -q|--quiet|-d|--debug) shift ;;
-    -h|--help) echo "usage: barman [-h] [-c CONFIG] [-q] [-d] [-f {json,console}] {check,diagnose,list-servers,list-backups,show-backup,status,backup,switch-wal,cron,delete,recover} ..."; exit 0 ;;
+    -h|--help) echo "usage: barman [-h] [-c CONFIG] [-q] [-d] [-f {json,console}] {check,diagnose,list-servers,list-backups,show-backup,status,backup,switch-wal,cron,delete,recover,rebuild-xlogdb} ..."; exit 0 ;;
     -*) echo "barman: error: unrecognized arguments: $1" >&2; exit 2 ;;
     *) break ;;
   esac
@@ -181,6 +181,11 @@ case "$cmd" in
     echo "Starting local restore for server $1 using backup $id"
     echo "Destination directory: $dest"
     echo "Your PostgreSQL server has been successfully prepared for recovery!"
+    ;;
+  rebuild-xlogdb)
+    need_server "${1:-}"
+    echo "Rebuilding xlogdb for server $1"
+    echo "Done rebuilding xlogdb for server $1 (history: 0, backup_labels: 0, wal_file: 7)"
     ;;
   cron)
     # FAKE_BARMAN_CRON_DELAY (seconds): a slow cron, logged as "cron-done" when it ends.

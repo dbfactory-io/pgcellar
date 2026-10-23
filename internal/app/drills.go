@@ -25,6 +25,7 @@ import (
 
 // Drill steps, in order. The key is what the database and the API carry.
 const (
+	StepFetch     = "fetch"
 	StepRecover   = "recover"
 	StepVersion   = "version"
 	StepConfigure = "configure"
@@ -37,6 +38,7 @@ const (
 )
 
 var drillStepLabels = map[string]string{
+	StepFetch:     "Fetch the off-site copy (restic restore)",
 	StepRecover:   "Restore the backup (barman recover)",
 	StepVersion:   "Find the PostgreSQL version",
 	StepConfigure: "Prepare the throwaway copy",
@@ -87,6 +89,9 @@ type DrillInput struct {
 	BackupID   string `json:"backup_id"`             // default: the latest backup that is DONE
 	Target     string `json:"target"`                // latest (default) | backup_end | time
 	TargetTime string `json:"target_time,omitempty"` // with target "time"
+	// Source: local (the Barman directory of this host) or vault (the
+	// off-site copy, fetched with restic first). Empty = drills.source.
+	Source string `json:"source,omitempty"`
 }
 
 // DrillStep is one line of the report.
@@ -131,7 +136,16 @@ type DrillDetails struct {
 	DatabasesN    int             `json:"databases_count"`
 	TablesN       int             `json:"tables_count"`
 	ReportWritten bool            `json:"report_written"`
+	// Source is local or vault; with vault, the restic snapshot the backup
+	// was fetched from and what was fetched.
+	Source            string    `json:"source,omitempty"`
+	VaultSnapshot     string    `json:"vault_snapshot,omitempty"`
+	VaultSnapshotTime time.Time `json:"vault_snapshot_time,omitzero"`
+	FetchedBytes      int64     `json:"fetched_bytes,omitempty"`
 }
+
+// FromVault reports whether the drill restored the off-site copy.
+func (d DrillDetails) FromVault() bool { return d.Source == config.DrillSourceVault }
 
 // DrillView is a drill as the pages and the API show it.
 type DrillView struct {
@@ -174,7 +188,23 @@ func (a *App) StartDrill(ctx context.Context, actor, server string, in DrillInpu
 	if err := a.knownServer(ctx, server); err != nil {
 		return 0, err
 	}
+	cfg := a.Config()
 	in.BackupID = strings.TrimSpace(in.BackupID)
+	in.Source = strings.ToLower(strings.TrimSpace(in.Source))
+	if in.Source == "" {
+		in.Source = cfg.Drills.EffectiveSource()
+	}
+	fromVault := in.Source == config.DrillSourceVault
+	switch {
+	case in.Source != config.DrillSourceLocal && !fromVault:
+		return 0, &ProblemsError{Problems: []string{fmt.Sprintf("Source %q is unknown: use local or vault.", in.Source)}}
+	case fromVault && !cfg.Vault.Enabled:
+		return 0, &ProblemsError{Problems: []string{"A drill from the off-site copy needs the vault: " + ErrVaultOff.Error() + "."}}
+	case fromVault && !cfg.VaultFor(*vaultCfgOf(cfg, server)):
+		return 0, &ProblemsError{Problems: []string{server + " is not copied to the vault (vault: false), so there is no off-site copy to restore."}}
+	case fromVault && in.BackupID != "" && !barman.BackupIDPattern.MatchString(in.BackupID):
+		return 0, &ProblemsError{Problems: []string{fmt.Sprintf("%q is not a backup id.", in.BackupID)}}
+	}
 	in.Target = strings.ToLower(strings.TrimSpace(in.Target))
 	if in.Target == "" {
 		in.Target = TargetLatest
@@ -197,7 +227,7 @@ func (a *App) StartDrill(ctx context.Context, actor, server string, in DrillInpu
 	default:
 		problems = append(problems, fmt.Sprintf("Target %q is unknown: use latest, backup_end or time.", in.Target))
 	}
-	if len(problems) == 0 {
+	if len(problems) == 0 && !fromVault { // the off-site copy is checked once fetched
 		st, ok := a.State(server)
 		if !ok {
 			return 0, ErrRefreshPending
@@ -231,28 +261,39 @@ func (a *App) StartDrill(ctx context.Context, actor, server string, in DrillInpu
 		return 0, &ProblemsError{Problems: problems}
 	}
 
+	// restic works on the repository of the server: never during its copy.
+	if fromVault && !a.vaultReserve(server, "drill") {
+		return 0, &ConflictError{Msg: fmt.Sprintf("An off-site copy of %s is running: the drill from the vault starts when it ends.", server), Retry: true}
+	}
+	release := func() {
+		if fromVault {
+			a.vaultRelease(server)
+		}
+	}
 	key := drillRunKey + server
 	a.runMu.Lock()
 	for k, id := range a.running {
 		if strings.HasPrefix(k, drillRunKey) {
 			a.runMu.Unlock()
+			release()
 			return id, &ConflictError{Msg: fmt.Sprintf("A restore drill is already running (run #%d): drills run one at a time.", id), Retry: true}
 		}
 	}
 	if id, busy := a.running[server]; busy {
 		a.runMu.Unlock()
+		release()
 		return id, &ConflictError{Msg: fmt.Sprintf("A backup of %s is running (run #%d): a drill never runs at the same time.", server, id), Retry: true}
 	}
 	id, err := a.Store.StartRun(server, store.KindDrill, actor)
 	if err != nil {
 		a.runMu.Unlock()
+		release()
 		return 0, err
 	}
 	a.running[key] = id
 	a.runMu.Unlock()
-	_ = a.Store.AddAudit(actor, "drill.start", server+"/"+in.BackupID, fmt.Sprintf("run #%d target=%s %s", id, in.Target, targetTime))
+	_ = a.Store.AddAudit(actor, "drill.start", server+"/"+in.BackupID, fmt.Sprintf("run #%d target=%s source=%s %s", id, in.Target, in.Source, targetTime))
 
-	cfg := a.Config()
 	a.jobs.Add(1)
 	go func() {
 		defer a.jobs.Done()
@@ -260,6 +301,7 @@ func (a *App) StartDrill(ctx context.Context, actor, server string, in DrillInpu
 			a.runMu.Lock()
 			delete(a.running, key)
 			a.runMu.Unlock()
+			release()
 		}()
 		a.runDrill(id, actor, server, in, opts, cfg)
 	}()
@@ -292,6 +334,7 @@ type drillRun struct {
 	extraDirs        []string
 	failedKey        string
 	inFinish         bool
+	barmanConf       string // with source vault: the configuration that reads the fetched copy
 }
 
 func (r *drillRun) logf(format string, args ...any) {
@@ -370,10 +413,10 @@ func (a *App) runDrill(id int64, actor, server string, in DrillInput, opts barma
 	ctx, cancel := context.WithTimeout(barman.WithActor(context.Background(), actor), cfg.Drills.Timeout)
 	defer cancel()
 	r.ctx = ctx
-	r.det.Target, r.det.TargetTime, r.det.Actor = in.Target, opts.TargetTime, actor
+	r.det.Target, r.det.TargetTime, r.det.Actor, r.det.Source = in.Target, opts.TargetTime, actor, in.Source
 	r.det.VerifyTables = cfg.Drills.VerifyTables
-	r.logf("Restore drill of %s, backup %s, target %s%s (run #%d, started by %s)", server, in.BackupID, in.Target,
-		map[bool]string{true: " " + opts.TargetTime}[opts.TargetTime != ""], id, actor)
+	r.logf("Restore drill of %s, backup %s, target %s%s, from %s (run #%d, started by %s)", server, firstNonEmpty(in.BackupID, "(latest in the copy)"), in.Target,
+		map[bool]string{true: " " + opts.TargetTime}[opts.TargetTime != ""], map[bool]string{true: "the off-site copy", false: "this host"}[r.det.FromVault()], id, actor)
 
 	failed := r.execute()
 
@@ -404,6 +447,14 @@ func (r *drillRun) execute() (failed string) {
 	a, cfg := r.a, r.cfg
 	fail := func(key string) string { return key }
 
+	// a0. fetch the off-site copy
+	r.root = cfg.Recoveries.Dir
+	if r.det.FromVault() {
+		if !r.step(StepFetch, r.fetchFromVault) {
+			return fail(StepFetch)
+		}
+	}
+
 	// a. restore
 	if !r.step(StepRecover, func() (string, error) {
 		r.root = cfg.Recoveries.Dir
@@ -416,7 +467,11 @@ func (r *drillRun) execute() (failed string) {
 			return "", err
 		}
 		r.det.DataDir = dest
-		eng := barman.NewEngine(&journalRunner{r: r, inner: a.Runner})
+		inner := a.Runner
+		if r.barmanConf != "" {
+			inner = configRunner{inner: a.Runner, conf: r.barmanConf}
+		}
+		eng := barman.NewEngine(&journalRunner{r: r, inner: inner})
 		if _, err := eng.Recover(r.ctx, r.server, r.in.BackupID, dest, r.opts); err != nil {
 			return "", err
 		}

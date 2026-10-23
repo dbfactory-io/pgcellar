@@ -285,13 +285,14 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"backup_id":   m{"type": "string", "pattern": "^[0-9]{8}T[0-9]{6}$", "description": "Default: the latest backup that is DONE"},
 					"target":      m{"type": "string", "enum": []string{"latest", "backup_end", "time"}, "default": "latest"},
 					"target_time": m{"type": "string", "description": "With target=time"},
+					"source":      m{"type": "string", "enum": []string{"local", "vault"}, "description": "local = the Barman directory of this host; vault = the off-site copy, fetched with restic first (the backup must be in the latest snapshot). Default: drills.source"},
 				}},
 				"Drill": m{"type": "object", "properties": m{
 					"id": m{"type": "integer"}, "server": m{"type": "string"}, "backup_id": m{"type": "string"},
 					"started_at": m{"type": "string", "format": "date-time"}, "finished_at": m{"type": "string", "format": "date-time"},
-					"ok": m{"type": "boolean"}, "step_failed": m{"type": "string", "enum": []string{"recover", "version", "configure", "start", "recovery", "checks", "stop", "checksums", "cleanup"}},
+					"ok": m{"type": "boolean"}, "step_failed": m{"type": "string", "enum": []string{"fetch", "recover", "version", "configure", "start", "recovery", "checks", "stop", "checksums", "cleanup"}},
 					"run_id": m{"type": "integer"}, "has_report": m{"type": "boolean"},
-					"details": m{"type": "object", "description": "summary (the sentence of the report), steps [{key,label,status,millis,note}], databases [{name,size_bytes,tables,rows}], pg_version, lsn, checksums, size_bytes, duration_ms, error, log_tail, fingerprint (SHA-256 of the report content), data_dir (while the restored copy is kept)"},
+					"details": m{"type": "object", "description": "summary (the sentence of the report), steps [{key,label,status,millis,note}], databases [{name,size_bytes,tables,rows}], pg_version, lsn, checksums, size_bytes, duration_ms, error, log_tail, fingerprint (SHA-256 of the report content), data_dir (while the restored copy is kept), source (local or vault), vault_snapshot and vault_snapshot_time (drill from the off-site copy), fetched_bytes"},
 				}},
 				"VaultInput": m{"type": "object", "properties": m{
 					"enabled": m{"type": "boolean"}, "endpoint": m{"type": "string", "example": "https://s3.gra.io.cloud.ovh.net"}, "region": m{"type": "string", "example": "gra"},

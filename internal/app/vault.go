@@ -281,15 +281,16 @@ func resticGlobal(cfg *config.Config, server string) []string {
 
 // resticCall runs restic commands on one repository and keeps a journal.
 type resticCall struct {
-	a       *App
-	cfg     *config.Config
-	server  string
-	env     []string
-	journal *strings.Builder
+	a         *App
+	cfg       *config.Config
+	server    string
+	env       []string
+	journal   *strings.Builder
+	unlimited bool // the journal of a drill has no size limit of its own
 }
 
 func (c *resticCall) logf(format string, args ...any) {
-	if c.journal != nil && c.journal.Len() < journalMax {
+	if c.journal != nil && (c.unlimited || c.journal.Len() < journalMax) {
 		fmt.Fprintf(c.journal, "%s  %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
 	}
 }

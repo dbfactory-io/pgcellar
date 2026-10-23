@@ -761,7 +761,8 @@ func (s *Server) drillList(u *userCtx, name string) drillListData {
 }
 
 func (s *Server) serverDrill(w http.ResponseWriter, r *http.Request, u *userCtx) {
-	id, err := s.app.StartDrill(r.Context(), u.Name, r.PathValue("name"), app.DrillInput{})
+	_ = r.ParseForm()
+	id, err := s.app.StartDrill(r.Context(), u.Name, r.PathValue("name"), app.DrillInput{Source: r.PostForm.Get("source")})
 	if err != nil {
 		s.fail(w, r, u, err)
 		return

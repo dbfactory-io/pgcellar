@@ -237,6 +237,13 @@ func (e *CLIEngine) SwitchWAL(ctx context.Context, server string) error {
 	return e.runPlain(ctx, "switch-wal", "--force", "--archive", server)
 }
 
+// RebuildXlogDB runs `barman rebuild-xlogdb <server>`: the WAL catalogue is
+// written again from the WAL files present (used on a copy of a server's
+// directory, whose catalogue may lag behind its files).
+func (e *CLIEngine) RebuildXlogDB(ctx context.Context, server string) (string, error) {
+	return e.runText(ctx, "rebuild-xlogdb", server)
+}
+
 func (e *CLIEngine) Cron(ctx context.Context) error {
 	return e.runPlain(ctx, "cron")
 }

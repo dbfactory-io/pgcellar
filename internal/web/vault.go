@@ -107,6 +107,8 @@ var vaultMessages = map[string]string{
 	"form.vault":            "Copy this server to the Vault",
 	"form.vault_h":          "After each backup and every few minutes for the WAL files, encrypted before it leaves.",
 	"status.vault_none_yet": "no copy yet",
+	"btn.drill_vault":       "Drill from the off-site copy",
+	"drill.from_vault":      "restored from the off-site copy",
 }
 
 func init() {

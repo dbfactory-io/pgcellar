@@ -55,8 +55,12 @@ func targetText(d DrillDetails) string {
 func drillSummary(server, backup string, at time.Time, ok bool, failedKey string, d DrillDetails) string {
 	when := at.Format("2 Jan 2006") + " at " + at.Format("15:04")
 	if ok {
-		s := fmt.Sprintf("On %s the backup %s of %s was restored and started successfully in %s; %s, %s.",
-			when, backup, server, fmtMillis(d.DurationMs), plural(d.DatabasesN, "database"), plural(d.TablesN, "table"))
+		from := ""
+		if d.FromVault() {
+			from = " from the off-site copy"
+		}
+		s := fmt.Sprintf("On %s the backup %s of %s was restored%s and started successfully in %s; %s, %s.",
+			when, backup, server, from, fmtMillis(d.DurationMs), plural(d.DatabasesN, "database"), plural(d.TablesN, "table"))
 		if d.Checksums == "verified" {
 			s += " Data checksums were verified."
 		}
@@ -66,7 +70,14 @@ func drillSummary(server, backup string, at time.Time, ok bool, failedKey string
 	if failedKey == "" {
 		what = "an unknown step"
 	}
-	s := fmt.Sprintf("On %s the restore drill of backup %s of %s FAILED at the step \"%s\" after %s.", when, backup, server, what, fmtMillis(d.DurationMs))
+	if backup == "" {
+		backup = "(not chosen yet)"
+	}
+	from := ""
+	if d.FromVault() {
+		from = " from the off-site copy"
+	}
+	s := fmt.Sprintf("On %s the restore drill%s of backup %s of %s FAILED at the step \"%s\" after %s.", when, from, backup, server, what, fmtMillis(d.DurationMs))
 	if d.Error != "" {
 		s += " " + d.Error
 	}
@@ -122,7 +133,8 @@ func DrillReportPDF(server, backupID string, startAt time.Time, rec store.Drill,
 	doc.Heading("The drill")
 	rows := [][2]string{
 		{"Server", server},
-		{"Source backup", backupID},
+		{"Source backup", firstNonEmpty(backupID, "-")},
+		{"Restored from", restoredFrom(d)},
 		{"Recovery target", targetText(d)},
 		{"Date", startAt.Format("Monday 2 January 2006, 15:04 MST")},
 		{"Duration", fmtMillis(d.DurationMs)},
@@ -181,12 +193,31 @@ func DrillReportPDF(server, backupID string, startAt time.Time, rec store.Drill,
 		}
 	}
 	doc.Space(8)
+	if d.FromVault() {
+		doc.Paragraph("The backup was restored from the off-site copy: fetched from the S3 bucket with restic, decrypted on this host, then restored by Barman from that copy alone.", 8)
+		doc.Space(4)
+	}
 	doc.Paragraph("This report records one restore of a real backup into a throwaway PostgreSQL server of the same major version. The copy was started on a private port, reachable from this host only, and removed or kept as the configuration says. It shows that the backup can be restored and that the result starts; it does not compare the data with the source.", 8)
 	pdf, fp := doc.Bytes()
 	if _, err := report.Check(pdf); err != nil {
 		return nil, "", fmt.Errorf("the generated PDF is damaged: %w", err)
 	}
 	return pdf, fp, nil
+}
+
+// restoredFrom says where the backup came from, for the report.
+func restoredFrom(d DrillDetails) string {
+	if !d.FromVault() {
+		return "this host (the Barman directory)"
+	}
+	s := "the off-site copy (vault)"
+	if d.VaultSnapshot != "" {
+		s += ", restic snapshot " + d.VaultSnapshot
+	}
+	if !d.VaultSnapshotTime.IsZero() {
+		s += " of " + d.VaultSnapshotTime.Local().Format("2006-01-02 15:04")
+	}
+	return s
 }
 
 func (a *App) writeDrillReport(r *drillRun, rec store.Drill) (string, string, error) {
@@ -270,6 +301,8 @@ func (a *App) purgeOrphanDrillCopies() {
 	servers, _ := filepath.Glob(filepath.Join(root, "*"))
 	for _, sdir := range servers {
 		dirs, _ := filepath.Glob(filepath.Join(sdir, "drill-*"))
+		fetched, _ := filepath.Glob(filepath.Join(sdir, "vault-*")) // copies fetched from the vault by a drill
+		dirs = append(dirs, fetched...)
 		for _, d := range dirs {
 			fi, err := os.Lstat(d)
 			if err != nil || !fi.IsDir() || kept[d] || time.Since(fi.ModTime()) < 24*time.Hour {

@@ -249,7 +249,7 @@
 {{range .Drills}}
 <li class="row cols">
   <div class="id">{{if .OK}}<span class="pill ok">verified</span>{{else}}<span class="pill bad">failed</span>{{end}}</div>
-  <div class="metas"><div class="meta">{{when .StartedAt}}</div><div class="meta"><code>{{.BackupID}}</code></div>
+  <div class="metas"><div class="meta">{{when .StartedAt}}</div><div class="meta"><code>{{.BackupID}}</code>{{if .Details.FromVault}} <span title="{{t "drill.from_vault"}}" aria-label="{{t "drill.from_vault"}}">🔐</span>{{end}}</div>
   <div class="meta num">{{if .OK}}{{.Details.DatabasesN}} db, {{.Details.TablesN}} tables{{else}}at "{{.Details.Steps | failedstep}}"{{end}}</div></div>
   <div class="act">{{if and .HasReport $.CanOperate}}<a class="btn alt" href="/drills/{{.ID}}/report">{{t "btn.report"}}</a>{{end}}</div>
   {{if .Details.Error}}<div class="msg meta">{{.Details.Error}}</div>{{end}}

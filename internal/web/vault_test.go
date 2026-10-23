@@ -78,8 +78,8 @@ func TestVaultPages(t *testing.T) {
 
 	// An operator copies now.
 	op, opCSRF := f.login(t, "operator")
-	if page := f.get("/servers/pg-main", op).Body.String(); !strings.Contains(page, "/servers/pg-main/vault-copy") {
-		t.Error("an operator gets the Copy now button")
+	if page := f.get("/servers/pg-main", op).Body.String(); !strings.Contains(page, "/servers/pg-main/vault-copy") || !strings.Contains(page, "Drill from the off-site copy") || !strings.Contains(page, `hx-vals='{"source": "vault"}'`) {
+		t.Error("an operator gets the Copy now and the drill from the vault buttons")
 	}
 	rec = f.post("/servers/pg-main/vault-copy", op, url.Values{"csrf": {opCSRF}}, "HX-Request", "true", "X-CSRF-Token", opCSRF)
 	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), "Copy of pg-main queued (position 1)") {
