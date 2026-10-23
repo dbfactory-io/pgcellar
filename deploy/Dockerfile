@@ -42,7 +42,7 @@ RUN apt-get update \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
       barman barman-cli postgresql-client-18 rsync openssh-client openssh-server \
-      ca-certificates git tzdata postgresql-common locales \
+      ca-certificates git tzdata postgresql-common locales tini \
 # Server binaries for the restore drills, nothing else: no cluster is created
 # (create_main_cluster = false), no service is started, and whatever a postinst
 # left behind is removed. Binaries end up in /usr/lib/postgresql/<major>/bin.
@@ -73,5 +73,9 @@ EXPOSE 8080 2222
 USER barman
 WORKDIR /var/lib/barman
 
-ENTRYPOINT ["/usr/local/bin/pgcellar"]
+# tini is PID 1: Barman starts helpers (pg_receivewal through barman cron, its
+# own sub-processes) that outlive their parent and are re-parented to PID 1.
+# pgcellar does not reap them; without an init they stay as zombies until the
+# container hits its pids limit and nothing can start any more.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/pgcellar"]
 CMD ["serve", "--config", "/etc/pgcellar/pgcellar.yaml"]

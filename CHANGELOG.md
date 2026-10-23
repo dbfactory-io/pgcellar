@@ -4,6 +4,12 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-23
+
+### Fixed
+
+- The Docker image runs pgCellar under `tini`. Processes started by Barman and left behind by their parent were re-parented to pgCellar, which did not reap them: about 1 300 zombies a day, until the container reached its pids limit after a few days and no backup could start. Upgrade, or add `init: true` to the `pgcellar` service of an older compose file.
+
 ## [0.2.0] - 2026-10-23
 
 ### Added
