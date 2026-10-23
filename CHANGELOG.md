@@ -4,6 +4,8 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-23
+
 ### Added
 
 - Releases are built by GitHub Actions from a `v*` tag: binaries for linux amd64, linux arm64 and macOS arm64 with `checksums.txt`, the multi-arch image `ghcr.io/dbfactory-io/pgcellar:<version>` (linux/amd64, linux/arm64), and a `manifest.json` that update checks read. The release notes come from this file (`make release-notes`). Manual, chapter 16.
