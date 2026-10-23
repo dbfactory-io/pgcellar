@@ -15,7 +15,7 @@
 <header class="dtop">
   <a class="dlogo" href="/" aria-label="pgCellar"><svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" class="el-s" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" class="el-s" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" class="el-f"/><path d="M50 18c5 3 7 9 5 15" fill="none" class="el-s" stroke-width="2.2" stroke-linecap="round"/></svg><b>pg<span>Cellar</span></b></a>
   <a class="dname" href="/docs/">Documentation</a>
-  <span class="dver">version 0.1.0</span>
+  <span class="dver">version 0.2.1</span>
   <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
 </header>
 <div class="dlayout">
@@ -37,12 +37,13 @@
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
   <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
+  <li><a href="/docs/off-site-copy-vault/"><span class="n">17</span>Off-site copy (Vault)</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 7 of 16</p>
+<p class="kicker">Chapter 7 of 17</p>
 <nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#what-a-drill-does-step-by-step">What a drill does, step by step</a></li><li class="l2"><a href="#switching-drills-on">Switching drills on</a></li><li class="l2"><a href="#what-the-image-must-contain">What the image must contain</a></li><li class="l3"><a href="#locales">Locales</a></li><li class="l2"><a href="#disk-and-memory">Disk and memory</a></li><li class="l2"><a href="#the-pdf-report">The PDF report</a></li><li class="l3"><a href="#the-fingerprint">The fingerprint</a></li><li class="l2"><a href="#reading-a-failed-drill">Reading a failed drill</a></li></ul></nav>
 <article>
 <h1 id="restore-drills-and-reports">Restore drills and reports</h1>
@@ -99,6 +100,7 @@
 <p>Why checksums come after the stop: <code>pg_checksums --check</code> refuses a cluster that was not shut down cleanly, and the control file of a restored base backup says &quot;in production&quot; until PostgreSQL has stopped once.</p>
 <p><strong>What the throwaway copy is configured with.</strong> It listens on <code>127.0.0.1</code> only, with a trust rule on its own socket and TCP rejected. It runs with <code>archive_mode = off</code>, <code>max_connections = 10</code>, <code>shared_buffers = 64MB</code>, <code>max_wal_senders = 0</code>, <code>autovacuum = off</code>, <code>logging_collector = off</code>, <code>ssl = off</code>, <code>jit = off</code>, <code>hot_standby = off</code>, an empty <code>shared_preload_libraries</code> (so an extension library missing from the image cannot stop the check), and the locale messages set to <code>C</code>. None of this changes your data; it only lets a small copy start anywhere.</p>
 <p><strong>What the check proves, and what it does not.</strong> It proves that the backup restores, the WAL replays, PostgreSQL starts on it, the databases are there, their tables can be counted, and, when checksums are on, no page is damaged. With <code>drills.verify_tables: true</code> it also runs <code>SELECT count(*)</code> on every table (slow on large databases) and sums the rows per database. It does not compare the data with the source, and it does not test your application. A source that needs an extension library to replay WAL is started without it and is not tested for it. Configuration files outside the data directory (Debian's <code>/etc/postgresql</code>) are not handled.</p>
+<p>A drill can also restore from the off-site copy instead of this host (<code>drills.source: vault</code>, or the button <strong>Drill from the off-site copy</strong>): it fetches the backup from the bucket with restic first, and the report says so. See chapter 17.</p>
 <p>When a step fails, the report keeps the earlier steps, the error text and the last 25 lines of the PostgreSQL log of the copy. pgCellar still stops the copy and removes the directory.</p>
 <h2 id="switching-drills-on">Switching drills on</h2>
 <p>Drills are scheduled per server, in <code>pgcellar.yaml</code>:</p>

@@ -15,7 +15,7 @@
 <header class="dtop">
   <a class="dlogo" href="/" aria-label="pgCellar"><svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" class="el-s" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" class="el-s" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" class="el-f"/><path d="M50 18c5 3 7 9 5 15" fill="none" class="el-s" stroke-width="2.2" stroke-linecap="round"/></svg><b>pg<span>Cellar</span></b></a>
   <a class="dname" href="/docs/">Documentation</a>
-  <span class="dver">version 0.1.0</span>
+  <span class="dver">version 0.2.1</span>
   <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
 </header>
 <div class="dlayout">
@@ -37,13 +37,14 @@
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
   <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
+  <li><a href="/docs/off-site-copy-vault/"><span class="n">17</span>Off-site copy (Vault)</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 10 of 16</p>
-<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#the-rule-an-absent-key-is-the-default">The rule: an absent key is the default</a></li><li class="l2"><a href="#top-level">Top level</a></li><li class="l2"><a href="#barman">barman</a></li><li class="l2"><a href="#scheduler">scheduler</a></li><li class="l2"><a href="#servers">servers</a></li><li class="l2"><a href="#alerts">alerts</a></li><li class="l2"><a href="#license">license</a></li><li class="l2"><a href="#users-and-api-keys">users and api_keys</a></li><li class="l2"><a href="#recoveries">recoveries</a></li><li class="l2"><a href="#drills">drills</a></li><li class="l2"><a href="#updates">updates</a></li><li class="l2"><a href="#environment-variables">Environment variables</a></li><li class="l2"><a href="#validation-errors">Validation errors</a></li></ul></nav>
+<p class="kicker">Chapter 10 of 17</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#the-rule-an-absent-key-is-the-default">The rule: an absent key is the default</a></li><li class="l2"><a href="#top-level">Top level</a></li><li class="l2"><a href="#barman">barman</a></li><li class="l2"><a href="#scheduler">scheduler</a></li><li class="l2"><a href="#servers">servers</a></li><li class="l2"><a href="#alerts">alerts</a></li><li class="l2"><a href="#license">license</a></li><li class="l2"><a href="#users-and-api-keys">users and api_keys</a></li><li class="l2"><a href="#recoveries">recoveries</a></li><li class="l2"><a href="#drills">drills</a></li><li class="l2"><a href="#vault">vault</a></li><li class="l2"><a href="#updates">updates</a></li><li class="l2"><a href="#environment-variables">Environment variables</a></li><li class="l2"><a href="#validation-errors">Validation errors</a></li></ul></nav>
 <article>
 <h1 id="configuration-reference">Configuration reference</h1>
 <p>Everything that belongs to pgCellar lives in one file, <code>pgcellar.yaml</code>. Barman's own settings stay in <code>/etc/barman.conf</code> and <code>/etc/barman.d/*.conf</code>. Secrets never go in this file: use the <code>*_env</code> keys, which name an environment variable, and hashes.</p>
@@ -238,6 +239,11 @@
 <td><code>tags</code></td>
 <td>empty</td>
 <td>Free labels for your own use.</td>
+</tr>
+<tr>
+<td><code>vault</code></td>
+<td>copied</td>
+<td><code>false</code> keeps this server out of the off-site copy (chapter 17). Only <code>false</code> is written.</td>
 </tr>
 </tbody>
 </table>
@@ -437,6 +443,84 @@ api_keys:
 <td><code>/usr/lib/postgresql</code></td>
 <td>Holds one directory per PostgreSQL major version, each with a <code>bin/</code>. Absolute path.</td>
 </tr>
+<tr>
+<td><code>source</code></td>
+<td><code>local</code></td>
+<td>Where the scheduled drills restore from: <code>local</code> (the Barman directory of this host) or <code>vault</code> (the off-site copy, fetched with restic first; needs the vault).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="vault"><code>vault</code></h2>
+<p>The off-site copy to S3 (chapter 17). An absent block, or <code>enabled: false</code>, copies nothing; a disabled block may be incomplete.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>false</code></td>
+<td>Copy the backups to the bucket.</td>
+</tr>
+<tr>
+<td><code>endpoint</code></td>
+<td>required when enabled</td>
+<td>S3 endpoint with <code>https://</code>, no path. OVHcloud: <code>https://s3.&lt;region&gt;.io.cloud.ovh.net</code>.</td>
+</tr>
+<tr>
+<td><code>region</code></td>
+<td><code>us-east-1</code></td>
+<td>S3 region (<code>gra</code> for OVHcloud Gravelines).</td>
+</tr>
+<tr>
+<td><code>bucket</code></td>
+<td>required when enabled</td>
+<td>Must exist; pgCellar never creates it.</td>
+</tr>
+<tr>
+<td><code>prefix</code></td>
+<td><code>pgcellar</code></td>
+<td>Folder in the bucket; each server gets <code>&lt;prefix&gt;/&lt;server&gt;</code>.</td>
+</tr>
+<tr>
+<td><code>access_key</code></td>
+<td>required when enabled</td>
+<td>Access key id of the S3 user.</td>
+</tr>
+<tr>
+<td><code>secret_key_file</code></td>
+<td><code>&lt;data_dir&gt;/vault/s3-secret-key</code></td>
+<td>File holding the S3 secret key only (0600). The Vault page writes it. Absolute path.</td>
+</tr>
+<tr>
+<td><code>password_file</code></td>
+<td><code>&lt;data_dir&gt;/vault/restic-password</code></td>
+<td>The restic password, generated on first use and never replaced. Download it as the recovery key. Absolute path.</td>
+</tr>
+<tr>
+<td><code>quota</code></td>
+<td>none</td>
+<td>Storage bought, <code>500GB</code>, <code>2TB</code> (powers of 1000) or <code>100GiB</code>. Alerts at 80 % and 100 %; never stops a copy.</td>
+</tr>
+<tr>
+<td><code>wal_interval</code></td>
+<td><code>15m</code></td>
+<td>How often the WAL files are copied. <code>0</code> = only after each backup. At least <code>1m</code>.</td>
+</tr>
+<tr>
+<td><code>max_age</code></td>
+<td><code>36h</code></td>
+<td>A copied server turns orange when its last good copy is older.</td>
+</tr>
+<tr>
+<td><code>keep.last</code>, <code>keep.daily</code>, <code>keep.weekly</code>, <code>keep.monthly</code></td>
+<td><code>0</code>, <code>7</code>, <code>4</code>, <code>0</code></td>
+<td>Snapshots kept by the daily <code>restic forget --prune</code>. At least one above 0.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="updates"><code>updates</code></h2>
@@ -516,7 +600,7 @@ PROBLEM  updates.source &quot;ftp://mirror&quot; must be an http:// or https:// 
 </tr>
 <tr>
 <td><code>PGCELLAR_IN_DOCKER</code></td>
-<td><code>1</code> tells pgCellar it runs in a container even without <code>/.dockerenv</code> or <code>/run/.containerenv</code>: no self-update, the Updates page shows the host updater command instead (chapter 16).</td>
+<td><code>1</code> or <code>true</code> tells pgCellar it runs in a container even without <code>/.dockerenv</code> or <code>/run/.containerenv</code>; <code>0</code> (or any other value) tells it the opposite even if one of those files exists. In a container: no self-update, the Updates page shows the host updater command instead (chapter 16).</td>
 </tr>
 </tbody>
 </table>

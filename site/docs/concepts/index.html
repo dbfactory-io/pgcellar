@@ -15,7 +15,7 @@
 <header class="dtop">
   <a class="dlogo" href="/" aria-label="pgCellar"><svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" class="el-s" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" class="el-s" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" class="el-f"/><path d="M50 18c5 3 7 9 5 15" fill="none" class="el-s" stroke-width="2.2" stroke-linecap="round"/></svg><b>pg<span>Cellar</span></b></a>
   <a class="dname" href="/docs/">Documentation</a>
-  <span class="dver">version 0.1.0</span>
+  <span class="dver">version 0.2.1</span>
   <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
 </header>
 <div class="dlayout">
@@ -37,12 +37,13 @@
   <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
   <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
   <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
+  <li><a href="/docs/off-site-copy-vault/"><span class="n">17</span>Off-site copy (Vault)</a></li>
   
   </ol>
 </nav>
 <main class="dmain">
 
-<p class="kicker">Chapter 2 of 16</p>
+<p class="kicker">Chapter 2 of 17</p>
 <nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#barman-does-the-backups-pgcellar-drives-it">Barman does the backups, pgCellar drives it</a></li><li class="l2"><a href="#a-physical-backup-is-not-a-dump">A physical backup is not a dump</a></li><li class="l2"><a href="#two-ways-for-the-wal-to-reach-barman">Two ways for the WAL to reach Barman</a></li><li class="l2"><a href="#slots-and-why-they-are-both-a-gift-and-a-risk">Slots, and why they are both a gift and a risk</a></li><li class="l2"><a href="#point-in-time-recovery">Point-in-time recovery</a></li><li class="l2"><a href="#what-pgcellar-adds-and-what-it-never-touches">What pgCellar adds, and what it never touches</a></li><li class="l2"><a href="#files-are-the-truth">Files are the truth</a></li><li class="l2"><a href="#vocabulary">Vocabulary</a></li></ul></nav>
 <article>
 <h1 id="concepts">Concepts</h1>

@@ -26,6 +26,8 @@ Why checksums come after the stop: `pg_checksums --check` refuses a cluster that
 
 **What the check proves, and what it does not.** It proves that the backup restores, the WAL replays, PostgreSQL starts on it, the databases are there, their tables can be counted, and, when checksums are on, no page is damaged. With `drills.verify_tables: true` it also runs `SELECT count(*)` on every table (slow on large databases) and sums the rows per database. It does not compare the data with the source, and it does not test your application. A source that needs an extension library to replay WAL is started without it and is not tested for it. Configuration files outside the data directory (Debian's `/etc/postgresql`) are not handled.
 
+A drill can also restore from the off-site copy instead of this host (`drills.source: vault`, or the button **Drill from the off-site copy**): it fetches the backup from the bucket with restic first, and the report says so. See chapter 17.
+
 When a step fails, the report keeps the earlier steps, the error text and the last 25 lines of the PostgreSQL log of the copy. pgCellar still stops the copy and removes the directory.
 
 ## Switching drills on

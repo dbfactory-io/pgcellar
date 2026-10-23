@@ -19,6 +19,7 @@ I wanted the missing layer: one screen that tells the truth, and a restore that 
 - **Backups**: list, run now, schedules run by pgCellar itself (no host cron), retention, delete a backup.
 - **Point-in-time recovery**: pick a date and a time on a timeline, get the restore done into a directory (and a `tar.gz` to download).
 - **Restore drills**: every week, restore the latest backup, start the copy with the PostgreSQL binaries of its version, look inside, stop it, and write a dated PDF report you can hand to an auditor.
+- **Off-site copy (Vault)**: after each backup, and every 15 minutes for the WAL, an encrypted copy of every server goes to an S3 bucket (OVHcloud or any S3-compatible storage) with restic. Object Lock shown, quota with warnings, a recovery key to keep offline, and drills that restore from the off-site copy. Manual chapter 17.
 - **Storage**: what backups and WAL take, what is left on the disk, and a warning before it is too late.
 - **Alerts**: Telegram, mail and a signed webhook. A message when a server changes level, when a backup or a drill fails, and a daily summary if you want one.
 - **API**: JSON under `/api/v1`, with API keys. Whatever the interface does, the API does.
@@ -127,6 +128,9 @@ GET    /api/v1/servers/{name}/timeline
 POST   /api/v1/servers/{name}/recoveries     restore to a directory or a point in time
 POST   /api/v1/servers/{name}/drills         run a drill now
 GET    /api/v1/drills/{id}/report            the PDF
+GET    /api/v1/vault                         the off-site copy: bucket, lock, quota, every server
+POST   /api/v1/vault/copy                    copy a server off-site now
+POST   /api/v1/vault/test                    test the bucket (admin)
 GET    /api/v1/alerts                        channels and journal (admin)
 POST   /api/v1/alerts/test                   send a test message (admin)
 GET    /api/v1/license

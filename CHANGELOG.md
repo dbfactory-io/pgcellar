@@ -4,6 +4,17 @@ All notable changes to pgCellar are written here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- Off-site copy (Vault): after each successful backup, and every `vault.wal_interval` (15 minutes) for the WAL files, the Barman directory and the `barman.d` file of each server are copied to an S3 bucket with restic, one repository per server, encrypted on the pgCellar host with a password only it holds. Copies run one at a time in the background, never during a backup, restore or drill of the same server, and never block a backup. Old snapshots are forgotten once a day (`vault.keep`, 7 daily and 4 weekly). Configured by the new `vault:` block of `pgcellar.yaml` or the new Vault page; `vault: false` on a server keeps it on this host only. Manual, chapter 17, with the OVHcloud setup.
+- Vault page: the bucket, its Object Lock rule ("Locked for 30 days (governance)" or "Not locked"), a quota gauge (versions kept by Object Lock included), every server with **Copy now**, the recent copies, **Test connection** (writes, reads back and removes a small object, reads the lock rule) and the settings form. The S3 secret key is written into `vault.secret_key_file` (0600), never into `pgcellar.yaml`.
+- Recovery key: **Download recovery key** (administrators, audited) gives the restic password and the commands to read the copies without pgCellar. Without it the copies cannot be read, by anyone.
+- Status of the off-site copy: a card on the server page, an emoji in the server list, a line per server and one for the whole vault on the Status page. A server turns orange after 3 failed copies or when no copy succeeded for `vault.max_age` (36h). Alerts `vault_copy_failed`, `vault_quota_warning` (80 %) and `vault_quota_exceeded` (100 %); the quota never stops a copy. Metrics `pgcellar_vault_last_copy_ok`, `pgcellar_vault_last_copy_age_seconds`, `pgcellar_vault_bytes`.
+- Restore drills from the off-site copy: `drills.source: vault` for the scheduled drills, the button **Drill from the off-site copy**, or `"source": "vault"` in the API. The drill fetches the latest snapshot (one backup, its parents and the WAL files), reads it with Barman through a configuration of its own, and the PDF says "restored from the off-site copy".
+- API: `GET`/`PUT /api/v1/vault`, `POST /api/v1/vault/test`, `POST /api/v1/vault/copy`, `GET /api/v1/vault/copies`, `GET /api/v1/vault/copies/{id}`, `GET /api/v1/vault/recovery-key`; `vault` in the state of every server.
+- The Docker image ships restic 0.19.1, the official binary checked against its published SHA-256.
+- The public demo shows the vault of Northwind.
+
 ## [0.2.1] - 2026-10-23
 
 ### Fixed

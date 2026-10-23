@@ -24,3 +24,4 @@ Three words you will see everywhere. A **server** is one PostgreSQL instance tha
 14. [Licensing and editions](14-licensing-and-editions.md) - FSL-1.1, what a licence blocks and what it never blocks.
 15. [CLI reference](15-cli-reference.md) - serve, check, apikey, hash-password, license, version.
 16. [Releases and updates](16-releases-and-updates.md) - How a release is built, the update check, automatic updates (binary and Docker), and updating by hand.
+17. [Off-site copy (Vault)](17-off-site-copy-vault.md) - Encrypted copy of every backup to S3 with restic, OVHcloud setup with Object Lock, recovery key, quota, drills from the off-site copy.

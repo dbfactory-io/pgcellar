@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Off-site copy (Vault) - pgCellar manual</title>
+<meta name="description" content="A backup on the same machine, or in the same room, dies with it: fire, ransomware, a deleted volume, a cloud account closed. The Vault is a second copy of every...">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://pgcellar.dbfactory.io/docs/off-site-copy-vault/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css?v=fbd435dfa8b5">
+<link rel="stylesheet" href="/docs/docs.css?v=43808e89cbb4">
+</head>
+<body class="docs">
+<header class="dtop">
+  <a class="dlogo" href="/" aria-label="pgCellar"><svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true"><path d="M48 6c9 0 16 8 16 20 0 11-6 19-15 21L38 38 34 18c3-8 8-12 14-12z"/><path d="M14 63c0-12 9-19 22-19h17c7 0 11 7 11 19z"/><circle cx="35" cy="33" r="16" class="el-s" stroke-width="2.5"/><path d="M27 42C14 49 6 45 7 31" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M1 3h12c0 8-3 12-6 12S1 11 1 3z"/><path d="M7 14v12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M3 6h8" class="el-s" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="29" r="2.4" class="el-f"/><path d="M50 18c5 3 7 9 5 15" fill="none" class="el-s" stroke-width="2.2" stroke-linecap="round"/></svg><b>pg<span>Cellar</span></b></a>
+  <a class="dname" href="/docs/">Documentation</a>
+  <span class="dver">version 0.2.1</span>
+  <nav class="dlinks"><a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a><a href="https://demo.pgcellar.dbfactory.io">Demo</a><a href="/en/">Product</a></nav>
+</header>
+<div class="dlayout">
+<nav class="dside" aria-label="Chapters">
+  <ol>
+  <li><a href="/docs/getting-started/"><span class="n">1</span>Getting started</a></li>
+  <li><a href="/docs/concepts/"><span class="n">2</span>Concepts</a></li>
+  <li><a href="/docs/preparing-postgresql/"><span class="n">3</span>Preparing a PostgreSQL server</a></li>
+  <li><a href="/docs/servers-and-wal-methods/"><span class="n">4</span>Servers and WAL methods</a></li>
+  <li><a href="/docs/backups-schedules-retention/"><span class="n">5</span>Backups, schedules and retention</a></li>
+  <li><a href="/docs/restores-and-pitr/"><span class="n">6</span>Restores and point-in-time recovery</a></li>
+  <li><a href="/docs/restore-drills-and-reports/"><span class="n">7</span>Restore drills and reports</a></li>
+  <li><a href="/docs/alerts/"><span class="n">8</span>Alerts</a></li>
+  <li><a href="/docs/users-roles-and-api/"><span class="n">9</span>Users, roles, API keys and the API</a></li>
+  <li><a href="/docs/configuration-reference/"><span class="n">10</span>Configuration reference</a></li>
+  <li><a href="/docs/operations/"><span class="n">11</span>Operations</a></li>
+  <li><a href="/docs/security-model/"><span class="n">12</span>Security model</a></li>
+  <li><a href="/docs/troubleshooting/"><span class="n">13</span>Troubleshooting</a></li>
+  <li><a href="/docs/licensing-and-editions/"><span class="n">14</span>Licensing and editions</a></li>
+  <li><a href="/docs/cli-reference/"><span class="n">15</span>CLI reference</a></li>
+  <li><a href="/docs/releases-and-updates/"><span class="n">16</span>Releases and updates</a></li>
+  <li><a href="/docs/off-site-copy-vault/" class="on" aria-current="page"><span class="n">17</span>Off-site copy (Vault)</a></li>
+  
+  </ol>
+</nav>
+<main class="dmain">
+
+<p class="kicker">Chapter 17 of 17</p>
+<nav class="dtoc" aria-label="On this page"><b>On this page</b><ul><li class="l2"><a href="#what-is-copied-and-how">What is copied, and how</a></li><li class="l2"><a href="#the-recovery-key">The recovery key</a></li><li class="l2"><a href="#setting-up-ovhcloud-object-storage">Setting up OVHcloud Object Storage</a></li><li class="l3"><a href="#why-object-lock-and-what-it-costs">Why Object Lock, and what it costs</a></li><li class="l2"><a href="#quota">Quota</a></li><li class="l2"><a href="#status-and-alerts">Status and alerts</a></li><li class="l2"><a href="#restore-drill-from-the-vault">Restore drill from the Vault</a></li><li class="l2"><a href="#settings">Settings</a></li><li class="l2"><a href="#when-something-goes-wrong">When something goes wrong</a></li></ul></nav>
+<article>
+<h1 id="off-site-copy-vault">Off-site copy (Vault)</h1>
+<p>A backup on the same machine, or in the same room, dies with it: fire, ransomware, a deleted volume, a cloud account closed. The Vault is a second copy of every backup, somewhere else, encrypted before it leaves.</p>
+<p>After each successful backup, and every 15 minutes for the WAL files, pgCellar sends the Barman directory of each server to an S3 bucket with <a href="https://restic.net">restic</a>. Any S3-compatible storage works. This chapter walks through OVHcloud Object Storage, the storage dbfactory sells in prepaid packs.</p>
+<h2 id="what-is-copied-and-how">What is copied, and how</h2>
+<ul>
+<li><strong>One restic repository per server</strong>, at <code>s3:&lt;endpoint&gt;/&lt;bucket&gt;/&lt;prefix&gt;/&lt;server&gt;</code>. Inside it, restic keeps snapshots of <code>&lt;barman_home&gt;/&lt;server&gt;</code> (base backups, WAL files, Barman's catalogue) and of the server's file in <code>barman.d</code>.</li>
+<li><strong>Encrypted on this host.</strong> restic encrypts everything with a password that pgCellar generates the first time it needs it, in <code>&lt;data_dir&gt;/vault/restic-password</code> (mode 0600). The storage provider, dbfactory included, only ever sees encrypted blocks. One password for the whole pgCellar, so one recovery key to keep, valid for the servers you add later too.</li>
+<li><strong>Deduplicated.</strong> Each copy only sends what is new. The first copy of a server sends everything; the next ones send the new backup, the new WAL files and a few KB of metadata.</li>
+<li><strong>When.</strong> Right after each successful backup (scheduled or <strong>Backup now</strong>), and every <code>vault.wal_interval</code> (15 minutes) for the WAL files. <strong>Copy now</strong> on the Vault page or the server page queues one at once.</li>
+<li><strong>One at a time.</strong> Copies run in the background, one after the other, through the same audited runner as Barman. A copy waits while a backup, a restore or a drill of the same server runs. It never blocks a backup: if the bucket is unreachable, the backups go on and the copy is tried again.</li>
+<li><strong>Retention.</strong> Once a day pgCellar runs <code>restic forget --prune</code> with <code>vault.keep</code> (7 daily and 4 weekly snapshots by default). Barman's own retention keeps applying on this host; the Vault keeps its own history.</li>
+</ul>
+<p>What is not copied: <code>pgcellar.yaml</code>, the SQLite database, the SSH keys. Keep <code>pgcellar.yaml</code> in its git repository (pushed somewhere) and the recovery key in a safe place.</p>
+<h2 id="the-recovery-key">The recovery key</h2>
+<blockquote>
+<p><strong>Lose the key, lose the copies.</strong> The copies are encrypted with the restic password of this pgCellar. Without it nobody can read them: not you, not dbfactory, not the storage provider. dbfactory cannot recover it for you.</p>
+</blockquote>
+<p>On the Vault page, an administrator clicks <strong>Download recovery key</strong> (or <code>GET /api/v1/vault/recovery-key</code>). The text file holds the password, the repositories, and the commands to read a copy without pgCellar. Every download is audited (<code>vault.key.download</code>), and the page says when it was last downloaded and by whom. Do it once, right after the first save, and keep the file offline: password manager, safe, printed copy.</p>
+<p>To give the copies to a new pgCellar (the old machine is gone), write the password, alone on one line, into <code>vault.password_file</code> (default <code>&lt;data_dir&gt;/vault/restic-password</code>, mode 0600, owned by the barman user) <strong>before the first copy</strong>, then configure the same bucket and folder. A wrong password makes every copy fail with &quot;the restic password does not open this repository&quot;: pgCellar never replaces an existing password file.</p>
+<h2 id="setting-up-ovhcloud-object-storage">Setting up OVHcloud Object Storage</h2>
+<p>The names below are those of the OVHcloud Control Panel in October 2026; check the <a href="https://docs.ovhcloud.com/en/guides/storage-and-backup/object-storage/s3-managing-object-lock.md">OVHcloud Object Storage documentation</a> if a screen moved.</p>
+<ol>
+<li>
+<p><strong>A Public Cloud project.</strong> In the Control Panel, <em>Public Cloud</em>, create a project (or use one). Object Storage is billed to it.</p>
+</li>
+<li>
+<p><strong>An S3 user.</strong> <em>Object Storage</em> &gt; <em>S3 users</em> &gt; <em>Create a user</em>. Copy its <strong>access key</strong> and <strong>secret key</strong> (the secret is shown once). Give it read and write rights on the bucket only (the <em>Read/Write</em> policy of the container is enough).</p>
+</li>
+<li>
+<p><strong>The bucket, with Object Lock.</strong> <em>Object Storage</em> &gt; <em>Create an object container</em>. Choose <strong>Standard object storage (S3 API)</strong>, the region (for example <em>Gravelines</em>, <code>gra</code>), and in the dedicated step, <strong>enable Object Lock</strong>. Object Lock can only be switched on when the bucket is created, never later; it turns versioning on by itself. Name the bucket, for example <code>acme-pgcellar</code>.</p>
+</li>
+<li>
+<p><strong>The default retention, in governance mode.</strong> In the container, <em>Object Lock</em>: mode <strong>Governance</strong>, for example 30 days. Or with the AWS CLI:</p>
+<pre><code class="language-bash">aws s3api create-bucket --bucket acme-pgcellar --object-lock-enabled-for-bucket \
+  --endpoint-url https://s3.gra.io.cloud.ovh.net --region gra
+aws s3api put-object-lock-configuration --bucket acme-pgcellar \
+  --endpoint-url https://s3.gra.io.cloud.ovh.net --region gra \
+  --object-lock-configuration '{&quot;ObjectLockEnabled&quot;:&quot;Enabled&quot;,&quot;Rule&quot;:{&quot;DefaultRetention&quot;:{&quot;Mode&quot;:&quot;GOVERNANCE&quot;,&quot;Days&quot;:30}}}'
+</code></pre>
+</li>
+<li>
+<p><strong>The endpoint</strong> is <code>https://s3.&lt;region&gt;.io.cloud.ovh.net</code>: <code>https://s3.gra.io.cloud.ovh.net</code> for Gravelines, <code>s3.sbg</code> for Strasbourg, <code>s3.rbx</code> for Roubaix, <code>s3.de</code> for Frankfurt. Use the <code>.io.cloud.ovh.net</code> endpoint, not the older <code>.perf.cloud.ovh.net</code> one.</p>
+</li>
+<li>
+<p><strong>In pgCellar</strong>, page <strong>Vault</strong> (administrators): tick <em>Copy the backups to this bucket</em>, fill in the endpoint, the region (<code>gra</code>), the bucket, the access key and the secret key, the storage you bought (<code>500GB</code>), <strong>Save</strong>, then <strong>Test connection</strong>, then <strong>Download recovery key</strong>.</p>
+</li>
+</ol>
+<p>The first copies start within a minute (the WAL pass), or after the next backup.</p>
+<h3 id="why-object-lock-and-what-it-costs">Why Object Lock, and what it costs</h3>
+<p>With a default retention, every object restic writes can neither be deleted nor overwritten before its time, not even with your keys. Someone who takes over this machine can delete the local backups and run <code>restic forget</code>, but the versions in the bucket stay readable for the retention period. Governance mode (not compliance) lets an account with the <code>s3:BypassGovernanceRetention</code> right remove them early, should you ever have to.</p>
+<p>pgCellar does not set the lock itself: it reads the rule of the bucket and shows it (&quot;Locked for 30 days (governance)&quot; or &quot;Not locked&quot;) on the Vault page, in the test result and on the Status line.</p>
+<p><strong>Deleted versions are still billed during the retention.</strong> When restic prunes, the bucket keeps the old versions until their retention ends, and the provider bills them. pgCellar counts them: the Vault page shows how much of the storage is &quot;kept by versioning or Object Lock&quot;, and the quota uses the total. A retention of 30 days with <code>keep: daily 7, weekly 4</code> keeps about a month of extra data; size the pack accordingly, or shorten the retention.</p>
+<h2 id="quota">Quota</h2>
+<p><code>vault.quota</code> is the storage you bought (<code>100GB</code>, <code>500GB</code>, <code>2TB</code>; GB and TB are powers of 1000, as storage is sold). After each copy after a backup, and every 6 hours otherwise, pgCellar lists the objects of each server's folder, older versions included, and adds them up. When the S3 user may not list versions, it counts the current objects only; when it may not list at all, it asks restic (<code>restic stats --mode raw-data</code>).</p>
+<p>The Vault page shows a gauge; the Status page shows the use in its Vault line. At <strong>80 %</strong> one alert is sent (<code>vault_quota_warning</code>), at <strong>100 %</strong> another (<code>vault_quota_exceeded</code>, repeated every <code>alerts.repeat_every</code> while it lasts). <strong>pgCellar never stops a backup nor a copy because of the quota</strong>, like it never does because of a licence: you get warned, the copies go on, and you buy a bigger pack or keep fewer snapshots.</p>
+<h2 id="status-and-alerts">Status and alerts</h2>
+<ul>
+<li><strong>Per server</strong>: a card <em>Off-site copy</em> on the server page (last copy, last good copy, what it takes in the bucket, the repository, the five latest copies, <strong>Copy now</strong>), an emoji in the server list (✅ fresh, ⚠️ last copy failed, ❌ late or failing, ⏳ no copy yet, 💤 not copied), a line on the Status page.</li>
+<li><strong>Orange</strong> when no copy succeeded for <code>vault.max_age</code> (36 hours by default), or after 3 failed copies in a row. A server that never had a copy is not orange until its first attempt is older than <code>vault.max_age</code>.</li>
+<li><strong>Alerts</strong>: <code>vault_copy_failed</code> once per run of failures: at the first failure of a copy that follows a backup or a click, at the second failure in a row of the periodic WAL pass (a network hiccup heals by itself). Late copies are announced as a level change of the server.</li>
+<li><strong>Metrics</strong>: <code>pgcellar_vault_last_copy_ok{server}</code> (1/0), <code>pgcellar_vault_last_copy_age_seconds{server}</code> (age of the last good copy), <code>pgcellar_vault_bytes{server}</code> (what the server takes in the bucket).</li>
+<li><strong>API</strong>: <code>GET /api/v1/vault</code>, <code>PUT /api/v1/vault</code>, <code>POST /api/v1/vault/test</code>, <code>POST /api/v1/vault/copy</code> (<code>{&quot;server&quot;: &quot;pg-main&quot;}</code>), <code>GET /api/v1/vault/copies</code>, <code>GET /api/v1/vault/copies/{id}</code>, <code>GET /api/v1/vault/recovery-key</code>. Details in <code>/api/v1/openapi.json</code>.</li>
+</ul>
+<p>Every restic command is in the audit log (the background WAL passes only when they fail), never the S3 secret key: restic gets it through its environment.</p>
+<h2 id="restore-drill-from-the-vault">Restore drill from the Vault</h2>
+<p>A copy you never restored is a hope. With <code>drills.source: vault</code> (Vault page, <em>Scheduled restore drills restore from</em>), the scheduled drills restore from the off-site copy instead of the local Barman directory. <strong>Drill from the off-site copy</strong> on the server page does it once, whatever the setting; through the API, <code>POST /api/v1/servers/{name}/drills</code> with <code>{&quot;source&quot;: &quot;vault&quot;}</code>.</p>
+<p>Before the usual steps (chapter 7), the drill:</p>
+<ol>
+<li>finds the latest restic snapshot of the server;</li>
+<li>restores the backup catalogue only, and picks the latest complete backup (or the one asked for);</li>
+<li>restores that backup, its parents (incremental backups) and the WAL files into <code>&lt;recoveries.dir&gt;/&lt;server&gt;/vault-&lt;timestamp&gt;/</code>, never the other backups;</li>
+<li>writes a Barman configuration that reads that copy (the paths that point to the live directories and the hooks are left out) and runs <code>barman rebuild-xlogdb</code> on it;</li>
+<li>then runs <code>barman -c &lt;that configuration&gt; recover</code> and the rest of the drill as always.</li>
+</ol>
+<p>The fetched copy is removed at the end. The PDF report says &quot;restored from the off-site copy&quot;, with the restic snapshot and its date. A drill from the Vault never runs while a copy of the same server is in progress.</p>
+<p>It downloads one full backup plus its WAL: allow for the bandwidth and the disk under <code>recoveries.dir</code>, and raise <code>drills.timeout</code> (30 minutes by default) for large servers.</p>
+<h2 id="settings">Settings</h2>
+<pre><code class="language-yaml">vault:
+  enabled: true
+  endpoint: https://s3.gra.io.cloud.ovh.net
+  region: gra
+  bucket: acme-pgcellar
+  # prefix: pgcellar                    # folder in the bucket, one per pgCellar
+  access_key: 5f2a9c4e7b1d4e0f8a3c6b9d2e7f1a4c
+  # secret_key_file: /var/lib/pgcellar/vault/s3-secret-key   # written by the Vault page
+  # password_file: /var/lib/pgcellar/vault/restic-password   # generated, see the recovery key
+  quota: 500GB
+  # wal_interval: 15m                   # 0 = only after each backup
+  # max_age: 36h
+  # keep: {daily: 7, weekly: 4}
+servers:
+  - name: shop-staging
+    vault: false                         # this one stays on this host only
+drills:
+  source: vault                          # scheduled drills restore from the off-site copy
+</code></pre>
+<p>Every key is in chapter 10. The S3 secret key is never in <code>pgcellar.yaml</code> nor in git: the Vault page writes it into <code>vault.secret_key_file</code> (mode 0600).</p>
+<p>The Docker image ships restic 0.19.1 (the official binary, checked against its published SHA-256). On a binary install, install restic 0.17 or later (<code>restic version</code>); <strong>Test connection</strong> says when it is missing.</p>
+<h2 id="when-something-goes-wrong">When something goes wrong</h2>
+<table>
+<thead>
+<tr>
+<th>What you see</th>
+<th>Why</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&quot;the secret key does not match the access key&quot;</td>
+<td>Wrong secret, or the region does not match the endpoint.</td>
+<td>Paste the secret again; check <code>region</code>.</td>
+</tr>
+<tr>
+<td>&quot;the bucket does not exist in this region&quot;</td>
+<td>Typo, or the bucket is in another region.</td>
+<td>Check <code>bucket</code> and the endpoint.</td>
+</tr>
+<tr>
+<td>&quot;the S3 user is not allowed to do this on the bucket&quot;</td>
+<td>The user has no write right on that bucket.</td>
+<td>Give it Read/Write on the container.</td>
+</tr>
+<tr>
+<td>&quot;the restic password does not open this repository&quot;</td>
+<td>The password file is not the one the copies were made with (new machine, file replaced).</td>
+<td>Put the recovery key back into <code>vault.password_file</code>.</td>
+</tr>
+<tr>
+<td>&quot;the S3 endpoint cannot be reached from this host&quot;</td>
+<td>Network, DNS, firewall, proxy.</td>
+<td>The copy is tried again at the next WAL pass; check outbound HTTPS.</td>
+</tr>
+<tr>
+<td>A copy of a few KB every 15 minutes with &quot;nothing new&quot; in it</td>
+<td>restic records a snapshot when the metadata of a directory changed, even when no file did.</td>
+<td>Nothing: the daily prune forgets them.</td>
+</tr>
+<tr>
+<td>Storage keeps growing after a prune</td>
+<td>Object Lock keeps the deleted versions until their retention ends.</td>
+<td>Expected; see &quot;Why Object Lock, and what it costs&quot;.</td>
+</tr>
+</tbody>
+</table>
+
+</article>
+<nav class="dpn" aria-label="Previous and next chapter">
+  <a class="prev" href="/docs/releases-and-updates/"><small>Previous</small>Releases and updates</a>
+  <span></span>
+</nav>
+
+</main>
+</div>
+<footer class="dfoot"><div>The barman serves, the cellar keeps. <a href="https://dbfactory.io">dbfactory.io</a> &middot; <a href="https://stranix.net">stranix.net</a> &middot; <a href="/docs/pgcellar-manual.pdf">Manual (PDF)</a></div></footer>
+</body>
+</html>

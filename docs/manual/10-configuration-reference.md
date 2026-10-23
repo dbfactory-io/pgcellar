@@ -73,6 +73,7 @@ A list. What pgCellar adds to a Barman section; `name` must match a `[section]` 
 | `retention.minimum_redundancy` | `0` | Never delete below this number of backups. Cannot exceed `redundancy`. |
 | `drills.schedule` | empty | Schedule of the automatic restore drill, same syntax. Empty = none. |
 | `tags` | empty | Free labels for your own use. |
+| `vault` | copied | `false` keeps this server out of the off-site copy (chapter 17). Only `false` is written. |
 
 The retention values are written to the Barman file when the server form is saved; pgCellar does not apply retention itself.
 
@@ -142,6 +143,26 @@ At least one user must be `admin`. Names are unique inside each list.
 | `verify_tables` | `false` | `SELECT count(*)` on every table. Slow on big databases. |
 | `max_age` | `192h` (8 days) | A server with a drill schedule turns orange when its last good drill is older. |
 | `bin_dir` | `/usr/lib/postgresql` | Holds one directory per PostgreSQL major version, each with a `bin/`. Absolute path. |
+| `source` | `local` | Where the scheduled drills restore from: `local` (the Barman directory of this host) or `vault` (the off-site copy, fetched with restic first; needs the vault). |
+
+## `vault`
+
+The off-site copy to S3 (chapter 17). An absent block, or `enabled: false`, copies nothing; a disabled block may be incomplete.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Copy the backups to the bucket. |
+| `endpoint` | required when enabled | S3 endpoint with `https://`, no path. OVHcloud: `https://s3.<region>.io.cloud.ovh.net`. |
+| `region` | `us-east-1` | S3 region (`gra` for OVHcloud Gravelines). |
+| `bucket` | required when enabled | Must exist; pgCellar never creates it. |
+| `prefix` | `pgcellar` | Folder in the bucket; each server gets `<prefix>/<server>`. |
+| `access_key` | required when enabled | Access key id of the S3 user. |
+| `secret_key_file` | `<data_dir>/vault/s3-secret-key` | File holding the S3 secret key only (0600). The Vault page writes it. Absolute path. |
+| `password_file` | `<data_dir>/vault/restic-password` | The restic password, generated on first use and never replaced. Download it as the recovery key. Absolute path. |
+| `quota` | none | Storage bought, `500GB`, `2TB` (powers of 1000) or `100GiB`. Alerts at 80 % and 100 %; never stops a copy. |
+| `wal_interval` | `15m` | How often the WAL files are copied. `0` = only after each backup. At least `1m`. |
+| `max_age` | `36h` | A copied server turns orange when its last good copy is older. |
+| `keep.last`, `keep.daily`, `keep.weekly`, `keep.monthly` | `0`, `7`, `4`, `0` | Snapshots kept by the daily `restic forget --prune`. At least one above 0. |
 
 ## `updates`
 

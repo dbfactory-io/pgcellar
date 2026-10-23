@@ -115,6 +115,7 @@ drills:
   keep_last: true                      # keep the data directory of the last good drill; absent = true
   verify_tables: false                 # true = SELECT count(*) on every table (slow)
   max_age: 192h                        # orange when the last good drill is older (8 days)
+  # source: vault                      # restore from the off-site copy (needs the vault); absent = local
 
 # New releases: once a day pgCellar reads the latest GitHub release and its
 # manifest.json, and says when a newer version exists (Updates page, a line on the
@@ -127,3 +128,18 @@ updates:
   auto: false                          # true = install new releases by itself, inside the window (binary installs)
   window: "02:00-05:00"                # when an update may be applied, local time; may cross midnight
   # source: https://api.github.com/repos/dbfactory-io/pgcellar/releases/latest
+
+# Off-site copy (Vault): after each backup, and every wal_interval for the WAL files,
+# the Barman directory of each server goes to an S3 bucket with restic, encrypted on
+# this host. Manual chapter 17. The secret key is never written here: the Vault page
+# writes it into secret_key_file. Download the recovery key once it is on.
+# vault:
+#   enabled: true
+#   endpoint: https://s3.gra.io.cloud.ovh.net
+#   region: gra
+#   bucket: acme-pgcellar
+#   access_key: <access key of the S3 user>
+#   quota: 500GB                        # warnings at 80 % and 100 %; copies never stop
+#   wal_interval: 15m                   # 0 = only after each backup
+#   max_age: 36h                        # orange when the last good copy is older
+#   keep: {daily: 7, weekly: 4}
