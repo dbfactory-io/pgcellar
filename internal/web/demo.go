@@ -24,6 +24,7 @@ const (
 var demoDenied = []*regexp.Regexp{
 	regexp.MustCompile(`^/servers/[^/]+/check$`),
 	regexp.MustCompile(`^/recoveries/[^/]+/download$`),
+	regexp.MustCompile(`^(/api/v1)?/vault/recovery-key$`),
 }
 
 func (s *Server) canOperate(u *userCtx) bool {

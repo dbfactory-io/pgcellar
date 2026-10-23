@@ -61,6 +61,7 @@ func inputFrom(s barman.Server, cs *config.Server) ServerInput {
 	if cs != nil {
 		in.Label = cs.Label
 		in.Schedule = cs.Schedule
+		in.Vault = config.Ptr(cs.Vault == nil || *cs.Vault)
 		if s.RetentionPolicy == "" && s.MinimumRedundancy == "" {
 			in.Retention = cs.Retention
 		}
@@ -259,12 +260,18 @@ func upsertServer(cfg *config.Config, in ServerInput) {
 			MinimumRedundancy:  in.Retention.MinimumRedundancy,
 		},
 	}
+	if in.Vault != nil && !*in.Vault {
+		entry.Vault = config.Ptr(false) // absent means copied: only false is written
+	}
 	servers := make([]config.Server, 0, len(cfg.Servers)+1)
 	replaced := false
 	for _, s := range cfg.Servers {
 		if s.Name == in.Name {
 			entry.Tags = s.Tags
 			entry.Drills = s.Drills // set in pgcellar.yaml, not in the server form
+			if in.Vault == nil {
+				entry.Vault = s.Vault
+			}
 			s = entry
 			replaced = true
 		}

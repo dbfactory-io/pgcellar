@@ -25,15 +25,16 @@ type statusData struct {
 	Every   string // refresh interval, for people
 	Stale   bool   // states come from before the restart; the first refresh is running
 	Summary summary
-	Storage []storageLine // one line per file system holding backups
-	License string        // discreet banner: over the quota, or expired
-	Update  string        // discreet banner: a newer pgCellar exists
+	Storage []storageLine  // one line per file system holding backups
+	License string         // discreet banner: over the quota, or expired
+	Update  string         // discreet banner: a newer pgCellar exists
+	Vault   *app.VaultLine // the off-site copy, nil when it is off
 }
 
 func (s *Server) statusData() statusData {
 	states, at, errMsg := s.app.States()
 	stale := s.app.CacheStale()
-	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states), License: s.app.LicenseInfo().Banner, Update: s.updateBanner()}
+	return statusData{States: states, Updated: at, Err: errMsg, Dev: s.app.Dev, Every: everyText(s.app.StatusInterval), Stale: stale, Summary: summarize(states, stale), Storage: storageLines(states), License: s.app.LicenseInfo().Banner, Update: s.updateBanner(), Vault: s.app.VaultSummary(states)}
 }
 
 func (s *Server) statusPage(w http.ResponseWriter, r *http.Request, u *userCtx) {
@@ -58,6 +59,7 @@ func (s *Server) serversPage(w http.ResponseWriter, r *http.Request, u *userCtx)
 // formData feeds the "server_form" template.
 type formData struct {
 	In       app.ServerInput
+	VaultOn  bool // the vault is enabled: the form shows the off-site copy box
 	Problems []string
 	Action   string
 	CSRF     string
@@ -67,7 +69,7 @@ type formData struct {
 
 func (s *Server) serverNewForm(w http.ResponseWriter, r *http.Request, u *userCtx) {
 	in := app.ServerInput{BackupMethod: "postgres", WALMethod: app.WALStreaming, Schedule: config.Schedule{Backup: "daily 02:00", Enabled: config.Ptr(true)}, Retention: config.Retention{RecoveryWindowDays: 14, MinimumRedundancy: 2}}
-	s.render(w, http.StatusOK, "server_new", s.newPage(r, u, tr("servers.new"), "servers", formData{In: in, Action: "/servers", CSRF: u.CSRF, New: true}))
+	s.render(w, http.StatusOK, "server_new", s.newPage(r, u, tr("servers.new"), "servers", formData{In: in, Action: "/servers", CSRF: u.CSRF, New: true, VaultOn: s.app.Config().Vault.Enabled}))
 }
 
 func atoi(r *http.Request, field string, problems *[]string) int {
@@ -93,6 +95,9 @@ func parseServerForm(r *http.Request) (app.ServerInput, []string) {
 		BackupMethod: f("backup_method"), ConnInfo: f("conninfo"), StreamingConnInfo: f("streaming_conninfo"),
 		Slot: f("slot_name"), SSHCommand: f("ssh_command"), WALMethod: f("wal_method"),
 		Schedule: config.Schedule{Backup: f("schedule_backup"), Enabled: config.Ptr(f("schedule_enabled") != "")},
+	}
+	if f("vault_field") != "" { // the box was on the form
+		in.Vault = config.Ptr(f("vault") != "")
 	}
 	in.Retention.RecoveryWindowDays = atoi(r, "recovery_window_days", &problems)
 	in.Retention.Redundancy = atoi(r, "redundancy", &problems)
@@ -128,7 +133,7 @@ func (s *Server) serverCreate(w http.ResponseWriter, r *http.Request, u *userCtx
 			return
 		}
 	}
-	s.render(w, http.StatusUnprocessableEntity, "server_new", s.newPage(r, u, tr("servers.new"), "servers", formData{In: in, Problems: problems, Action: "/servers", CSRF: u.CSRF, New: true}))
+	s.render(w, http.StatusUnprocessableEntity, "server_new", s.newPage(r, u, tr("servers.new"), "servers", formData{In: in, Problems: problems, Action: "/servers", CSRF: u.CSRF, New: true, VaultOn: s.app.Config().Vault.Enabled}))
 }
 
 type serverPageData struct {
@@ -137,6 +142,7 @@ type serverPageData struct {
 	BackupList backupListData
 	Recoveries recoveryListData
 	Drills     drillListData
+	Vault      vaultCard
 	Timeline   tlView
 	Updated    time.Time // when the cache entry of the server was built
 	Runs       []app.RunView
@@ -161,7 +167,7 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 		Detail:     *d,
 		CanOperate: s.canOperate(u),
 		CanAdmin:   s.canAdmin(u),
-		Form:       formData{In: d.ServerInput, Action: "/servers/" + name, CSRF: u.CSRF, ReadOnly: !s.canAdmin(u)},
+		Form:       formData{In: d.ServerInput, Action: "/servers/" + name, CSRF: u.CSRF, ReadOnly: !s.canAdmin(u), VaultOn: s.app.Config().Vault.Enabled},
 	}
 	if override != nil {
 		data.Form = *override
@@ -174,6 +180,7 @@ func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, u *userCtx
 	data.BackupList = s.backupList(r, u, name)
 	data.Recoveries = s.recoveryList(u, name)
 	data.Drills = s.drillList(u, name)
+	data.Vault = s.vaultCardOf(u, name, d.State)
 	data.Runs, _ = s.app.Runs(name, 10)
 	s.render(w, status, "server", s.newPage(r, u, name, "servers", data))
 }
@@ -195,7 +202,7 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request, u *userCtx
 		}
 		problems = pe.Problems
 	}
-	s.renderServer(w, r, u, http.StatusUnprocessableEntity, &formData{In: in, Problems: problems, Action: "/servers/" + name, CSRF: u.CSRF})
+	s.renderServer(w, r, u, http.StatusUnprocessableEntity, &formData{In: in, Problems: problems, Action: "/servers/" + name, CSRF: u.CSRF, VaultOn: s.app.Config().Vault.Enabled})
 }
 
 // backupListData feeds the "backup_list" fragment: the backups of a server,

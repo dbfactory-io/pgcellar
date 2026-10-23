@@ -78,6 +78,8 @@
   <div id="recovery-list" aria-live="polite">{{template "recovery_list" .Recoveries}}</div>
 </section>
 
+{{template "vault_card" .Vault}}
+
 <section id="drills">
   <h2>{{t "section.drills"}}</h2>
   {{template "drill_list" .Drills}}

@@ -145,6 +145,25 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 			"/license": m{
 				"get": op("The licence in force: edition, licensee, servers allowed and used, expiry, state", "viewer", m{"responses": m{"200": resp("Licence", nil)}}),
 			},
+			"/vault": m{
+				"get": op("The off-site copy: settings (secret key never shown, only secret_key_set), Object Lock rule of the bucket (lock, lock_text), quota and use (quota_bytes, used_bytes, noncurrent_bytes kept by versioning, used_percent, quota_level ok|warn|fail), whether the recovery key exists and was downloaded, the last connection test, the status of every server (servers[].status: copied, last copy, last_ok_at, fail_streak, used_bytes, stale, why, text) and the queue. Read from pgcellar.yaml and SQLite only.", "viewer", m{"responses": m{"200": resp("Vault", dataOf(ref("Vault")))}}),
+				"put": op("Change the vault settings; fields left out keep their value. secret_key is written into vault.secret_key_file (0600), never into pgcellar.yaml. Commits pgcellar.yaml.", "admin", m{"requestBody": body("VaultInput"), "responses": m{"200": resp("Saved", nil), "422": errResp}}),
+			},
+			"/vault/test": m{
+				"post": op("Test the bucket: restic runs, a small object is written, read back and removed, the Object Lock rule is read. Empty body = the saved settings; a VaultInput body tests those values over the saved ones without saving them. 502 when a step failed (the body still carries the steps). Audited as vault.test.", "admin", m{"requestBody": m{"required": false, "content": m{"application/json": m{"schema": ref("VaultInput")}}}, "responses": m{"200": resp("Test result", dataOf(ref("VaultTest"))), "502": resp("A step failed", dataOf(ref("VaultTest"))), "422": errResp}}),
+			},
+			"/vault/copy": m{
+				"post": op("Queue a copy of one server now. Copies run one at a time, in the background; follow it with GET /vault/copies?server=. Audited as vault.copy.", "operator", m{"requestBody": m{"required": true, "content": m{"application/json": m{"schema": m{"type": "object", "required": []string{"server"}, "properties": m{"server": m{"type": "string"}}}}}}, "responses": m{"202": resp("Queued", dataOf(m{"type": "object", "properties": m{"server": m{"type": "string"}, "position": m{"type": "integer"}, "running": m{"type": "boolean"}}})), "404": errResp, "409": errResp}}),
+			},
+			"/vault/copies": m{
+				"get": op("The off-site copies, newest first (?server=, ?limit=, default 50), without their journal.", "viewer", m{"parameters": []m{{"name": "server", "in": "query", "schema": m{"type": "string"}}, {"name": "limit", "in": "query", "schema": m{"type": "integer"}}}, "responses": m{"200": resp("Copies", dataOf(m{"type": "array", "items": ref("VaultCopy")}))}}),
+			},
+			"/vault/copies/{id}": m{
+				"get": op("One copy with its journal (the restic commands and what they said; never a secret).", "viewer", m{"parameters": []m{recoveryParam()}, "responses": m{"200": resp("Copy", dataOf(ref("VaultCopy"))), "404": errResp}}),
+			},
+			"/vault/recovery-key": m{
+				"get": op("The recovery key, text/plain: the restic password of the copies and how to read them without pgCellar. Generated when no copy ran yet. Every download is audited as vault.key.download. Keep it offline: without it the copies cannot be read.", "admin", m{"responses": m{"200": m{"description": "Recovery key", "content": m{"text/plain": m{"schema": m{"type": "string"}}}}, "409": errResp}}),
+			},
 			"/updates": m{
 				"get": op("What the last release check found (current, latest, available, checked_at, published_at, notes_url, manifest, error) and the updates settings (check, interval, auto, window, in_window, docker), plus self_update on a binary installation (enabled, current, refused_reason, last_attempt, last_error, failed_versions). The check sends nothing but the running version, in its User-Agent.", "viewer", m{"responses": m{"200": resp("Update status", nil)}}),
 			},
@@ -273,6 +292,33 @@ func (a *API) openapi(w http.ResponseWriter, r *http.Request) {
 					"ok": m{"type": "boolean"}, "step_failed": m{"type": "string", "enum": []string{"recover", "version", "configure", "start", "recovery", "checks", "stop", "checksums", "cleanup"}},
 					"run_id": m{"type": "integer"}, "has_report": m{"type": "boolean"},
 					"details": m{"type": "object", "description": "summary (the sentence of the report), steps [{key,label,status,millis,note}], databases [{name,size_bytes,tables,rows}], pg_version, lsn, checksums, size_bytes, duration_ms, error, log_tail, fingerprint (SHA-256 of the report content), data_dir (while the restored copy is kept)"},
+				}},
+				"VaultInput": m{"type": "object", "properties": m{
+					"enabled": m{"type": "boolean"}, "endpoint": m{"type": "string", "example": "https://s3.gra.io.cloud.ovh.net"}, "region": m{"type": "string", "example": "gra"},
+					"bucket": m{"type": "string"}, "prefix": m{"type": "string", "default": "pgcellar"}, "access_key": m{"type": "string"},
+					"secret_key": m{"type": "string", "description": "Written into vault.secret_key_file, never stored in pgcellar.yaml; empty = keep"},
+					"quota":      m{"type": "string", "example": "500GB"}, "wal_interval": m{"type": "string", "example": "15m", "description": "0 = only after backups"},
+					"max_age": m{"type": "string", "example": "36h"}, "keep_last": m{"type": "integer"}, "keep_daily": m{"type": "integer"}, "keep_weekly": m{"type": "integer"}, "keep_monthly": m{"type": "integer"},
+					"drill_source": m{"type": "string", "enum": []string{"local", "vault"}},
+				}},
+				"Vault": m{"type": "object", "properties": m{
+					"config": m{"type": "object"}, "enabled": m{"type": "boolean"}, "secret_key_set": m{"type": "boolean"}, "key_exists": m{"type": "boolean"},
+					"key_created_at": dt, "key_downloaded_at": dt, "key_downloaded_by": m{"type": "string"},
+					"lock": m{"type": "object", "properties": m{"enabled": m{"type": "boolean"}, "mode": m{"type": "string"}, "days": m{"type": "integer"}}}, "lock_text": m{"type": "string"},
+					"quota_bytes": m{"type": "integer"}, "used_bytes": m{"type": "integer"}, "noncurrent_bytes": m{"type": "integer"}, "used_percent": m{"type": "number"}, "quota_level": m{"type": "string"},
+					"last_test": ref("VaultTest"), "servers": m{"type": "array", "items": m{"type": "object"}}, "queue": m{"type": "array", "items": m{"type": "string"}}, "drill_source": m{"type": "string"},
+				}},
+				"VaultTest": m{"type": "object", "properties": m{
+					"at": dt, "actor": m{"type": "string"}, "ok": m{"type": "boolean"}, "target": m{"type": "string"}, "error": m{"type": "string"},
+					"steps": m{"type": "array", "items": m{"type": "object", "properties": m{"key": m{"type": "string", "enum": []string{"restic", "secret", "write", "read", "delete", "lock"}}, "label": m{"type": "string"}, "ok": m{"type": "boolean"}, "note": m{"type": "string"}, "millis": m{"type": "integer"}}}},
+					"lock":  m{"type": "object"},
+				}},
+				"VaultCopy": m{"type": "object", "properties": m{
+					"id": m{"type": "integer"}, "server": m{"type": "string"}, "trigger": m{"type": "string", "enum": []string{"backup", "wal", "manual"}}, "actor": m{"type": "string"},
+					"started_at": dt, "finished_at": dt, "running": m{"type": "boolean"}, "ok": m{"type": "boolean"}, "snapshot_id": m{"type": "string", "description": "Empty when nothing changed since the previous copy"},
+					"bytes_added": m{"type": "integer"}, "bytes_total": m{"type": "integer"}, "files_new": m{"type": "integer"}, "duration_ms": m{"type": "integer"},
+					"error": m{"type": "string"}, "warnings": m{"type": "array", "items": m{"type": "string"}}, "unchanged": m{"type": "boolean"}, "initialised": m{"type": "boolean"},
+					"pruned": m{"type": "boolean"}, "prune_error": m{"type": "string"}, "journal": m{"type": "string"},
 				}},
 				"Run": m{"type": "object", "properties": m{
 					"id": m{"type": "integer"}, "server": m{"type": "string"}, "kind": m{"type": "string"}, "status": m{"type": "string", "enum": []string{"running", "ok", "failed"}},

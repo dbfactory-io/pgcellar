@@ -42,6 +42,11 @@ func (a *App) setupDev(src string, cfg *config.Config) (string, error) {
 		return "", err
 	}
 	a.TempDir = tmp
+	// The fake restic keeps its "bucket" in the temporary directory.
+	a.VaultTools = VaultTools{Restic: "fake-restic"}
+	if err := os.Setenv("FAKE_RESTIC_ROOT", filepath.Join(tmp, "vault")); err != nil {
+		return "", err
+	}
 
 	cfg.DataDir = filepath.Join(tmp, "data")
 	cfg.Recoveries.Dir = filepath.Join(tmp, "recoveries")

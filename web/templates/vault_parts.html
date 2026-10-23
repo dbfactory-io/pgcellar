@@ -1,0 +1,41 @@
+{{define "vault_trigger"}}{{if eq . "backup"}}{{t "vault.trigger.backup"}}{{else if eq . "wal"}}{{t "vault.trigger.wal"}}{{else}}{{t "vault.trigger.manual"}}{{end}}{{end}}
+
+{{define "vault_copy_row"}}
+<li class="row{{if and (not .OK) (not .Running)}} bad{{end}}">
+  <div class="grow"><strong><span aria-hidden="true">{{if .Running}}⏳{{else if .OK}}✅{{else}}❌{{end}}</span> {{.Server}}</strong> <span class="meta">{{template "vault_trigger" .Trigger}}{{if and .Actor (ne .Actor "system")}} &middot; {{actor .Actor}}{{end}}</span></div>
+  <div class="meta">{{when .StartedAt}}</div>
+  {{if .OK}}<div class="meta">{{if .Unchanged}}{{t "vault.unchanged"}}{{else}}{{size .BytesAdded}} {{t "vault.sent"}}{{end}} &middot; {{t "vault.covers"}} {{size .BytesTotal}}</div>{{end}}
+  {{if not .Running}}<div class="meta">{{t "vault.in"}} {{dur .Duration}}</div>{{end}}
+  {{if .Error}}<div class="msg">{{.Error}}</div>{{end}}
+  {{if .Warnings}}<div class="msg meta">{{range .Warnings}}{{.}}. {{end}}</div>{{end}}
+  {{if .PruneError}}<div class="msg meta">restic forget: {{.PruneError}}</div>{{end}}
+</li>
+{{end}}
+
+{{define "vault_card"}}{{if .Enabled}}
+<section id="vault">
+  <h2>{{t "vault.card"}}</h2>
+  {{with .Status}}
+  {{if .Copied}}
+  <div class="card">
+    <p style="margin:0"><span aria-hidden="true">{{.Emoji}}</span> <strong>{{.Text}}</strong>{{if .Running}} <span class="pill warn">{{t "vault.running"}}</span>{{else if .Queued}} <span class="pill">{{t "vault.queued"}}</span>{{end}}</p>
+    {{if .Why}}<div class="flash warn" style="margin:.8rem 0 0">{{.Why}}</div>{{end}}
+    <dl class="facts" style="margin-top:.8rem">
+      <div><dt>{{t "vault.last_ok"}}</dt><dd>{{if .LastOKAt.IsZero}}{{t "vault.never"}}{{else}}{{when .LastOKAt}} &middot; {{t "vault.covers"}} {{size .LastOKBytes}}{{end}}</dd></div>
+      <div><dt>{{t "vault.stored"}}</dt><dd>{{if .UsageAt.IsZero}}-{{else}}{{dsize .UsedBytes}}{{end}}</dd></div>
+      <div><dt>{{t "vault.every"}}</dt><dd>{{if $.Interval}}{{dur $.Interval}}{{else}}{{t "vault.after_backup"}}{{end}}</dd></div>
+      <div><dt>{{t "vault.repo"}}</dt><dd><code class="wrapany">{{.Repo}}</code></dd></div>
+    </dl>
+  </div>
+  {{if $.Copies}}<ul class="rows" style="margin-top:.8rem">{{range $.Copies}}{{template "vault_copy_row" .}}{{end}}</ul>{{end}}
+  {{if $.CanOp}}<div class="btns" style="margin-top:.8rem">
+    <button class="btn alt" hx-post="/servers/{{$.Server}}/vault-copy" hx-target="#vault-result" hx-swap="innerHTML" hx-disabled-elt="this">{{t "vault.copy_now"}}</button>
+    <a class="btn alt" href="/vault">{{t "vault.see_all"}}</a>
+  </div>{{end}}
+  <div id="vault-result" aria-live="polite"></div>
+  {{else}}
+  <div class="softnote">{{t "vault.card_off"}}</div>
+  {{end}}
+  {{end}}
+</section>
+{{end}}{{end}}

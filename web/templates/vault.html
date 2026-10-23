@@ -1,0 +1,118 @@
+{{define "content"}}
+{{with .Data}}
+<h1>{{t "vault.title"}}</h1>
+<p class="muted">{{t "vault.intro"}}</p>
+
+{{template "problems" .Problems}}
+{{with .Test}}
+{{if .OK}}<div class="flash ok" role="status"><span aria-hidden="true">✅</span> {{t "vault.test_ok"}} {{t "vault.lock"}}: {{.LockText}}.</div>
+{{else}}<div class="flash bad" role="alert"><span aria-hidden="true">❌</span> {{t "vault.test_bad"}} {{.Error}}</div>{{end}}
+<ul class="rows" style="margin-bottom:1.5rem">{{range .Steps}}<li class="row{{if not .OK}} bad{{end}}"><div class="grow"><strong><span aria-hidden="true">{{if .OK}}✅{{else}}❌{{end}}</span> {{.Label}}</strong></div><div class="meta">{{.Millis}} ms</div>{{if .Note}}<div class="msg meta wrapany">{{.Note}}</div>{{end}}</li>{{end}}</ul>
+{{end}}
+
+{{if not .Enabled}}
+<div class="empty"><strong>{{t "vault.off"}}</strong><p>{{t "vault.off_hint"}}</p></div>
+{{else}}
+<section>
+  <h2>{{t "vault.status"}}</h2>
+  <div class="card">
+    <dl class="facts">
+      <div><dt>{{t "vault.bucket"}}</dt><dd><strong>{{.Config.Bucket}}</strong> <span class="muted">({{.Config.EffectiveRegion}})</span></dd></div>
+      <div><dt>{{t "vault.endpoint"}}</dt><dd><code class="wrapany">{{.Config.Endpoint}}</code></dd></div>
+      <div><dt>{{t "vault.folder"}}</dt><dd><code>{{.Config.EffectivePrefix}}/</code></dd></div>
+      <div><dt>{{t "vault.lock"}}</dt><dd>{{if .Lock.Locked}}<span aria-hidden="true">🔒</span> {{end}}{{.LockText}}{{if .LockError}}<div class="help">{{.LockError}}</div>{{end}}<div class="help">{{t "vault.lock_help"}}</div></dd></div>
+      <div><dt>{{t "vault.keep"}}</dt><dd>{{.Config.Keep.Text}}</dd></div>
+      <div><dt>{{t "vault.every"}}</dt><dd>{{if .Config.EffectiveWALInterval}}{{dur .Config.EffectiveWALInterval}}{{else}}{{t "vault.after_backup"}}{{end}}</dd></div>
+      <div><dt>{{t "vault.max_age"}}</dt><dd>{{dur .Config.EffectiveMaxAge}}</dd></div>
+      <div><dt>{{t "vault.drill_source"}}</dt><dd>{{if eq .DrillSource "vault"}}{{t "vault.f_drills_vault"}}{{else}}{{t "vault.f_drills_local"}}{{end}}</dd></div>
+    </dl>
+    <p style="margin:1rem 0 0">{{t "vault.quota"}}: <strong>{{dsize .UsedBytes}}</strong>{{if .QuotaBytes}} {{t "vault.of"}} {{dsize .QuotaBytes}} ({{.UsedPct}} % {{t "vault.used"}}){{else}} <span class="muted">({{t "vault.no_quota"}})</span>{{end}}</p>
+    {{if .QuotaBytes}}<div class="stbar" aria-hidden="true"><b class="q-{{.QuotaLevel}}" style="width:{{.UsedPct}}%"></b></div>{{end}}
+    {{if .NoncurrentBytes}}<p class="muted" style="margin:.3rem 0 0">{{dsize .NoncurrentBytes}} {{t "vault.noncurrent"}}</p>{{end}}
+  </div>
+</section>
+
+<section>
+  <h2>{{t "vault.key"}}</h2>
+  <div class="flash warn" role="note"><span aria-hidden="true">🔑</span> {{t "vault.key_warn"}}</div>
+  <p>{{if .KeyDownloadedAt.IsZero}}<strong>{{t "vault.key_never"}}.</strong>{{else}}<span aria-hidden="true">✅</span> {{t "vault.key_done"}} {{when .KeyDownloadedAt}} {{t "vault.key_by"}} {{.KeyDownloadedBy}}.{{end}}{{if not .KeyCreatedAt.IsZero}} <span class="muted">({{t "vault.key_created"}} {{when .KeyCreatedAt}})</span>{{end}}</p>
+  {{if .CanAdmin}}<p><a class="btn" href="/vault/recovery-key">{{t "vault.key_download"}}</a></p>{{end}}
+</section>
+
+<section>
+  <h2>{{t "vault.servers"}}</h2>
+  <div id="vault-result" aria-live="polite"></div>
+  <ul class="rows">
+  {{range .Servers}}{{$name := .Name}}{{with .Status}}
+  <li class="row{{if .Stale}} warnrow{{end}}">
+    <div class="grow"><a href="/servers/{{$name}}#vault"><strong>{{$name}}</strong></a>
+      <div class="meta"><span aria-hidden="true">{{.Emoji}}</span> {{.Text}}{{if .Running}} &middot; {{t "vault.running"}}{{else if .Queued}} &middot; {{t "vault.queued"}}{{end}}</div>
+      {{if .Why}}<div class="meta warnt">{{.Why}}</div>{{end}}</div>
+    {{if .Copied}}<div class="meta">{{if .UsageAt.IsZero}}-{{else}}{{dsize .UsedBytes}} {{t "vault.stored"}}{{end}}</div>
+    {{if $.Data.CanOp}}<div><button class="btn alt" hx-post="/servers/{{$name}}/vault-copy" hx-target="#vault-result" hx-swap="innerHTML" hx-disabled-elt="this">{{t "vault.copy_now"}}</button></div>{{end}}{{end}}
+  </li>
+  {{end}}{{end}}
+  </ul>
+</section>
+
+<section>
+  <h2>{{t "vault.recent"}}</h2>
+  {{if .Copies}}<ul class="rows">{{range .Copies}}{{template "vault_copy_row" .}}{{end}}</ul>{{else}}<p class="muted">{{t "vault.no_copy"}}</p>{{end}}
+</section>
+{{end}}
+
+<section>
+  <h2>{{t "vault.test"}}</h2>
+  {{with .LastTest}}<p>{{if .OK}}<span aria-hidden="true">✅</span>{{else}}<span aria-hidden="true">❌</span>{{end}} {{when .At}} {{t "vault.key_by"}} {{actor .Actor}}: {{if .OK}}{{t "vault.lock"}} {{.LockText}}{{else}}{{.Error}}{{end}}</p>{{else}}<p class="muted">{{t "vault.test_none"}}</p>{{end}}
+</section>
+
+<section>
+  <h2>{{t "vault.settings"}}</h2>
+  {{if not .CanAdmin}}<p class="muted">{{t "vault.settings_ro"}}</p>{{end}}
+  {{with .Form}}
+  <form class="grid" method="post" action="/vault">
+    <input type="hidden" name="csrf" value="{{$.Data.CSRF}}">
+    <fieldset{{if not $.Data.CanAdmin}} disabled{{end}}>
+      <legend>{{t "vault.bucket"}}</legend>
+      <label class="chk"><input type="checkbox" name="enabled" value="1"{{if .Enabled}} checked{{end}}> {{t "vault.enabled"}}</label>
+      <label>{{t "vault.f_endpoint"}} <input type="text" inputmode="url" name="endpoint" value="{{.Endpoint}}" placeholder="https://s3.gra.io.cloud.ovh.net"><small>{{t "vault.f_endpoint_h"}}</small></label>
+      <label>{{t "vault.f_region"}} <input type="text" name="region" value="{{.Region}}" placeholder="gra"><small>{{t "vault.f_region_h"}}</small></label>
+      <label>{{t "vault.f_bucket"}} <input type="text" name="bucket" value="{{.Bucket}}" placeholder="acme-pgcellar" pattern="[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]"><small>{{t "vault.f_bucket_h"}}</small></label>
+      <label>{{t "vault.f_prefix"}} <input type="text" name="prefix" value="{{.Prefix}}" placeholder="pgcellar"><small>{{t "vault.f_prefix_h"}}</small></label>
+      <label>{{t "vault.f_access"}} <input type="text" name="access_key" value="{{.AccessKey}}" autocomplete="off"></label>
+      <label>{{t "vault.f_secret"}} <input type="password" name="secret_key" value="" autocomplete="new-password"{{if .SecretSet}} placeholder="••••••••"{{end}}><small>{{if .SecretSet}}{{t "vault.f_secret_set"}} {{end}}{{t "vault.f_secret_h"}}</small></label>
+    </fieldset>
+    <fieldset{{if not $.Data.CanAdmin}} disabled{{end}}>
+      <legend>{{t "vault.settings"}}</legend>
+      <label>{{t "vault.f_quota"}} <input type="text" name="quota" value="{{.Quota}}" placeholder="500GB"><small>{{t "vault.f_quota_h"}}</small></label>
+      <label>{{t "vault.f_wal"}} <input type="text" name="wal_interval" value="{{.WALInterval}}" placeholder="15m"><small>{{t "vault.f_wal_h"}}</small></label>
+      <label>{{t "vault.f_maxage"}} <input type="text" name="max_age" value="{{.MaxAge}}" placeholder="36h"></label>
+      <div class="lbl">{{t "vault.f_keep"}}
+        <div class="inline">
+          <label>{{t "vault.f_last"}} <input type="number" min="0" name="keep_last" value="{{.KeepLast}}"></label>
+          <label>{{t "vault.f_daily"}} <input type="number" min="0" name="keep_daily" value="{{.KeepDaily}}"></label>
+          <label>{{t "vault.f_weekly"}} <input type="number" min="0" name="keep_weekly" value="{{.KeepWeekly}}"></label>
+          <label>{{t "vault.f_monthly"}} <input type="number" min="0" name="keep_monthly" value="{{.KeepMonthly}}"></label>
+        </div>
+        <small>{{t "vault.f_keep_h"}}</small></div>
+      <label>{{t "vault.f_drills"}}
+        <select name="drill_source">
+          <option value="local"{{if ne .DrillSource "vault"}} selected{{end}}>{{t "vault.f_drills_local"}}</option>
+          <option value="vault"{{if eq .DrillSource "vault"}} selected{{end}}>{{t "vault.f_drills_vault"}}</option>
+        </select>
+      </label>
+    </fieldset>
+    {{if $.Data.CanAdmin}}<div class="actions btns">
+      <button class="btn" type="submit">{{t "btn.save"}}</button>
+      <button class="btn alt" type="submit" formaction="/vault/test">{{t "vault.test_btn"}}</button>
+    </div>{{end}}
+  </form>
+  {{end}}
+</section>
+
+<section>
+  <h2>{{t "vault.help"}}</h2>
+  <p class="muted">{{t "vault.help_text"}} <a href="https://pgcellar.dbfactory.io/docs/off-site-copy-vault/" target="_blank" rel="noopener">{{t "foot.docs"}}</a></p>
+</section>
+{{end}}
+{{end}}

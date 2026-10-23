@@ -103,6 +103,7 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	s.alertCounts(&b)
 	s.licenseMetrics(&b)
 	s.updateMetrics(&b)
+	vaultMetrics(&b, states)
 	_, _ = fmt.Fprintf(&b, "# HELP pgcellar_build_info Version of the running pgCellar.\n# TYPE pgcellar_build_info gauge\npgcellar_build_info{version=\"%s\"} 1\n", promEscape(s.app.Version))
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(b.String()))

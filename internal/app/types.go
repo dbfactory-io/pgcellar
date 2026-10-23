@@ -25,7 +25,13 @@ type ServerInput struct {
 	WALMethod string           `json:"wal_method"`
 	Retention config.Retention `json:"retention"`
 	Schedule  config.Schedule  `json:"schedule"`
+	// Vault: false keeps the server out of the off-site copy. Absent = keep
+	// the current choice (copied, for a new server).
+	Vault *bool `json:"vault,omitempty"`
 }
+
+// CopiedToVault resolves Vault for the form (absent = copied).
+func (in ServerInput) CopiedToVault() bool { return in.Vault == nil || *in.Vault }
 
 // WAL methods of a server.
 const (

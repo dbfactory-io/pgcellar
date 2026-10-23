@@ -11,6 +11,7 @@
   </div>
   <div>{{if .State}}{{template "level" .State.Level}}{{else}}<small>unknown</small>{{end}}</div>
   {{if .State}}{{if .State.SetupLevel}}<div>{{template "setup_pill" .State}}</div>{{end}}{{end}}
+  {{if .State}}{{with .State.Vault}}<div class="meta" title="{{.Text}}"><span aria-hidden="true">{{.Emoji}}</span> {{if .Copied}}{{t "vault.card"}}{{else}}{{t "vault.not_copied"}}{{end}}</div>{{end}}{{end}}
   <div class="meta">{{if .HasFile}}{{.BackupMethod}}{{else}}-{{end}}</div>
   <div class="meta">{{if .Schedule.IsEnabled}}{{.ScheduleHuman}}{{else}}<span aria-hidden="true">💤</span> schedule off{{end}}</div>
   <div class="meta">{{retention .Retention}}</div>

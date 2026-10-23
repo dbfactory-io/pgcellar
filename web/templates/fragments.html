@@ -63,6 +63,7 @@
   {{if .Summary.Sub}}<p>{{.Summary.Sub}}</p>{{end}}
 </div>
 {{template "storage_status" .Storage}}
+{{with .Vault}}<p class="stline {{.Level}}"><a href="/vault">{{.Text}}</a></p>{{end}}
 {{if .States}}
 <div class="rows">
 {{range .States}}
@@ -77,6 +78,7 @@
       {{if not .NextBackup.IsZero}}<div>{{t "sched.next"}}: {{nexttext .NextBackup}}</div>{{end}}
       {{if .LastScheduled}}<div>{{t "sched.last"}}: {{lastsched .LastScheduled}}</div>{{end}}
       {{if .Drill}}{{if or .Drill.Last .Drill.Scheduled}}<div>{{.Drill.Text}}{{if .Drill.Stale}} <span class="pill warn">drill</span>{{end}}</div>{{end}}{{end}}
+      {{if .Vault}}{{if .Vault.Copied}}<div>{{.Vault.Text}}{{if .Vault.Stale}} <span class="pill warn">vault</span>{{end}}</div>{{end}}{{end}}
     </div>
   </a>
   <div class="lines tail"><div>{{.BackupCount}} {{if eq .BackupCount 1}}{{t "unit.backup"}}{{else}}{{t "unit.backups"}}{{end}} &middot; {{if .CheckOK}}<span class="pill ok">checks OK</span>{{else if .Checks}}<span class="pill bad">check FAILED</span>{{else}}<span class="pill warn">check unknown</span>{{end}}{{if .SetupLevel}} &middot; {{template "setup_pill" .}}{{end}}</div></div>
@@ -132,6 +134,12 @@
     <label>Backup schedule <input type="text" name="schedule_backup" value="{{.In.Schedule.Backup}}" placeholder="daily 02:00"><small>daily 02:00, weekly sun 03:00, hourly, every 6 hours, or a cron expression.</small></label>
     <label class="chk"><input type="checkbox" name="schedule_enabled" value="1"{{if .In.Schedule.IsEnabled}} checked{{end}}> Enabled</label>
   </fieldset>
+  {{if .VaultOn}}<fieldset{{if .ReadOnly}} disabled{{end}}>
+    <legend>{{t "form.vault_legend"}}</legend>
+    <input type="hidden" name="vault_field" value="1">
+    <label class="chk"><input type="checkbox" name="vault" value="1"{{if .In.CopiedToVault}} checked{{end}}> {{t "form.vault"}}</label>
+    <small>{{t "form.vault_h"}}</small>
+  </fieldset>{{end}}
   {{if not .ReadOnly}}<div class="actions"><button class="btn" type="submit">{{if .New}}{{t "btn.create"}}{{else}}{{t "btn.save"}}{{end}}</button></div>{{end}}
 </form>
 {{end}}

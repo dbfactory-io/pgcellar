@@ -32,7 +32,7 @@ type Server struct {
 	apiH    http.Handler
 }
 
-var pages = []string{"login", "status", "servers", "server_new", "server", "restore", "ssh_key", "runs", "run", "history", "audit", "error", "alerts", "updates"}
+var pages = []string{"login", "status", "servers", "server_new", "server", "restore", "ssh_key", "runs", "run", "history", "audit", "error", "alerts", "updates", "vault"}
 
 func funcs(assets map[string]string) template.FuncMap {
 	return template.FuncMap{
@@ -54,6 +54,9 @@ func funcs(assets map[string]string) template.FuncMap {
 		"runtime":    runtime,
 		"f1":         f1,
 		"failedstep": failedStep,
+		"dsize":      app.FormatDecimalSize,
+		"dur":        func(d time.Duration) string { return app.HumanDuration(d) },
+		"short":      shortDuration,
 	}
 }
 
@@ -68,7 +71,7 @@ func New(a *app.App) (*Server, error) {
 		return nil, err
 	}
 	for _, p := range pages {
-		t, err := template.New(p).Funcs(funcs(s.assets)).ParseFS(web.FS, "templates/layout.html", "templates/fragments.html", "templates/storage.html", "templates/"+p+".html")
+		t, err := template.New(p).Funcs(funcs(s.assets)).ParseFS(web.FS, "templates/layout.html", "templates/fragments.html", "templates/storage.html", "templates/vault_parts.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", p, err)
 		}
@@ -170,6 +173,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /audit", s.guard(app.RoleAdmin, s.auditPage))
 	mux.HandleFunc("GET /alerts", s.guard(app.RoleAdmin, s.alertsPage))
 	mux.HandleFunc("POST /alerts/test", s.guard(app.RoleAdmin, s.alertsTest))
+	mux.HandleFunc("GET /vault", s.guard(app.RoleViewer, s.vaultPage))
+	mux.HandleFunc("POST /vault", s.guard(app.RoleAdmin, s.vaultSave))
+	mux.HandleFunc("POST /vault/test", s.guard(app.RoleAdmin, s.vaultTest))
+	mux.HandleFunc("GET /vault/recovery-key", s.guard(app.RoleAdmin, s.vaultKey))
+	mux.HandleFunc("POST /servers/{name}/vault-copy", s.guard(app.RoleOperator, s.vaultCopy))
 	mux.HandleFunc("GET /updates", s.guard(app.RoleViewer, s.updatesPage))
 	mux.HandleFunc("POST /updates/check", s.guard(app.RoleOperator, s.updatesCheck))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
